@@ -168,6 +168,10 @@ def get_performance(since_hours: int = 168) -> Dict[str, Any]:
         "history": history,
         "history_source": "alpaca",
         "history_points": history_points,
+        "experiment": {
+            "first_trade_date": config.FIRST_TRADE_DATE,
+            "first_trade_label": config.FIRST_TRADE_DATE_LABEL,
+        },
         "universe": {
             "rationale": UNIVERSE_RATIONALE,
             "tickers": TRADING_UNIVERSE,

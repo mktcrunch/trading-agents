@@ -73,7 +73,7 @@ gcloud run deploy "${SERVICE}" \
   --image "${IMAGE}" \
   --region "${REGION}" \
   --platform managed \
-  --no-allow-unauthenticated \
+  --allow-unauthenticated \
   --service-account "${SA_EMAIL}" \
   --memory 1Gi \
   --cpu 1 \

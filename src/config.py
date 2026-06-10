@@ -140,6 +140,10 @@ DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY", "db-9Wivtyr8PmQGT7FuJsdPKDqCQ
 # TRADING UNIVERSE & CONFIGURATION
 # ============================================================================
 
+# Twin Ledger live paper-trading experiment (both traders)
+FIRST_TRADE_DATE = "2026-06-09"
+FIRST_TRADE_DATE_LABEL = "June 9, 2026"
+
 # 12 liquid ETFs ($1B+ AUM) spanning equities, sectors, bonds, commodities, intl.
 # Chosen so agents must allocate across regimes — not win on a single-theme bet.
 TRADING_UNIVERSE = [

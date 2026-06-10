@@ -196,6 +196,35 @@
       font-size: 1.9rem; font-weight: 700;
       font-family: var(--mono); color: var(--accent);
     }
+    .experiment-banner {
+      background: linear-gradient(90deg, rgba(11, 92, 63, 0.1) 0%, rgba(47, 158, 114, 0.08) 100%);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 0.85rem 1.15rem;
+      margin-bottom: 1rem;
+      font-size: 0.88rem;
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+    .experiment-banner .experiment-inner {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.5rem;
+    }
+    .experiment-banner .experiment-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent-deep);
+    }
+    .experiment-banner .experiment-date {
+      font-family: var(--mono);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent-deep);
+    }
+    .experiment-banner .experiment-sep { color: var(--subtle); }
+    .experiment-banner .experiment-note { color: var(--muted); font-size: 0.82rem; }
     .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
     .leader-rank { text-align: right; }
     .filters {
@@ -1273,7 +1302,7 @@
           <span class="brand-product">Twin Ledger · Live Scoreboard</span>
         </div>
       </a>
-      <p class="meta header-meta">LIVE · GEMINI 3.5 FLASH · MARKET BENCHMARK</p>
+      <p class="meta header-meta">LIVE · FIRST TRADE JUNE 9, 2026 · GEMINI 3.5 FLASH · MARKET BENCHMARK</p>
     </div>
     <button class="primary" onclick="refresh()">Refresh</button>
   </div>
@@ -1305,6 +1334,14 @@
       <div class="universe-block" id="universe-block"></div>
     </div>
     <div id="perf-error" class="error-banner"></div>
+    <div class="experiment-banner" id="experiment-banner">
+      <div class="experiment-inner">
+        <span class="experiment-label">First trade date</span>
+        <strong class="experiment-date">June 9, 2026</strong>
+        <span class="experiment-sep">·</span>
+        <span class="experiment-note">Live paper trading for Baseline and Internal starts here — all P&amp;L and charts are from this date forward.</span>
+      </div>
+    </div>
     <div class="leader-banner" id="leader-banner"></div>
     <div class="compare-grid" id="compare-cards"></div>
 
@@ -1321,6 +1358,7 @@
 
     <div class="panel">
       <h2>Portfolio Value History</h2>
+      <p class="meta" id="chart-experiment-note" style="padding:0 1rem 0;margin-top:-0.25rem">Equity history from first trade date — June 9, 2026.</p>
       <div class="panel-body padded">
         <div class="filters">
           <label>Range <select id="perf-hours"><option value="168">7d</option><option value="720">30d</option><option value="2160">90d</option></select></label>
@@ -2041,6 +2079,7 @@
     let chatBusy = false;
 
     const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "—";
+    const FIRST_TRADE_LABEL = "June 9, 2026";
     const eventTypeLabel = (type) => (type === "mc_context_loaded" ? "signal_context_loaded" : type);
     const fmtUsd = (n) => n == null ? "—" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     const fmtPct = (n) => n == null ? "—" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
@@ -2125,7 +2164,7 @@
         <div>
           <div class="meta">Twin Ledger Leaderboard</div>
           <div style="font-size:1.1rem;margin-top:0.25rem"><strong>${leaderName}</strong> is ahead by <span class="gap">${fmtUsd(lb.gap_usd)}</span></div>
-          <div class="meta" style="margin-top:0.35rem">Starting equity ${fmtUsd(live.starting_equity)} · Updated ${fmtTime(live.updated_at)}</div>
+          <div class="meta" style="margin-top:0.35rem">Starting equity ${fmtUsd(live.starting_equity)} · First trade ${FIRST_TRADE_LABEL} · Updated ${fmtTime(live.updated_at)}</div>
         </div>
         <div class="leader-rank">
           <div class="meta">Rank</div>
