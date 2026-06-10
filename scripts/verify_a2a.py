@@ -258,7 +258,7 @@ def main() -> int:
             print(f"  {mark} {name}: {eng.get('display_name') or eng.get('error', 'unknown')}")
             if eng.get("stream_query_exposed"):
                 print("      stream_query: exposed")
-        print("\n--- Submission snippet (also in docs/SUBMISSION.md) ---\n")
+        print("\n--- Submission snippet ---\n")
         print(report["submission_snippet"])
 
     return 0 if report["overall_ok"] else 1

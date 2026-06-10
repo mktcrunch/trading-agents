@@ -37,6 +37,7 @@ class ExecutionAgent(BaseAgent):
         position_changes: Dict[str, float],
         reference_prices: Dict[str, float],
         current_positions: Optional[Dict] = None,
+        dry_run: bool | None = None,
     ) -> Dict[str, Optional[str]]:
         """
         Place LIMIT orders overnight (OPG time-in-force)
@@ -50,10 +51,18 @@ class ExecutionAgent(BaseAgent):
         Returns:
             Dict mapping ticker -> order ID (or None if failed)
         """
-        order_ids = {}
+        order_ids: Dict[str, Optional[str]] = {}
         offset_pct = config.ORDER_CONFIG.get("overnight_limit_offset_pct", 0.005)
+        simulate = dry_run if dry_run is not None else config.is_dry_run()
 
-        cancelled = reconcile_duplicate_open_orders(self.alpaca_client)
+        if simulate:
+            self.log_action(
+                "DRY RUN — overnight orders will be simulated (no reconcile, no placement)",
+                data={"dry_run": True},
+                event_type="agent_action",
+            )
+
+        cancelled = [] if simulate else reconcile_duplicate_open_orders(self.alpaca_client)
         for c in cancelled:
             self.log_action(
                 f"Cancelled duplicate {c['side']} {c['symbol']} "
@@ -106,6 +115,23 @@ class ExecutionAgent(BaseAgent):
                 limit_price = round_limit_price(ref_price * (1 + offset_pct))
                 side = "sell"
                 qty_change = abs(qty_change)
+
+            if simulate:
+                order_ids[ticker] = "dry-run"
+                self.log_action(
+                    f"DRY RUN would place overnight {side}: {qty_change} {ticker} @ ${limit_price:.2f}",
+                    data={
+                        "ticker": ticker,
+                        "side": side,
+                        "qty": qty_change,
+                        "limit_price": limit_price,
+                        "time_in_force": "day",
+                        "dry_run": True,
+                        "reason": "dry_run",
+                    },
+                    event_type="order_skipped",
+                )
+                continue
 
             try:
                 order_id = self.alpaca_client.place_limit_order(

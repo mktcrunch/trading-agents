@@ -360,12 +360,18 @@ async def execute_trading_decisions(
         order_manager = OrderManager()
         placed = 0
 
+        from src import config as app_config
+
+        dry = app_config.is_dry_run()
         if position_changes:
             order_manager.build_overnight_orders(position_changes, latest_prices, spread_pct=0.5)
             order_ids = await execution_agent.place_overnight_orders(
                 position_changes, latest_prices, current_positions
             )
-            placed = len([o for o in order_ids.values() if o])
+            if dry:
+                placed = len([t for t, q in position_changes.items() if q])
+            else:
+                placed = len([o for o in order_ids.values() if o])
 
         # 3. End trace with success
         end_trace(
@@ -374,6 +380,7 @@ async def execute_trading_decisions(
             success=True,
             summary={
                 "orders_placed": placed,
+                "dry_run": dry,
                 "position_changes": position_changes,
                 "validation_results": validation,
             }
@@ -382,6 +389,7 @@ async def execute_trading_decisions(
         return {
             "success": True,
             "orders_placed": placed,
+            "dry_run": dry,
             "position_changes": position_changes,
             "validation_results": validation,
         }

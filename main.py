@@ -5,7 +5,9 @@ Master entry point: Run both Baseline and Internal trading systems simultaneousl
 Usage:
     python main.py              # Run both systems in parallel (discovery before internal)
     python main.py --baseline   # Run only baseline system
+    python main.py --baseline --dry-run   # Signal + audit only, no Alpaca orders
     python main.py --internal   # Run discovery (if stale) + internal system
+    python main.py --internal --dry-run
     python main.py --discovery  # Run DataBento discovery only
     python main.py --overnight  # EOD workflow for both systems (4:10 PM job)
     python main.py --risk       # Intraday risk check for both accounts
@@ -20,6 +22,7 @@ from src.adk.model import configure_genai_env
 
 configure_genai_env()
 
+from src import config
 from src.systems.baseline_system import BaselineSystem
 from src.systems.internal_system import InternalSystem
 from src.agents.discovery_agent import DiscoveryAgent
@@ -89,17 +92,18 @@ async def run_both_systems():
     return True
 
 
-async def run_baseline_only():
+async def run_baseline_only(dry_run: bool = False):
     """Run only the baseline system."""
-    start_trace("daily", system="baseline")
+    start_trace("daily", system="baseline", meta={"dry_run": dry_run})
     logger.info("=" * 80)
-    logger.info("STARTING BASELINE SYSTEM (System A)")
+    logger.info("STARTING BASELINE SYSTEM (System A)" + (" — DRY RUN" if dry_run else ""))
     logger.info("=" * 80)
 
     baseline = BaselineSystem()
 
     try:
-        await baseline.run_daily_workflow()
+        with config.dry_run_mode(dry_run):
+            await baseline.run_daily_workflow()
     except Exception as e:
         logger.error(f"Error running baseline system: {e}")
         end_trace("daily", system="baseline", success=False, summary={"error": str(e)})
@@ -108,15 +112,15 @@ async def run_baseline_only():
     logger.info("=" * 80)
     logger.info("BASELINE SYSTEM COMPLETE")
     logger.info("=" * 80)
-    end_trace("daily", system="baseline", success=True)
+    end_trace("daily", system="baseline", success=True, summary={"dry_run": dry_run})
     return True
 
 
-async def run_internal_only():
+async def run_internal_only(dry_run: bool = False):
     """Run discovery (if stale) then internal system."""
-    start_trace("daily", system="internal")
+    start_trace("daily", system="internal", meta={"dry_run": dry_run})
     logger.info("=" * 80)
-    logger.info("STARTING INTERNAL SYSTEM (System B)")
+    logger.info("STARTING INTERNAL SYSTEM (System B)" + (" — DRY RUN" if dry_run else ""))
     logger.info("=" * 80)
 
     if not await run_discovery(traced=False):
@@ -125,7 +129,8 @@ async def run_internal_only():
     internal = InternalSystem()
 
     try:
-        await internal.run_daily_workflow()
+        with config.dry_run_mode(dry_run):
+            await internal.run_daily_workflow()
     except Exception as e:
         logger.error(f"Error running internal system: {e}")
         end_trace("daily", system="internal", success=False, summary={"error": str(e)})
@@ -134,17 +139,20 @@ async def run_internal_only():
     logger.info("=" * 80)
     logger.info("INTERNAL SYSTEM COMPLETE")
     logger.info("=" * 80)
-    end_trace("daily", system="internal", success=True)
+    end_trace("daily", system="internal", success=True, summary={"dry_run": dry_run})
     return True
 
 
-async def run_overnight_job():
+async def run_overnight_job(dry_run: bool = False):
     """
     Scheduled EOD job (~4:10 PM ET): discovery + both systems place overnight OPG orders.
     """
-    start_trace("overnight", system="both")
+    start_trace("overnight", system="both", meta={"dry_run": dry_run})
     logger.info("=" * 80)
-    logger.info("OVERNIGHT JOB — discovery + baseline + internal")
+    logger.info(
+        "OVERNIGHT JOB — discovery + baseline + internal"
+        + (" — DRY RUN" if dry_run else "")
+    )
     logger.info("=" * 80)
 
     if not await run_discovery(traced=False):
@@ -153,17 +161,18 @@ async def run_overnight_job():
     baseline = BaselineSystem()
     internal = InternalSystem()
     try:
-        await asyncio.gather(
-            baseline.run_daily_workflow(),
-            internal.run_daily_workflow(),
-        )
+        with config.dry_run_mode(dry_run):
+            await asyncio.gather(
+                baseline.run_daily_workflow(),
+                internal.run_daily_workflow(),
+            )
     except Exception as e:
         logger.error(f"Overnight job failed: {e}")
         end_trace("overnight", system="both", success=False, summary={"error": str(e)})
         return False
 
     logger.info("OVERNIGHT JOB COMPLETE")
-    end_trace("overnight", system="both", success=True)
+    end_trace("overnight", system="both", success=True, summary={"dry_run": dry_run})
     return True
 
 
@@ -258,18 +267,25 @@ async def run_chase_job(system: str = "both"):
 def main():
     """Main entry point."""
     if len(sys.argv) > 1:
-        arg = sys.argv[1]
+        dry_run = "--dry-run" in sys.argv
+        positional = [
+            a for a in sys.argv[1:]
+            if a not in ("--dry-run", "--force")
+        ]
+        if not positional:
+            print("Usage: python main.py <command> [--dry-run] [--force]")
+            sys.exit(1)
+        arg = positional[0]
         if arg == "--baseline":
-            success = asyncio.run(run_baseline_only())
+            success = asyncio.run(run_baseline_only(dry_run=dry_run))
         elif arg == "--internal":
-            success = asyncio.run(run_internal_only())
+            success = asyncio.run(run_internal_only(dry_run=dry_run))
         elif arg == "--discovery":
             force = "--force" in sys.argv
             success = asyncio.run(run_discovery(force=force))
         elif arg == "--overnight":
-            success = asyncio.run(run_overnight_job())
+            success = asyncio.run(run_overnight_job(dry_run=dry_run))
         elif arg == "--risk":
-            dry_run = "--dry-run" in sys.argv
             system = "both"
             if "--baseline" in sys.argv:
                 system = "baseline"

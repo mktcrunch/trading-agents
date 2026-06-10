@@ -8,7 +8,6 @@ from google.genai import types
 
 from src import config
 from src.adk.model import configure_genai_env
-from src.adk.runner import run_signal_agent
 from src.agents.competition_context import build_competition_context
 from src.agents.data_agent_baseline import BaselineDataAgent
 from src.agents.execution_agent import ExecutionAgent
@@ -50,21 +49,8 @@ async def baseline_signal_decisions(ctx):
     technical_data = ctx.state.get("technical_data") or {}
     competition = ctx.state.get("competition") or {}
 
-    if config.USE_ADK:
-        payload = {
-            "system": "baseline",
-            "competition": competition,
-            "technical_data": technical_data,
-        }
-        decisions = await run_signal_agent(
-            system="baseline",
-            user_payload=payload,
-            session_id=ctx.invocation_id or "baseline_daily",
-            valid_tickers=config.TICKER_UNIVERSE,
-        )
-    else:
-        signal_agent = BaselineSignalAgent()
-        decisions, _ = await signal_agent.run_ledger_cycle(technical_data, competition)
+    signal_agent = BaselineSignalAgent()
+    decisions, _ = await signal_agent.run_ledger_cycle(technical_data, competition)
 
     ctx.state["decisions"] = [d.to_dict() for d in decisions]
     return {"decisions": len(decisions)}

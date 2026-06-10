@@ -71,7 +71,7 @@ Agent Engine deploys include `google-adk[a2a]` (see `deploy/agent_engine_require
 python scripts/verify_a2a.py
 ```
 
-Checks requirements, local ADK `sub_agents` tree, and live Reasoning Engine REST resources (`stream_query` exposed). Submission copy: [docs/SUBMISSION.md](../docs/SUBMISSION.md).
+Checks requirements, local ADK `sub_agents` tree, and live Reasoning Engine REST resources (`stream_query` exposed).
 
 ### Grounding
 

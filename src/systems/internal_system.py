@@ -39,9 +39,20 @@ class InternalSystem:
 
     async def run_daily_workflow(self):
         """Execute daily Twin Ledger trading workflow."""
-        if config.USE_ADK and config.USE_ADK_WORKFLOW:
-            from src.adk.workflows.internal_daily import run_internal_daily_adk
-            return await run_internal_daily_adk()
+        if config.USE_ADK:
+            from src.adk.workflows.daily_pipeline import run_daily_trading_pipeline
+
+            result = await run_daily_trading_pipeline("internal")
+            if not result.get("success"):
+                self.logger.error(result.get("error") or "Daily pipeline failed")
+                return False
+            dry = config.is_dry_run()
+            self.logger.info(
+                f"[INTERNAL] Pipeline complete — "
+                f"{result.get('actionable_count', 0)} actionable, "
+                f"orders={'simulated (dry run)' if dry else result.get('orders_placed', 0)}"
+            )
+            return True
 
         self.logger.info("=" * 60)
         self.logger.info("[INTERNAL SYSTEM] Twin Ledger daily workflow started")

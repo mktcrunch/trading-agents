@@ -8,7 +8,6 @@ from google.genai import types
 
 from src import config
 from src.adk.model import configure_genai_env
-from src.adk.runner import run_signal_agent
 from src.agents.competition_context import build_competition_context
 from src.agents.data_agent_internal import InternalDataAgent
 from src.agents.execution_agent import ExecutionAgent
@@ -56,26 +55,9 @@ async def internal_signal_decisions(ctx):
     mc_predictions = ctx.state.get("mc_predictions") or {}
     databento_sources = ctx.state.get("databento_sources") or {}
     signal_agent = InternalSignalAgent()
-
-    if config.USE_ADK:
-        payload = {
-            "system": "internal",
-            "competition": competition,
-            "technical_data": technical_data,
-            "mc_predictions": mc_predictions,
-            "databento_sources": databento_sources,
-        }
-        decisions = await run_signal_agent(
-            system="internal",
-            user_payload=payload,
-            session_id=ctx.invocation_id or "internal_daily",
-            valid_tickers=config.TICKER_UNIVERSE,
-        )
-        signals = signal_agent.decisions_to_signals(decisions, technical_data, mc_predictions)
-    else:
-        decisions, signals = await signal_agent.run_ledger_cycle(
-            technical_data, mc_predictions, competition, databento_sources
-        )
+    decisions, signals = await signal_agent.run_ledger_cycle(
+        technical_data, mc_predictions, competition, databento_sources
+    )
 
     ctx.state["decisions"] = [d.to_dict() for d in decisions]
     ctx.state["signals"] = {t: s.to_dict() for t, s in signals.items()}

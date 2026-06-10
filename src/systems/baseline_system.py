@@ -39,9 +39,20 @@ class BaselineSystem:
 
     async def run_daily_workflow(self):
         """Execute daily Twin Ledger trading workflow."""
-        if config.USE_ADK and config.USE_ADK_WORKFLOW:
-            from src.adk.workflows.baseline_daily import run_baseline_daily_adk
-            return await run_baseline_daily_adk()
+        if config.USE_ADK:
+            from src.adk.workflows.daily_pipeline import run_daily_trading_pipeline
+
+            result = await run_daily_trading_pipeline("baseline")
+            if not result.get("success"):
+                self.logger.error(result.get("error") or "Daily pipeline failed")
+                return False
+            dry = config.is_dry_run()
+            self.logger.info(
+                f"[BASELINE] Pipeline complete — "
+                f"{result.get('actionable_count', 0)} actionable, "
+                f"orders={'simulated (dry run)' if dry else result.get('orders_placed', 0)}"
+            )
+            return True
 
         self.logger.info("=" * 60)
         self.logger.info("[BASELINE SYSTEM] Twin Ledger daily workflow started")

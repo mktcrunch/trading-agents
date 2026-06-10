@@ -10,7 +10,7 @@ Licensed under the [Apache License 2.0](LICENSE).
 
 **Orchestration:** [Agent Development Kit (ADK)](https://google.github.io/adk-docs/) — multi-agent coordinators, `FunctionTool` wrappers for Alpaca/MarketCrunch/DataBento, optional MCP stdio server for external tool connections.
 
-**Competition docs:** [docs/SUBMISSION.md](docs/SUBMISSION.md) — ADK roles, A2A/Agent Engine, grounding/RAG narrative for judges. Verify A2A: `python scripts/verify_a2a.py`.
+**A2A verification:** `python scripts/verify_a2a.py` — checks ADK sub-agents, Agent Engine REST, and `google-adk[a2a]` wiring.
 
 ---
 
@@ -146,7 +146,10 @@ pytest tests/ -q             # offline unit/smoke tests (no API keys)
 ```bash
 python main.py                    # discovery + both systems in parallel
 python main.py --baseline         # baseline only
+python main.py --baseline --dry-run   # full pipeline, no Alpaca orders
 python main.py --internal         # discovery (if stale) + internal
+python main.py --internal --dry-run
+python main.py --overnight --dry-run  # both traders, no orders
 python main.py --discovery        # DataBento discovery only
 python main.py --overnight        # EOD job: discovery + both systems
 python main.py --risk             # intraday risk (both accounts)
@@ -193,7 +196,7 @@ trading-agents/
 ├── data/                   # approved_datasources.json, audit_events.jsonl, risk state
 ├── deploy/                 # Cloud Run + Scheduler setup
 ├── tests/                  # pytest smoke tests (config, ADK imports, grounding)
-├── docs/                   # SUBMISSION.md for judges
+├── docs/                   # optional local notes (not in public repo)
 ├── scripts/                # verify_a2a.py, GCS sync helpers
 ├── LICENSE
 ├── logs/

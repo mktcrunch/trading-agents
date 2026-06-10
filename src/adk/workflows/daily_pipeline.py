@@ -62,7 +62,11 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"GCS audit hydrate failed: {e}")
 
-    logger.info(f"[daily_pipeline] Starting deterministic workflow for {system}")
+    dry = config.is_dry_run()
+    logger.info(
+        f"[daily_pipeline] Starting deterministic workflow for {system}"
+        + (" (DRY RUN — no orders)" if dry else "")
+    )
 
     if config.LEARNING_ENABLED:
         try:

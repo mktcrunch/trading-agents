@@ -78,3 +78,10 @@ agents/*/src */
 baseline_trading/
 deploy/agent_engine_ids.env
 deploy/logs/
+
+# Local dev / not for judge-facing repo
+.cursor/
+.cursorignore
+.cursorrules
+docs/SUBMISSION.md
+docs/SUBMISSION_*.txt

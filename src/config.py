@@ -2,9 +2,12 @@
 Configuration management for MarketCrunch Trading Agents
 Loads all environment variables and constants
 """
+import contextvars
 import os
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List
+from typing import Iterator, List
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -166,6 +169,26 @@ TICKER_UNIVERSE: List[str] = [t["ticker"] for t in TRADING_UNIVERSE]
 TRADING_ENABLED = os.getenv("TRADING_ENABLED", "true").lower() == "true"
 BACKTEST_MODE = os.getenv("BACKTEST_MODE", "false").lower() == "true"
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+
+_dry_run_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("dry_run", default=False)
+
+
+def is_dry_run() -> bool:
+    """True when env DRY_RUN=true or a CLI session enabled dry_run_mode()."""
+    return DRY_RUN or _dry_run_ctx.get()
+
+
+@contextmanager
+def dry_run_mode(enabled: bool = True) -> Iterator[None]:
+    """Temporarily enable daily-workflow dry run (no Alpaca order placement)."""
+    if not enabled:
+        yield
+        return
+    token = _dry_run_ctx.set(True)
+    try:
+        yield
+    finally:
+        _dry_run_ctx.reset(token)
 
 # ============================================================================
 # SIGNAL & ALLOCATION CONFIG
