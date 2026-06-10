@@ -427,19 +427,23 @@ class RiskMonitor:
     # ------------------------------------------------------------------
 
     def _get_15min_prediction(self, ticker: str) -> Optional[float]:
+        from src.apis.marketcrunch_client import request_with_retry
+
         url = config.PREDICT_15MIN_URL
+        resp = request_with_retry(
+            "POST",
+            url,
+            json={"ticker": ticker},
+            headers={"Content-Type": "application/json"},
+            label=f"MC predict15min {ticker}",
+        )
+        if resp is None:
+            return None
         try:
-            resp = requests.post(
-                url,
-                json={"ticker": ticker},
-                headers={"Content-Type": "application/json"},
-                timeout=60,
-            )
-            resp.raise_for_status()
             data = resp.json()
             return data.get("prediction", {}).get("predicted_close_price_15min")
         except Exception as e:
-            logger.warning(f"15-min prediction failed for {ticker}: {e}")
+            logger.warning(f"15-min prediction parse failed for {ticker}: {e}")
             return None
 
     def _should_exit_with_prediction(

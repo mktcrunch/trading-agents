@@ -42,6 +42,10 @@ except (PermissionError, OSError):
 MC_API_KEY_ID = os.getenv("MC_API_KEY_ID")
 MC_API_SECRET_KEY = os.getenv("MC_API_SECRET_KEY")
 MC_API_URL = os.getenv("MC_API_URL", "https://mktcrunch-api-52245432644.us-central1.run.app")
+MC_API_CONNECT_TIMEOUT = int(os.getenv("MC_API_CONNECT_TIMEOUT", "10"))
+MC_API_READ_TIMEOUT = int(os.getenv("MC_API_READ_TIMEOUT", "120"))
+MC_API_MAX_RETRIES = int(os.getenv("MC_API_MAX_RETRIES", "3"))
+MC_API_RETRY_BACKOFF_SEC = float(os.getenv("MC_API_RETRY_BACKOFF_SEC", "2"))
 
 if not MC_API_KEY_ID or not MC_API_SECRET_KEY:
     raise ValueError("Missing MC_API_KEY_ID or MC_API_SECRET_KEY environment variables")

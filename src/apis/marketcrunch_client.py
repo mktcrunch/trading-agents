@@ -2,13 +2,70 @@
 MarketCrunch API client
 Fetches predictions and technical analysis
 """
+import time
 import requests
 from typing import Optional, Dict, Any
-from datetime import datetime
 from src import config
 from src.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+_RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+
+
+def request_with_retry(
+    method: str,
+    url: str,
+    *,
+    session: Optional[requests.Session] = None,
+    headers: Optional[Dict[str, str]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    json: Optional[Dict[str, Any]] = None,
+    label: str = "MC API",
+) -> Optional[requests.Response]:
+    """HTTP request with connect/read timeouts and retries on transient failures."""
+    http = session or requests
+    timeout = (config.MC_API_CONNECT_TIMEOUT, config.MC_API_READ_TIMEOUT)
+    max_retries = config.MC_API_MAX_RETRIES
+    backoff = config.MC_API_RETRY_BACKOFF_SEC
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = http.request(
+                method,
+                url,
+                headers=headers,
+                params=params,
+                json=json,
+                timeout=timeout,
+            )
+            if response.status_code in _RETRYABLE_STATUS and attempt < max_retries:
+                wait = backoff * attempt
+                logger.warning(
+                    f"{label}: HTTP {response.status_code}, "
+                    f"retry {attempt}/{max_retries} in {wait:.0f}s"
+                )
+                time.sleep(wait)
+                continue
+            response.raise_for_status()
+            return response
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            if attempt < max_retries:
+                wait = backoff * attempt
+                logger.warning(
+                    f"{label}: {e}, retry {attempt}/{max_retries} in {wait:.0f}s"
+                )
+                time.sleep(wait)
+            else:
+                logger.error(f"{label}: {e} (exhausted {max_retries} attempts)")
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"{label}: {e}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"{label}: {e}")
+            return None
+
+    return None
 
 
 class MarketCrunchClient:
@@ -36,6 +93,21 @@ class MarketCrunchClient:
             "Content-Type": "application/json",
         }
 
+    def _get_json(self, path: str, ticker: str, label: str) -> Optional[Dict[str, Any]]:
+        url = f"{self.api_url}{path}"
+        params = {"ticker": ticker.upper()}
+        response = request_with_retry(
+            "GET",
+            url,
+            session=self.session,
+            headers=self.headers,
+            params=params,
+            label=f"MC {label} {ticker}",
+        )
+        if response is None:
+            return None
+        return response.json()
+
     def get_ai_estimates(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
         Get complete analysis for a ticker (uses /analyze endpoint)
@@ -47,18 +119,9 @@ class MarketCrunchClient:
         - weekly_range: price predictions for the week
         """
         try:
-            url = f"{self.api_url}/analyze"
-            params = {"ticker": ticker.upper()}
-
-            response = self.session.get(
-                url,
-                params=params,
-                headers=self.headers,
-                timeout=30
-            )
-            response.raise_for_status()
-
-            data = response.json()
+            data = self._get_json("/analyze", ticker, "analyze")
+            if data is None:
+                return None
 
             # Extract and parse key prediction data
             ai_est = data.get('ai_estimate', {})
@@ -72,7 +135,10 @@ class MarketCrunchClient:
 
             confidence = ai_est.get('confidence', 'Unknown')
 
-            logger.info(f"✓ Fetched complete analysis for {ticker}: target={target_delta_numeric:.2f}%, confidence={confidence}")
+            logger.info(
+                f"✓ Fetched complete analysis for {ticker}: "
+                f"target={target_delta_numeric:.2f}%, confidence={confidence}"
+            )
 
             # Store parsed numeric value back in data for easier access
             if 'ai_estimate' in data:
@@ -80,9 +146,6 @@ class MarketCrunchClient:
 
             return data
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to fetch analysis for {ticker}: {e}")
-            return None
         except Exception as e:
             logger.error(f"Unexpected error fetching analysis for {ticker}: {e}")
             return None
@@ -99,25 +162,10 @@ class MarketCrunchClient:
             "timeframe": "1d"
         }
         """
-        try:
-            url = f"{self.api_url}/technical"
-            params = {"ticker": ticker.upper()}
-
-            response = self.session.get(
-                url,
-                params=params,
-                headers=self.headers,
-                timeout=30
-            )
-            response.raise_for_status()
-
-            data = response.json()
+        data = self._get_json("/technical", ticker, "technical")
+        if data:
             logger.info(f"✓ Fetched technical analysis for {ticker}")
-            return data
-
-        except Exception as e:
-            logger.error(f"Failed to fetch technical analysis for {ticker}: {e}")
-            return None
+        return data
 
     def get_factors(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
@@ -130,25 +178,10 @@ class MarketCrunchClient:
             "negative_factors": [{"key": "...", "label": "..."}]
         }
         """
-        try:
-            url = f"{self.api_url}/factors"
-            params = {"ticker": ticker.upper()}
-
-            response = self.session.get(
-                url,
-                params=params,
-                headers=self.headers,
-                timeout=30
-            )
-            response.raise_for_status()
-
-            data = response.json()
+        data = self._get_json("/factors", ticker, "factors")
+        if data:
             logger.info(f"✓ Fetched factors for {ticker}")
-            return data
-
-        except Exception as e:
-            logger.error(f"Failed to fetch factors for {ticker}: {e}")
-            return None
+        return data
 
     def get_weekly_range(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
@@ -164,25 +197,10 @@ class MarketCrunchClient:
             "history": [...]
         }
         """
-        try:
-            url = f"{self.api_url}/weekly"
-            params = {"ticker": ticker.upper()}
-
-            response = self.session.get(
-                url,
-                params=params,
-                headers=self.headers,
-                timeout=30
-            )
-            response.raise_for_status()
-
-            data = response.json()
+        data = self._get_json("/weekly", ticker, "weekly")
+        if data:
             logger.info(f"✓ Fetched weekly range for {ticker}")
-            return data
-
-        except Exception as e:
-            logger.error(f"Failed to fetch weekly range for {ticker}: {e}")
-            return None
+        return data
 
     def get_analyze(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
@@ -190,25 +208,10 @@ class MarketCrunchClient:
 
         Returns combined data from ai-estimates, technical, weekly, factors
         """
-        try:
-            url = f"{self.api_url}/analyze"
-            params = {"ticker": ticker.upper()}
-
-            response = self.session.get(
-                url,
-                params=params,
-                headers=self.headers,
-                timeout=30
-            )
-            response.raise_for_status()
-
-            data = response.json()
+        data = self._get_json("/analyze", ticker, "analyze")
+        if data:
             logger.info(f"✓ Fetched complete analysis for {ticker}")
-            return data
-
-        except Exception as e:
-            logger.error(f"Failed to fetch analysis for {ticker}: {e}")
-            return None
+        return data
 
     def fetch_signals_for_tickers(self, tickers: list) -> Dict[str, Optional[Dict[str, Any]]]:
         """
