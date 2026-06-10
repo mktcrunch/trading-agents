@@ -17,9 +17,11 @@ DASHBOARD_HTML = Path(__file__).parent / "src" / "dashboard" / "index.html"
 
 
 def _check_auth(handler: BaseHTTPRequestHandler) -> bool:
+    """Job routes only. Fail closed if SCHEDULER_SECRET is unset or header mismatches."""
     secret = config.SCHEDULER_SECRET
     if not secret:
-        return True
+        logger.warning("Job request rejected: SCHEDULER_SECRET is not configured")
+        return False
     return handler.headers.get("X-Scheduler-Secret") == secret
 
 
@@ -163,8 +165,8 @@ class JobHandler(BaseHTTPRequestHandler):
         try:
             if path == "/jobs/overnight":
                 from main import run_overnight_job
-                ok = asyncio.run(run_overnight_job())
-                _json_response(self, 200, {"job": "overnight", "success": ok})
+                ok = asyncio.run(run_overnight_job(dry_run=dry_run))
+                _json_response(self, 200, {"job": "overnight", "success": ok, "dry_run": dry_run})
             elif path == "/jobs/risk":
                 from main import run_risk_job
                 ok = asyncio.run(run_risk_job(system="both", dry_run=dry_run))

@@ -54,6 +54,11 @@
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
     }
+    .dashboard-shell {
+      max-width: 72rem;
+      margin: 0 auto;
+      width: 100%;
+    }
     h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
     h3 { font-size: 1rem; margin-bottom: 0.5rem; }
     .header {
@@ -134,7 +139,7 @@
       display: flex; gap: 0.35rem; margin-bottom: 1.25rem;
       padding: 0.3rem; background: var(--accent-pale);
       border: 1px solid var(--border); border-radius: var(--radius);
-      width: fit-content;
+      width: 100%;
       box-shadow: var(--shadow-sm);
     }
     .tab {
@@ -440,8 +445,16 @@
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    .arch-hero p { color: var(--muted); font-size: 0.92rem; line-height: 1.65; max-width: 52rem; }
-    .arch-pill-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 1rem; }
+    .arch-hero p { color: var(--muted); font-size: 0.92rem; line-height: 1.65; }
+    .arch-intro {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .arch-intro .arch-hero { margin-bottom: 0; }
+    .arch-intro .arch-stats { margin-bottom: 0; }
+    .arch-pill-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 1rem; align-items: center; }
     .arch-pill {
       font-family: var(--mono);
       font-size: 0.68rem;
@@ -460,17 +473,20 @@
 
     .arch-stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.65rem;
-      margin-bottom: 1.25rem;
     }
     .arch-stat {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 0.9rem 1rem;
+      padding: 0.9rem 0.75rem;
       text-align: center;
       box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 4.75rem;
     }
     .arch-stat .num {
       font-family: var(--mono);
@@ -1117,6 +1133,18 @@
       line-height: 1.4;
     }
 
+    /* ── Desktop layout ── */
+    @media (min-width: 640px) {
+      .arch-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1024px) {
+      body { padding-left: 2rem; padding-right: 2rem; }
+      .arch-hero { padding: 1.75rem 2rem; }
+    }
+    @media (min-width: 1200px) {
+      .arch-stats { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    }
+
     /* ── Mobile & tablet ── */
     @media (max-width: 800px) {
       .compare-grid,
@@ -1281,9 +1309,10 @@
   </style>
 </head>
 <body>
+  <div class="dashboard-shell">
   <div class="header">
     <div class="header-brand">
-      <a href="https://marketcrunch.ai" class="brand-link" target="_blank" rel="noopener noreferrer" aria-label="MarketCrunch AI — Twin Ledger">
+      <a href="https://marketcrunch.ai" class="brand-link" target="_blank" rel="noopener noreferrer" aria-label="MarketCrunch AI, Twin Ledger">
         <svg class="brand-logo" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <defs>
             <linearGradient id="mcLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1316,21 +1345,21 @@
   <!-- PERFORMANCE VIEW -->
   <div id="view-performance" class="view active">
     <div class="mission">
-      <strong>The market is the only benchmark that never stops moving</strong> — prices shift, competitors react, and yesterday's edge fades overnight.
+      <strong>The market is the only benchmark that never stops moving</strong>: prices shift, competitors react, and yesterday's edge fades overnight.
       Twin Ledger puts two autonomous traders in that arena with real prices, real orders, and a live scoreboard.
       <br><br>
-      <strong>Twin Ledger</strong> is our live experiment — not a backtest, not a replay of history.
-      Two competing traders start with the same capital and compete head-to-head on separate Alpaca accounts — each backed by its own multi-agent crew (coordinator, data, signal, and risk specialists).
+      <strong>Twin Ledger</strong> is our live experiment, not a backtest, not a replay of history.
+      Two competing traders start with the same capital and compete head-to-head on separate Alpaca accounts, each backed by its own multi-agent crew (coordinator, data, signal, and risk specialists).
       <strong>Baseline</strong> trades on technicals and structured LLM reasoning alone.
-      <strong>Internal</strong> adds the <strong>MC Internal</strong> stack — MarketCrunch’s proprietary prediction service, confidence-based sizing, and agentic vendor-data discovery — layered on top of the same agent crew. Gemini still makes the final trade call, but with private forecast context Baseline never sees.
+      <strong>Internal</strong> adds the <strong>MC Internal</strong> stack: MarketCrunch’s proprietary prediction service, confidence-based sizing, and agentic vendor-data discovery, layered on top of the same agent crew. Gemini still makes the final trade call, but with private forecast context Baseline never sees.
       This scoreboard is the experiment: who adapts faster as the market moves?
       <div class="mc-model-panel">
         <h4>Two architectures, one scoreboard</h4>
-        <p><strong>Baseline</strong> — public market data, Alpaca news, and Google Search grounding → Gemini ledger decisions → risk → execution.</p>
-        <p style="margin-top:0.45rem"><strong>Internal</strong> — <em>same public stack</em>, plus MarketCrunch ensemble forecasts, discovered vendor features, and prediction-aware sizing and risk. One incremental layer on top of identical public context.</p>
-        <p style="margin-top:0.45rem">MarketCrunch models are trained at scale — <strong>50M+ parameters</strong> across <strong>1B+ datapoints</strong> — and served into Internal’s agent crew at decision time. Baseline never receives that layer.</p>
+        <p><strong>Baseline</strong>: public market data, Alpaca news, and Google Search grounding → Gemini ledger decisions → risk → execution.</p>
+        <p style="margin-top:0.45rem"><strong>Internal</strong>: <em>same public stack</em>, plus MarketCrunch ensemble forecasts, discovered vendor features, and prediction-aware sizing and risk. One incremental layer on top of identical public context.</p>
+        <p style="margin-top:0.45rem">MarketCrunch models are trained at scale (<strong>50M+ parameters</strong> across <strong>1B+ datapoints</strong>) and served into Internal’s agent crew at decision time. Baseline never receives that layer.</p>
       </div>
-      <div class="llm-tag">LLM: Google Gemini 3.5 Flash — trading decisions, trailing stops, discovery planning</div>
+      <div class="llm-tag">LLM: Google Gemini 3.5 Flash for trading decisions, trailing stops, discovery planning</div>
       <div class="universe-block" id="universe-block"></div>
     </div>
     <div id="perf-error" class="error-banner"></div>
@@ -1339,7 +1368,7 @@
         <span class="experiment-label">First trade date</span>
         <strong class="experiment-date">June 9, 2026</strong>
         <span class="experiment-sep">·</span>
-        <span class="experiment-note">Live paper trading for Baseline and Internal starts here — all P&amp;L and charts are from this date forward.</span>
+        <span class="experiment-note">Live paper trading for Baseline and Internal starts here; all P&amp;L and charts are from this date forward.</span>
       </div>
     </div>
     <div class="leader-banner" id="leader-banner"></div>
@@ -1358,7 +1387,7 @@
 
     <div class="panel">
       <h2>Portfolio Value History</h2>
-      <p class="meta" id="chart-experiment-note" style="padding:0 1rem 0;margin-top:-0.25rem">Equity history from first trade date — June 9, 2026.</p>
+      <p class="meta" id="chart-experiment-note" style="padding:0 1rem 0;margin-top:-0.25rem">Equity history from first trade date, June 9, 2026.</p>
       <div class="panel-body padded">
         <div class="filters">
           <label>Range <select id="perf-hours"><option value="168">7d</option><option value="720">30d</option><option value="2160">90d</option></select></label>
@@ -1371,18 +1400,19 @@
 
   <!-- ARCHITECTURE VIEW -->
   <div id="view-architecture" class="view">
+    <div class="arch-intro">
     <div class="arch-hero">
       <h2>Two Traders, Specialist Crews, Full Traceability</h2>
       <p>
-        Twin Ledger is a live head-to-head trading experiment on Google Cloud. Two competing traders —
-        <strong style="color:var(--baseline)">Baseline</strong> and <strong style="color:var(--internal)">Internal</strong> —
+        Twin Ledger is a live head-to-head trading experiment on Google Cloud. Two competing traders,
+        <strong style="color:var(--baseline)">Baseline</strong> and <strong style="color:var(--internal)">Internal</strong>,
         each start with <strong>$100,000</strong> on a dedicated Alpaca paper account. Every trader is a
         <strong>Vertex AI Agent Engine</strong> deployment: a chat-mode <em>coordinator</em> routes scheduler work to
-        task-mode specialists and deterministic execution tools (phrase-matched callbacks — not LLM orchestration).
+        task-mode specialists and deterministic execution tools (phrase-matched callbacks, not LLM orchestration).
         <strong>Gemini 3.5 Flash</strong> runs on the Vertex <code>global</code> endpoint for signal decisions, discovery planning,
         chat Q&amp;A, and the intraday trailing-stop planner inside the deterministic risk path.
         Each overnight run refreshes <strong>per-agent learning memory</strong> for the full crew before new signals.
-        Every action is logged to GCS with a <code>trace_id</code> and surfaced in this dashboard — equity charts come from Alpaca portfolio history.
+        Every action is logged to GCS with a <code>trace_id</code> and surfaced in this dashboard; equity charts come from Alpaca portfolio history.
       </p>
       <div class="arch-pill-row">
         <span class="arch-pill accent">Google ADK</span>
@@ -1408,15 +1438,16 @@
       <div class="arch-stat"><div class="num">1B+</div><div class="lbl">Training Datapoints</div></div>
       <div class="arch-stat"><div class="num">$100k</div><div class="lbl">Starting Equity</div></div>
     </div>
+    </div>
 
     <div class="arch-section-title">MC Internal prediction stack <span class="mc-ip-badge">MC Internal IP</span></div>
     <div class="arch-callout" style="margin-bottom:1.25rem">
-      <strong>Internal consumes MarketCrunch’s production ensemble</strong> — trained at scale over <strong>50M+ parameters</strong> and <strong>1B+ datapoints</strong>.
+      <strong>Internal consumes MarketCrunch’s production ensemble</strong>: trained at scale over <strong>50M+ parameters</strong> and <strong>1B+ datapoints</strong>.
       Twin Ledger does not retrain models; it pulls nightly forecasts and injects them into Internal’s data, signal, sizing, and risk agents. Baseline is the control arm and never calls this API.
       <ul style="margin:0.65rem 0 0;padding-left:1.15rem;font-size:0.82rem;color:var(--muted);line-height:1.55">
-        <li><strong>What flows in</strong> — per-ETF direction, expected move, and confidence from MarketCrunch <code>/analyze</code></li>
-        <li><strong>How agents use it</strong> — enriched Gemini signal prompts, confidence-based sizing, and an intraday prediction gate on exits</li>
-        <li><strong>What stays the same</strong> — identical ADK crew, scheduler, execution path, and audit trail as Baseline</li>
+        <li><strong>What flows in</strong>: per-ETF direction, expected move, and confidence from MarketCrunch <code>/analyze</code></li>
+        <li><strong>How agents use it</strong>: enriched Gemini signal prompts, confidence-based sizing, and an intraday prediction gate on exits</li>
+        <li><strong>What stays the same</strong>: identical ADK crew, scheduler, execution path, and audit trail as Baseline</li>
       </ul>
     </div>
 
@@ -1424,15 +1455,15 @@
       <strong>Scheduler → deterministic path.</strong> Cloud Scheduler sends a plain-text message
       (<em>“Run daily trading workflow.”</em>, <em>“Run intraday risk check.”</em>, or <em>“Run post-open chase.”</em>)
       to each Agent Engine. A <code>before_agent_callback</code> intercepts these phrases and invokes the matching
-      tool directly — no multi-turn LLM orchestration. If the coordinator is used interactively and does not complete
+      tool directly, with no multi-turn LLM orchestration. If the coordinator is used interactively and does not complete
       a daily job, an <code>after_agent_callback</code> fallback runs the same deterministic pipeline
       (<code>DAILY_COORDINATOR_FALLBACK=true</code>).
       <ul style="margin:0.65rem 0 0;padding-left:1.15rem;font-size:0.82rem;color:var(--muted);line-height:1.55">
-        <li><strong>Reliability</strong> — unattended cron must complete every time; LLM orchestration can stop after data fetch or explanation without placing orders.</li>
-        <li><strong>Latency &amp; cost</strong> — risk runs every 15 minutes; routing should not add extra Gemini turns.</li>
-        <li><strong>Auditability</strong> — fixed pipeline (<code>data → signal → risk → execute → monitor</code>) with one trace per job; judges can replay the same steps.</li>
-        <li><strong>Where Gemini stays</strong> — signal decisions, discovery planning, dashboard chat (read-only), <strong>intraday trailing-stop planner</strong> (inside deterministic risk path); only <em>scheduler routing</em> is non-LLM.</li>
-        <li><strong>Learning refresh</strong> — before each overnight signal pass, audit outcomes are scored per crew role and persisted to GCS (<code>learning/{role}_{system}.json</code>).</li>
+        <li><strong>Reliability</strong>: unattended cron must complete every time; LLM orchestration can stop after data fetch or explanation without placing orders.</li>
+        <li><strong>Latency &amp; cost</strong>: risk runs every 15 minutes; routing should not add extra Gemini turns.</li>
+        <li><strong>Auditability</strong>: fixed pipeline (<code>data → signal → risk → execute → monitor</code>) with one trace per job; judges can replay the same steps.</li>
+        <li><strong>Where Gemini stays</strong>: signal decisions, discovery planning, dashboard chat (read-only), <strong>intraday trailing-stop planner</strong> (inside deterministic risk path); only <em>scheduler routing</em> is non-LLM.</li>
+        <li><strong>Learning refresh</strong>: before each overnight signal pass, audit outcomes are scored per crew role and persisted to GCS (<code>learning/{role}_{system}.json</code>).</li>
       </ul>
     </div>
 
@@ -1489,22 +1520,22 @@
 
     <div class="arch-stack">
       <div class="arch-layer">
-        <div class="arch-layer-label">Layer 1 — Triggers</div>
+        <div class="arch-layer-label">Layer 1: Triggers</div>
         <div class="arch-nodes">
           <div class="arch-node scheduler">
             <div class="name">baseline-overnight-direct</div>
             <div class="desc">Daily trading workflow</div>
-            <div class="tag">4:10 PM ET · Mon–Fri</div>
+            <div class="tag">4:10 PM ET · Mon-Fri</div>
           </div>
           <div class="arch-node scheduler">
             <div class="name">internal-overnight-direct</div>
             <div class="desc">Daily trading workflow</div>
-            <div class="tag">4:10 PM ET · Mon–Fri</div>
+            <div class="tag">4:10 PM ET · Mon-Fri</div>
           </div>
           <div class="arch-node scheduler">
             <div class="name">*-risk-direct</div>
             <div class="desc">Intraday risk monitor</div>
-            <div class="tag">Every 15m · 9–3:45 PM ET</div>
+            <div class="tag">Every 15m · 9-3:45 PM ET</div>
           </div>
           <div class="arch-node scheduler">
             <div class="name">*-chase-direct</div>
@@ -1515,7 +1546,7 @@
       </div>
       <div class="arch-connector">▼ streamQuery → Vertex AI Reasoning Engine</div>
       <div class="arch-layer">
-        <div class="arch-layer-label">Layer 2 — Two competing traders, each with a 6-agent crew</div>
+        <div class="arch-layer-label">Layer 2: Two competing traders, each with a 6-agent crew</div>
         <div class="arch-agent-crews">
           <div class="arch-crew-block baseline">
             <h4>Baseline · competing trader</h4>
@@ -1531,37 +1562,37 @@
         </div>
         <div class="arch-crew-shared">
           <strong>+ Discovery agent · Internal only · <span class="mc-ip-badge">MC Internal IP</span></strong>
-          <p>Proprietary vendor catalog probes — runs before Internal overnight if stale. Baseline does not use discovery. Separate from the Data agent (which <em>loads</em> approved features). Ask chat: <em>“What did the discovery agent do?”</em></p>
+          <p>Proprietary vendor catalog probes run before Internal overnight if stale. Baseline does not use discovery. Separate from the Data agent (which <em>loads</em> approved features). Ask chat: <em>“What did the discovery agent do?”</em></p>
         </div>
         <div class="arch-arena" style="margin-top:1rem;margin-bottom:0">
           <div class="arch-arena-card baseline">
             <h4>Baseline · ADK deployment detail</h4>
             <div class="subtitle">Scheduler callbacks + FunctionTools on coordinator</div>
             <ul>
-              <li><strong>twin_ledger_baseline</strong> — chat-mode coordinator; scheduler phrases → deterministic tools</li>
-              <li><strong>baseline_data</strong> — task LlmAgent: account, OHLCV, RSI/MACD/Bollinger, news</li>
-              <li><strong>baseline_signal</strong> — task LlmAgent: Gemini JSON decisions + rationale</li>
-              <li><strong>Risk (intraday)</strong> — deterministic path via <code>run_intraday_risk_check</code>; <strong>Gemini trailing-stop planner</strong> inside each cycle</li>
-              <li><strong>Risk (pre-trade)</strong> — rule-based validation (max positions, weight caps)</li>
-              <li><strong>Execution + Monitor</strong> — deterministic order placement &amp; portfolio snapshot (no LLM)</li>
+              <li><strong>twin_ledger_baseline</strong>: chat-mode coordinator; scheduler phrases → deterministic tools</li>
+              <li><strong>baseline_data</strong>: task LlmAgent: account, OHLCV, RSI/MACD/Bollinger, news</li>
+              <li><strong>baseline_signal</strong>: task LlmAgent: Gemini JSON decisions + rationale</li>
+              <li><strong>Risk (intraday)</strong>: deterministic path via <code>run_intraday_risk_check</code>; <strong>Gemini trailing-stop planner</strong> inside each cycle</li>
+              <li><strong>Risk (pre-trade)</strong>: rule-based validation (max positions, weight caps)</li>
+              <li><strong>Execution + Monitor</strong>: deterministic order placement &amp; portfolio snapshot (no LLM)</li>
             </ul>
           </div>
           <div class="arch-arena-card internal">
             <h4>Internal · ADK deployment detail</h4>
             <div class="subtitle"><span class="mc-ip-badge">MC Internal IP</span> layers on top of Baseline crew</div>
             <ul>
-              <li><strong>internal_data</strong> — <span class="mc-ip-badge">MC Internal</span> prediction feed + gate-approved vendor features + technicals</li>
-              <li><strong>internal_signal</strong> — <span class="mc-ip-badge">MC Internal</span> competitive ledger prompt enriched with prediction context</li>
-              <li><strong>Strategy allocator</strong> — <span class="mc-ip-badge">MC Internal</span> confidence-based position sizing from prediction snapshot (threshold ≥0.55)</li>
-              <li><strong>Discovery agent</strong> — <span class="mc-ip-badge">MC Internal IP</span> only; Baseline never runs catalog probes</li>
-              <li><strong>Risk (intraday)</strong> — same deterministic path + Gemini trailing planner; adds <span class="mc-ip-badge">MC Internal</span> prediction gate on stop exits</li>
+              <li><strong>internal_data</strong>: <span class="mc-ip-badge">MC Internal</span> prediction feed + gate-approved vendor features + technicals</li>
+              <li><strong>internal_signal</strong>: <span class="mc-ip-badge">MC Internal</span> competitive ledger prompt enriched with prediction context</li>
+              <li><strong>Strategy allocator</strong>: <span class="mc-ip-badge">MC Internal</span> confidence-based position sizing from prediction snapshot (threshold ≥0.55)</li>
+              <li><strong>Discovery agent</strong>: <span class="mc-ip-badge">MC Internal IP</span> only; Baseline never runs catalog probes</li>
+              <li><strong>Risk (intraday)</strong>: same deterministic path + Gemini trailing planner; adds <span class="mc-ip-badge">MC Internal</span> prediction gate on stop exits</li>
             </ul>
           </div>
         </div>
       </div>
       <div class="arch-connector">▼ ADK FunctionTools</div>
       <div class="arch-layer">
-        <div class="arch-layer-label">Layer 3 — Execution &amp; risk tools</div>
+        <div class="arch-layer-label">Layer 3: Execution &amp; risk tools</div>
         <div class="arch-nodes">
           <div class="arch-node both">
             <div class="name">run_daily_trading_workflow</div>
@@ -1583,7 +1614,7 @@
       </div>
       <div class="arch-connector">▼ Every action → audit_events.jsonl → GCS · learning memory synced</div>
       <div class="arch-layer">
-        <div class="arch-layer-label">Layer 4 — Observability (this dashboard)</div>
+        <div class="arch-layer-label">Layer 4: Observability (this dashboard)</div>
         <div class="arch-nodes">
           <div class="arch-node gcp">
             <div class="name">GCS Audit Bucket</div>
@@ -1614,28 +1645,28 @@
         <tbody>
           <tr>
             <td><code>baseline-overnight-direct</code></td>
-            <td>4:10 PM Mon–Fri</td>
+            <td>4:10 PM Mon-Fri</td>
             <td>Baseline Engine</td>
             <td>Run daily trading workflow.</td>
             <td><code>run_daily_trading_workflow</code></td>
           </tr>
           <tr>
             <td><code>internal-overnight-direct</code></td>
-            <td>4:10 PM Mon–Fri</td>
+            <td>4:10 PM Mon-Fri</td>
             <td>Internal Engine</td>
             <td>Run daily trading workflow.</td>
             <td><code>run_daily_trading_workflow</code></td>
           </tr>
           <tr>
             <td><code>baseline-risk-direct</code></td>
-            <td>Every 15m, 9:00–3:45 PM</td>
+            <td>Every 15m, 9:00-3:45 PM</td>
             <td>Baseline Engine</td>
             <td>Run intraday risk check.</td>
             <td><code>run_intraday_risk_check</code></td>
           </tr>
           <tr>
             <td><code>internal-risk-direct</code></td>
-            <td>Every 15m, 9:00–3:45 PM</td>
+            <td>Every 15m, 9:00-3:45 PM</td>
             <td>Internal Engine</td>
             <td>Run intraday risk check.</td>
             <td><code>run_intraday_risk_check</code></td>
@@ -1666,7 +1697,7 @@
       </div>
       <div class="arch-detail-card shared">
         <h4>2 · Refresh learning</h4>
-        <p><code>refresh_system_learning</code> — score audit outcomes for all crew roles (coordinator, data, signal, risk, execution, monitor; + discovery on Internal). Signal/Risk lessons inject into the next Gemini prompt.</p>
+        <p><code>refresh_system_learning</code>: score audit outcomes for all crew roles (coordinator, data, signal, risk, execution, monitor; + discovery on Internal). Signal/Risk lessons inject into the next Gemini prompt.</p>
       </div>
       <div class="arch-detail-card internal">
         <h4>3a · Discovery (if stale)</h4>
@@ -1674,28 +1705,28 @@
       </div>
       <div class="arch-detail-card shared">
         <h4>3b · Technical data</h4>
-        <p><code>get_technical_indicators</code> — 90-day Alpaca OHLCV + RSI, MACD, Bollinger for all 12 universe ETFs.</p>
+        <p><code>get_technical_indicators</code>: 90-day Alpaca OHLCV + RSI, MACD, Bollinger for all 12 universe ETFs.</p>
       </div>
       <div class="arch-detail-card shared">
         <h4>4 · Competition context</h4>
-        <p>Live portfolio values, ranks, and open positions for both traders — each signal agent sees the leaderboard.</p>
+        <p>Live portfolio values, ranks, and open positions for both traders; each signal agent sees the leaderboard.</p>
       </div>
       <div class="arch-detail-card internal">
         <h4>5a · Internal enrichment <span class="mc-ip-badge">MC Internal</span></h4>
         <ul>
           <li>Same public stack as Baseline: technicals, Alpaca news, Google Search grounding</li>
-          <li>Incremental: MarketCrunch forecasts per ETF — direction, expected move, confidence</li>
+          <li>Incremental: MarketCrunch forecasts per ETF: direction, expected move, confidence</li>
           <li>Gate-approved vendor features from the discovery pipeline</li>
           <li>Confidence-aware position sizing on top of Gemini ledger decisions</li>
         </ul>
       </div>
       <div class="arch-detail-card baseline">
         <h4>5b · Baseline signal</h4>
-        <p>Gemini direct call (<code>prefer_direct=True</code>) — technicals + news + Google Search grounding + competitor snapshot + learning block → structured decisions.</p>
+        <p>Gemini direct call (<code>prefer_direct=True</code>), technicals + news + Google Search grounding + competitor snapshot + learning block → structured decisions.</p>
       </div>
       <div class="arch-detail-card shared">
         <h4>6 · Execute</h4>
-        <p><code>execute_trading_decisions</code> — risk validate → size positions → place DAY limits. Technical JSON reused for prices (no refetch).</p>
+        <p><code>execute_trading_decisions</code>: risk validate → size positions → place DAY limits. Technical JSON reused for prices (no refetch).</p>
       </div>
       <div class="arch-detail-card shared">
         <h4>7 · Monitor &amp; audit</h4>
@@ -1716,10 +1747,10 @@
       <div class="arch-detail-card internal">
         <h4>MarketCrunch prediction API <span class="mc-ip-badge">MC Internal</span></h4>
         <ul>
-          <li>Production ensemble — 50M+ parameters trained on 1B+ datapoints</li>
+          <li>Production ensemble: 50M+ parameters trained on 1B+ datapoints</li>
           <li>Daily forecasts per ETF for overnight decisions and sizing</li>
           <li>Short-horizon endpoint for intraday exit gating</li>
-          <li>Internal only — Baseline never calls MarketCrunch</li>
+          <li>Internal only; Baseline never calls MarketCrunch</li>
         </ul>
       </div>
       <div class="arch-detail-card internal">
@@ -1740,9 +1771,9 @@
       <div class="arch-detail-card shared">
         <h4>GCS persistence</h4>
         <ul>
-          <li><code>audit_events.jsonl</code> — immutable decision log</li>
-          <li><code>risk_state_{system}.json</code> — trailing stops, EOD guard</li>
-          <li><code>learning/{role}_{system}.json</code> — per-agent learning memory</li>
+          <li><code>audit_events.jsonl</code>: immutable decision log</li>
+          <li><code>risk_state_{system}.json</code>: trailing stops, EOD guard</li>
+          <li><code>learning/{role}_{system}.json</code>: per-agent learning memory</li>
           <li>Discovery registry + approved datasources</li>
         </ul>
       </div>
@@ -1756,7 +1787,7 @@
     <div class="panel" style="margin-bottom:1.25rem">
       <div class="panel-body padded">
         <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">
-          Neither trader can win on a single-theme bet — the universe spans US equity sizes, sectors,
+          Neither trader can win on a single-theme bet; the universe spans US equity sizes, sectors,
           international, rates, credit, and commodities ($1B+ AUM each).
         </p>
         <div class="arch-ticker-grid">
@@ -1784,14 +1815,14 @@
           <span class="arch-wf-cron">daily · 4:10 PM ET</span>
         </div>
         <div class="arch-wf-body">
-          <div class="arch-step"><span class="arch-step-num">0</span><span class="arch-step-text"><strong>Scheduler intercept</strong> — <code>before_agent_callback</code> routes message to <code>run_daily_trading_workflow</code></span></div>
-          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Learning refresh</strong> — audit → scorecard → lessons for all crew roles; Signal/Risk blocks injected next</span></div>
-          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Data</strong> — 90d technicals; Internal adds <span class="mc-ip-badge">MC Internal</span> predictions + vendor features</span></div>
-          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Signal</strong> — Gemini direct JSON: action, ticker, size_pct, confidence, rationale per symbol</span></div>
-          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Risk</strong> — max 8 positions; reject BUYs failing weight / exposure checks</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Allocator</strong> — Baseline: size_pct cap 10% · Internal: <span class="mc-ip-badge">MC Internal</span> confidence-based sizing from prediction snapshot</span></div>
-          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Execution</strong> — DAY limit at last close ±0.5%; delta vs pending orders; sells before buys (30s gap)</span></div>
-          <div class="arch-step"><span class="arch-step-num">7</span><span class="arch-step-text"><strong>Audit</strong> — <code>job_started</code> → <code>ledger_decision</code> → <code>order_placed</code> → <code>portfolio_snapshot</code> → <code>job_completed</code></span></div>
+          <div class="arch-step"><span class="arch-step-num">0</span><span class="arch-step-text"><strong>Scheduler intercept</strong>: <code>before_agent_callback</code> routes message to <code>run_daily_trading_workflow</code></span></div>
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Learning refresh</strong>: audit → scorecard → lessons for all crew roles; Signal/Risk blocks injected next</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Data</strong>: 90d technicals; Internal adds <span class="mc-ip-badge">MC Internal</span> predictions + vendor features</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Signal</strong>: Gemini direct JSON: action, ticker, size_pct, confidence, rationale per symbol</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Risk</strong>: max 8 positions; reject BUYs failing weight / exposure checks</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Allocator</strong>: Baseline: size_pct cap 10% · Internal: <span class="mc-ip-badge">MC Internal</span> confidence-based sizing from prediction snapshot</span></div>
+          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Execution</strong>: DAY limit at last close ±0.5%; delta vs pending orders; sells before buys (30s gap)</span></div>
+          <div class="arch-step"><span class="arch-step-num">7</span><span class="arch-step-text"><strong>Audit</strong>: <code>job_started</code> → <code>ledger_decision</code> → <code>order_placed</code> → <code>portfolio_snapshot</code> → <code>job_completed</code></span></div>
         </div>
       </div>
       <div class="arch-wf">
@@ -1800,12 +1831,12 @@
           <span class="arch-wf-cron">risk · every 15m</span>
         </div>
         <div class="arch-wf-body">
-          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Positions check</strong> — log returns for every open position</span></div>
-          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>LLM trailing planner</strong> — Gemini sets activation % &amp; profit lock per position (<code>trailing_stop_planned</code>)</span></div>
-          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Stop evaluation</strong> — trailing trigger → base stop (ATR on Internal); deterministic rules after LLM plan</span></div>
-          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Signal gate</strong> — Internal: <span class="mc-ip-badge">MC Internal</span> short-horizon prediction must agree before stop exit</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>EOD exit</strong> — losers below threshold in final ~6 min before close</span></div>
-          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Market sell</strong> — risk_stop_exit / risk_eod_exit logged with full payload</span></div>
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Positions check</strong>: log returns for every open position</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>LLM trailing planner</strong>: Gemini sets activation % &amp; profit lock per position (<code>trailing_stop_planned</code>)</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Stop evaluation</strong>: trailing trigger → base stop (ATR on Internal); deterministic rules after LLM plan</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Signal gate</strong>: Internal: <span class="mc-ip-badge">MC Internal</span> short-horizon prediction must agree before stop exit</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>EOD exit</strong>: losers below threshold in final ~6 min before close</span></div>
+          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Market sell</strong>: risk_stop_exit / risk_eod_exit logged with full payload</span></div>
         </div>
       </div>
       <div class="arch-wf">
@@ -1815,10 +1846,10 @@
         </div>
         <div class="arch-wf-body">
           <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Scan</strong> overnight DAY/OPG limits since prior close</span></div>
-          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Fill check</strong> — skip if &gt;70% filled or already chased</span></div>
-          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Volatility gate</strong> — 30-min std dev &amp; range must be calm</span></div>
-          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Cancel + market</strong> — chase remaining qty with market order</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Audit</strong> — order_placed / order_skipped with chase rationale</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Fill check</strong>: skip if &gt;70% filled or already chased</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Volatility gate</strong>: 30-min std dev &amp; range must be calm</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Cancel + market</strong>: chase remaining qty with market order</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Audit</strong>: order_placed / order_skipped with chase rationale</span></div>
         </div>
       </div>
     </div>
@@ -1828,11 +1859,11 @@
       <div class="arch-detail-card baseline">
         <h4>Baseline risk profile</h4>
         <ul>
-          <li><strong>Path:</strong> deterministic — scheduler → <code>run_intraday_risk_check</code></li>
+          <li><strong>Path:</strong> deterministic scheduler → <code>run_intraday_risk_check</code></li>
           <li><strong>LLM inside path:</strong> Gemini trailing-stop planner each cycle</li>
           <li><strong>Base stop:</strong> fixed −1% return from entry</li>
-          <li><strong>Trailing:</strong> pure LLM planner (activation 0.5–4%, lock 45–80%)</li>
-          <li><strong>Prediction gate:</strong> none — stops execute immediately</li>
+          <li><strong>Trailing:</strong> pure LLM planner (activation 0.5-4%, lock 45-80%)</li>
+          <li><strong>Prediction gate:</strong> none; stops execute immediately</li>
           <li><strong>EOD exit:</strong> losers below −0.95% in final ~6 min before close</li>
         </ul>
       </div>
@@ -1865,12 +1896,12 @@
         <div class="subtitle">Technicals + pure LLM reasoning · 6-agent specialist crew</div>
         <ul>
           <li><strong>Agents:</strong> Coordinator routes data → signal → risk → execution → monitor (no Discovery)</li>
-          <li><strong>Signal:</strong> RSI, MACD, Bollinger, news, Google Search grounding — public data only</li>
+          <li><strong>Signal:</strong> RSI, MACD, Bollinger, news, Google Search grounding, public data only</li>
           <li><strong>Sizing:</strong> LLM size_pct → equal-weight allocation (max 10%)</li>
           <li><strong>Overnight:</strong> DAY limit orders, chased if unfilled</li>
           <li><strong>Trailing stops:</strong> Pure LLM-planned activation &amp; profit lock</li>
           <li><strong>Base stop:</strong> Fixed −1% return threshold</li>
-          <li><strong>Prediction gate:</strong> None — exits execute immediately</li>
+          <li><strong>Prediction gate:</strong> None; exits execute immediately</li>
           <li><strong>Edge hypothesis:</strong> Structured LLM reasoning beats gut feel</li>
         </ul>
       </div>
@@ -1896,10 +1927,10 @@
       every crew role gets a 7-day scorecard from the audit log. Lessons persist to GCS and appear in the
       <em>Decisions</em> tab learning panel. Signal and Risk agents receive injected prompt blocks on the next Gemini call.
       <ul style="margin:0.65rem 0 0;padding-left:1.15rem;font-size:0.82rem;color:var(--muted);line-height:1.55">
-        <li><strong>Tier 1 — Analyze</strong> — role-specific scorecards (e.g. signal: logged / pending / scored decisions; execution: placed vs skipped)</li>
-        <li><strong>Tier 2 — Reflect</strong> — rule-based heuristics for all roles; optional Gemini polish for Signal + Risk only</li>
-        <li><strong>Tier 3 — Inject</strong> — <code>build_signal_learning_block</code> and <code>build_risk_learning_block</code> appended to live prompts</li>
-        <li><strong>Pending vs scored</strong> — same-day decisions show <code>decisions_pending</code> until next-day bars exist; zero scored ≠ inactive pipeline</li>
+        <li><strong>Tier 1, Analyze</strong>: role-specific scorecards (e.g. signal: logged / pending / scored decisions; execution: placed vs skipped)</li>
+        <li><strong>Tier 2, Reflect</strong>: rule-based heuristics for all roles; optional Gemini polish for Signal + Risk only</li>
+        <li><strong>Tier 3, Inject</strong>: <code>build_signal_learning_block</code> and <code>build_risk_learning_block</code> appended to live prompts</li>
+        <li><strong>Pending vs scored</strong>: same-day decisions show <code>decisions_pending</code> until next-day bars exist; zero scored ≠ inactive pipeline</li>
       </ul>
     </div>
     <div class="arch-detail-grid" style="margin-bottom:1.25rem">
@@ -1907,7 +1938,7 @@
         <h4>Baseline · 6 learning roles</h4>
         <ul>
           <li>coordinator · data · signal · risk · execution · monitor</li>
-          <li>Discovery not applicable — Baseline never runs catalog probes</li>
+          <li>Discovery not applicable; Baseline never runs catalog probes</li>
         </ul>
       </div>
       <div class="arch-detail-card internal">
@@ -1931,7 +1962,7 @@
     <div class="panel" style="margin-bottom:1.25rem">
       <div class="panel-body padded">
         <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.75rem">
-          Every job gets a <span class="mono" style="color:var(--accent)">trace_id</span>. Click any trace in the Decisions tab to see the full reasoning chain — the same immutable log stored in GCS.
+          Every job gets a <span class="mono" style="color:var(--accent)">trace_id</span>. Click any trace in the Decisions tab to see the full reasoning chain, the same immutable log stored in GCS.
         </p>
         <div class="arch-audit-grid">
           <div class="arch-audit-chip">job_started / job_completed<span>Workflow envelope</span></div>
@@ -1959,16 +1990,16 @@
         <h4>Read-only Trader Chat (Decisions tab)</h4>
         <ul>
           <li>Cloud Run hosts a <strong>read-only</strong> ADK coordinator (<code>DASHBOARD_CHAT_READ_ONLY=true</code>)</li>
-          <li>Markdown replies via Gemini 3.5 Flash — no order placement or scheduler tools</li>
-          <li>Agent crew chips query audit history directly — no live risk workflow needed</li>
+          <li>Markdown replies via Gemini 3.5 Flash with no order placement or scheduler tools</li>
+          <li>Agent crew chips query audit history directly with no live risk workflow needed</li>
           <li><code>POST /api/chat</code> · <code>GET /api/chat/status</code></li>
         </ul>
       </div>
       <div class="arch-detail-card shared">
         <h4>Direct audit APIs (no LLM)</h4>
         <ul>
-          <li><code>GET /api/agent-activity?system=&amp;agent_role=&amp;hours=</code> — per-agent event trail</li>
-          <li><code>GET /api/learning?system=&amp;agent_role=</code> — persisted learning memory (all roles or one)</li>
+          <li><code>GET /api/agent-activity?system=&amp;agent_role=&amp;hours=</code>: per-agent event trail</li>
+          <li><code>GET /api/learning?system=&amp;agent_role=</code>: persisted learning memory (all roles or one)</li>
           <li><code>GET /api/summary</code> · <code>/api/events</code> · <code>/api/trace/{id}</code> · <code>/api/performance</code></li>
         </ul>
       </div>
@@ -1978,7 +2009,7 @@
     <div class="arch-detail-grid">
       <div class="arch-detail-card shared">
         <h4>Vertex AI Agent Engine</h4>
-        <p>Two Reasoning Engine deployments — one per trader. Root agent = ADK <code>LlmAgent</code> with sub-agents and FunctionTools. Deployed via <code>adk deploy agent_engine</code>.</p>
+        <p>Two Reasoning Engine deployments, one per trader. Root agent = ADK <code>LlmAgent</code> with sub-agents and FunctionTools. Deployed via <code>adk deploy agent_engine</code>.</p>
       </div>
       <div class="arch-detail-card shared">
         <h4>Cloud Scheduler</h4>
@@ -1986,7 +2017,7 @@
       </div>
       <div class="arch-detail-card shared">
         <h4>Cloud Run Dashboard</h4>
-        <p>Serves this UI + REST APIs. Reads GCS audit, learning memory, risk state, and live Alpaca portfolio history. Hosts read-only chat — production trading still flows through Agent Engine scheduler jobs.</p>
+        <p>Serves this UI + REST APIs. Reads GCS audit, learning memory, risk state, and live Alpaca portfolio history. Hosts read-only chat; production trading still flows through Agent Engine scheduler jobs.</p>
       </div>
       <div class="arch-detail-card shared">
         <h4>GCS buckets</h4>
@@ -2063,6 +2094,16 @@
     </div>
   </div>
 
+  <footer class="site-footer">
+    <a href="https://marketcrunch.ai" target="_blank" rel="noopener noreferrer">MarketCrunch AI</a>
+    <span class="footer-sep">·</span>
+    <span>Twin Ledger Trading Agents</span>
+    <span class="footer-sep">·</span>
+    <span class="footer-muted">Google Gemini &amp; ADK on GCP</span>
+  </footer>
+
+  </div><!-- /.dashboard-shell -->
+
   <div id="trace-modal">
     <div class="modal-content">
       <button class="close-btn" onclick="closeTrace()">Close</button>
@@ -2083,11 +2124,11 @@
       return VALID_VIEWS.has(name) ? name : "performance";
     }
 
-    const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "—";
+    const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "n/a";
     const FIRST_TRADE_LABEL = "June 9, 2026";
     const eventTypeLabel = (type) => (type === "mc_context_loaded" ? "signal_context_loaded" : type);
-    const fmtUsd = (n) => n == null ? "—" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    const fmtPct = (n) => n == null ? "—" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
+    const fmtUsd = (n) => n == null ? "n/a" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const fmtPct = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
     const pctClass = (n) => Number(n) >= 0 ? "pos" : "neg";
 
     async function fetchJSON(url) {
@@ -2120,7 +2161,7 @@
     }
 
     function traceCell(traceId) {
-      if (!traceId) return `<span class="trace-missing mono">—</span>`;
+      if (!traceId) return `<span class="trace-missing mono">n/a</span>`;
       return `<span class="trace-link mono" onclick="showTrace('${traceId}')">${traceId.slice(0, 8)}</span>`;
     }
 
@@ -2145,7 +2186,7 @@
         return;
       }
       el.innerHTML = `
-        <div><strong>Trading universe</strong> — ${universe.count} ETFs both agents may trade</div>
+        <div><strong>Trading universe</strong>: ${universe.count} ETFs both agents may trade</div>
         <div class="universe-rationale">${universe.rationale}</div>
         <div class="ticker-grid">
           ${universe.tickers.map(t => `
@@ -2340,7 +2381,7 @@
         } catch (_) { /* ignore */ }
         if (!data?.live) {
           const hint = e.status === 404
-            ? "Performance API not found — restart the server (python main.py --serve) to load the latest server code."
+            ? "Performance API not found. Restart the server (python main.py --serve) to load the latest server code."
             : `Failed to load performance: ${e.message}`;
           showPerfError(hint);
           return;
@@ -2463,7 +2504,7 @@
             `<strong>${st.read_only ? "Read-only" : "Caution"}:</strong> ${st.warning}`;
         }
       } catch (e) {
-        el.textContent = "Chat unavailable — restart server with latest code";
+        el.textContent = "Chat unavailable. Restart server with latest code";
         document.getElementById("chat-send").disabled = true;
       }
     }
@@ -2475,7 +2516,7 @@
       if (chatBusy) return;
       chatBusy = true;
       document.getElementById("chat-send").disabled = true;
-      appendChatMessage("user", `${roleLabel} — audit log (last ${hours}h)`);
+      appendChatMessage("user", `${roleLabel}, audit log (last ${hours}h)`);
 
       try {
         const data = await fetchJSON(
@@ -2602,7 +2643,7 @@
         return `
         <div class="learning-card">
           <h3>${labels[role] || role} · ${system}</h3>
-          <p>${agent.lessons_learned || "No reflection yet — runs after overnight pipeline."}</p>
+          <p>${agent.lessons_learned || "No reflection yet; runs after overnight pipeline."}</p>
           ${bad ? `<ul>${bad}</ul>` : ""}
           ${doMore ? `<ul>${doMore}</ul>` : ""}
           <div class="learning-meta">${learningMeta(role, score, agent.updated_at)}</div>
@@ -2652,7 +2693,7 @@
           <td>${traceCell(e.trace_id)}</td>
           <td><span class="badge ${sysBadge}">${e.system}</span></td>
           <td><span class="badge badge-type">${eventTypeLabel(e.event_type)}</span></td>
-          <td>${e.agent || "—"}</td>
+          <td>${e.agent || "n/a"}</td>
           <td>${(e.action||"").slice(0, 100)}</td>
           <td>${badge(e.status)}</td>
         </tr>`;
@@ -2666,7 +2707,7 @@
         await loadChatStatus();
         await refreshDecisions();
       }
-      /* architecture tab is static — no fetch */
+      /* architecture tab is static (no fetch) */
     }
 
     function escHtml(s) {
@@ -2799,13 +2840,5 @@
     switchView(viewFromHash(), { pushHash: false });
     setInterval(refresh, 30000);
   </script>
-
-  <footer class="site-footer">
-    <a href="https://marketcrunch.ai" target="_blank" rel="noopener noreferrer">MarketCrunch AI</a>
-    <span class="footer-sep">·</span>
-    <span>Twin Ledger Trading Agents</span>
-    <span class="footer-sep">·</span>
-    <span class="footer-muted">Google Gemini &amp; ADK on GCP</span>
-  </footer>
 </body>
 </html>

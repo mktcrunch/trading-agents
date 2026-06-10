@@ -90,37 +90,54 @@ echo "==> Service URL: ${SERVICE_URL}"
 
 echo "==> Creating scheduler jobs (America/New_York)"
 
+SCHEDULER_HEADERS=""
+if gcloud secrets describe SCHEDULER_SECRET --project="${PROJECT}" &>/dev/null; then
+  SCHEDULER_SECRET_VAL="$(gcloud secrets versions access latest \
+    --secret=SCHEDULER_SECRET --project="${PROJECT}")"
+  SCHEDULER_HEADERS="X-Scheduler-Secret=${SCHEDULER_SECRET_VAL}"
+  echo "==> Cloud Run scheduler jobs will send X-Scheduler-Secret (required for /jobs/*)"
+else
+  echo "WARNING: SCHEDULER_SECRET not in Secret Manager — Cloud Run /jobs/* will reject requests"
+fi
+
+_upsert_scheduler_job() {
+  local job_name="$1"
+  local schedule="$2"
+  local uri="$3"
+
+  local -a create_flags=(--http-method POST --oidc-service-account-email "${SA_EMAIL}")
+  local -a update_flags=(--http-method POST --oidc-service-account-email "${SA_EMAIL}")
+  if [[ -n "${SCHEDULER_HEADERS}" ]]; then
+    create_flags+=(--headers="${SCHEDULER_HEADERS}")
+    update_flags+=(--update-headers="${SCHEDULER_HEADERS}")
+  fi
+
+  if gcloud scheduler jobs describe "${job_name}" --location "${REGION}" --project "${PROJECT}" &>/dev/null; then
+    echo "==> Updating scheduler job ${job_name}"
+    gcloud scheduler jobs update http "${job_name}" \
+      --project "${PROJECT}" \
+      --location "${REGION}" \
+      --schedule "${schedule}" \
+      --time-zone "America/New_York" \
+      --uri "${uri}" \
+      "${update_flags[@]}"
+  else
+    echo "==> Creating scheduler job ${job_name}"
+    gcloud scheduler jobs create http "${job_name}" \
+      --project "${PROJECT}" \
+      --location "${REGION}" \
+      --schedule "${schedule}" \
+      --time-zone "America/New_York" \
+      --uri "${uri}" \
+      "${create_flags[@]}"
+  fi
+}
+
 # Overnight orders — 4:10 PM ET weekdays
-gcloud scheduler jobs create http "${SERVICE}-overnight" \
-  --location "${REGION}" \
-  --schedule "10 16 * * 1-5" \
-  --time-zone "America/New_York" \
-  --uri "${SERVICE_URL}/jobs/overnight" \
-  --http-method POST \
-  --oidc-service-account-email "${SA_EMAIL}" \
-  2>/dev/null || gcloud scheduler jobs update http "${SERVICE}-overnight" \
-  --location "${REGION}" \
-  --schedule "10 16 * * 1-5" \
-  --time-zone "America/New_York" \
-  --uri "${SERVICE_URL}/jobs/overnight" \
-  --http-method POST \
-  --oidc-service-account-email "${SA_EMAIL}"
+_upsert_scheduler_job "${SERVICE}-overnight" "10 16 * * 1-5" "${SERVICE_URL}/jobs/overnight"
 
 # Intraday risk — every 5 min, 9 AM–3:55 PM ET weekdays (market-hours gate inside app)
-gcloud scheduler jobs create http "${SERVICE}-risk" \
-  --location "${REGION}" \
-  --schedule "*/5 9-15 * * 1-5" \
-  --time-zone "America/New_York" \
-  --uri "${SERVICE_URL}/jobs/risk" \
-  --http-method POST \
-  --oidc-service-account-email "${SA_EMAIL}" \
-  2>/dev/null || gcloud scheduler jobs update http "${SERVICE}-risk" \
-  --location "${REGION}" \
-  --schedule "*/5 9-15 * * 1-5" \
-  --time-zone "America/New_York" \
-  --uri "${SERVICE_URL}/jobs/risk" \
-  --http-method POST \
-  --oidc-service-account-email "${SA_EMAIL}"
+_upsert_scheduler_job "${SERVICE}-risk" "*/5 9-15 * * 1-5" "${SERVICE_URL}/jobs/risk"
 
 echo "==> Done."
 echo "Overnight: POST ${SERVICE_URL}/jobs/overnight  (4:10 PM ET Mon-Fri)"
