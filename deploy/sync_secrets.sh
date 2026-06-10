@@ -2,7 +2,7 @@
 # Upload required Cloud Run secrets from .env to Secret Manager.
 #
 # Usage:
-#   export GCP_PROJECT=turing-course-437219-c0
+#   export GCP_PROJECT=your-gcp-project-id
 #   ./deploy/sync_secrets.sh
 
 set -euo pipefail
@@ -10,7 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-PROJECT="${GCP_PROJECT:-turing-course-437219-c0}"
+: "${GCP_PROJECT:?Set GCP_PROJECT to your GCP project ID}"
+PROJECT="${GCP_PROJECT}"
 ENV_FILE="${ENV_FILE:-.env}"
 SERVICE="${SERVICE_NAME:-trading-agents}"
 SA_EMAIL="${SERVICE_SA:-${SERVICE}@${PROJECT}.iam.gserviceaccount.com}"

@@ -8,7 +8,7 @@
 #   pip install google-cloud-aiplatform[agent_engines]  (in venv)
 #
 # Usage:
-#   export GCP_PROJECT=turing-course-437219-c0
+#   export GCP_PROJECT=your-gcp-project-id
 #   export GCP_REGION=us-central1
 #   ./deploy/setup_vertex.sh              # APIs + IAM + Agent Engine only
 #   ./deploy/setup_vertex.sh --cloud-run  # also redeploy Cloud Run with Vertex
@@ -18,17 +18,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-DEFAULT_PROJECT_ID="turing-course-437219-c0"
-REQUESTED="${GCP_PROJECT:-$DEFAULT_PROJECT_ID}"
+if [[ -z "${GCP_PROJECT:-}" ]]; then
+  echo "ERROR: Set GCP_PROJECT to your GCP project ID."
+  echo "  gcloud projects list --format='table(projectId,name)'"
+  exit 1
+fi
 
-resolve_project_id() {
-  case "${1}" in
-    MKTCrunch-MVP|mktcrunch-mvp|MKCRUNCH-MVP) echo "turing-course-437219-c0" ;;
-    *) echo "${1}" ;;
-  esac
-}
+case "${GCP_PROJECT}" in
+  MKTCrunch-MVP|mktcrunch-mvp|MKCRUNCH-MVP)
+    echo "ERROR: GCP_PROJECT=${GCP_PROJECT} is a console display name, not a project ID."
+    echo "  gcloud projects list --format='value(projectId)'"
+    exit 1
+    ;;
+esac
 
-PROJECT="$(resolve_project_id "${REQUESTED}")"
+PROJECT="${GCP_PROJECT}"
 REGION="${GCP_REGION:-us-central1}"
 SERVICE="${SERVICE_NAME:-trading-agents}"
 SA_EMAIL="${SERVICE_SA:-${SERVICE}@${PROJECT}.iam.gserviceaccount.com}"

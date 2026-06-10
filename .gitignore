@@ -73,5 +73,8 @@ Thumbs.db
 temp/
 agents/*/src/
 agents/*/.env
+agents/*_tmp*/
+agents/*/src */
+baseline_trading/
 deploy/agent_engine_ids.env
 deploy/logs/

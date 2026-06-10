@@ -18,7 +18,9 @@ from vertexai.preview import reasoning_engines
 from src import config
 
 def clean_agents(dry_run=True):
-    project = os.getenv("GCP_PROJECT", "turing-course-437219-c0")
+    project = os.getenv("GCP_PROJECT", "")
+    if not project:
+        raise SystemExit("Set GCP_PROJECT to your GCP project ID")
     location = os.getenv("GCP_REGION", "us-central1")
     
     vertexai.init(project=project, location=location)

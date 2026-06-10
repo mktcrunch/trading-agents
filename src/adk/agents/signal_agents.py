@@ -1,6 +1,8 @@
 """ADK LlmAgent builders for Twin Ledger signal generation."""
 from google.adk.agents import LlmAgent
+from google.adk.tools.google_search_tool import GoogleSearchTool
 
+from src import config
 from src.adk.model import adk_model
 from src.adk.prompts.baseline import BASELINE_SIGNAL_INSTRUCTION
 from src.adk.prompts.internal import INTERNAL_SIGNAL_INSTRUCTION
@@ -9,13 +11,20 @@ from src.adk.mcp.toolset import optional_mcp_tools
 from src.adk.tools import baseline_data_tools, internal_data_tools
 
 
+def _baseline_signal_tools() -> list:
+    tools = baseline_data_tools() + optional_mcp_tools()
+    if config.BASELINE_GOOGLE_SEARCH_GROUNDING:
+        tools.append(GoogleSearchTool(bypass_multi_tools_limit=True))
+    return tools
+
+
 def build_baseline_signal_agent() -> LlmAgent:
     """LlmAgent that emits structured Twin Ledger decisions (baseline)."""
     return LlmAgent(
         name="baseline_signal",
         model=adk_model(),
         instruction=BASELINE_SIGNAL_INSTRUCTION,
-        tools=baseline_data_tools() + optional_mcp_tools(),
+        tools=_baseline_signal_tools(),
         output_schema=TradingDecisionsResponse,
         mode="task",
     )

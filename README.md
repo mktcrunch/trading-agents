@@ -1,12 +1,16 @@
 # MarketCrunch Trading Agents
 
+Licensed under the [Apache License 2.0](LICENSE).
+
 **Twin Ledger** runs where static benchmarks fall short: live paper markets on Alpaca, with real prices, real competition, and new decisions every session. Two autonomous agents trade head-to-head and generate outcomes you can audit end to end.
 
 **Baseline** trades on technicals and **Gemini 3.5 Flash** structured reasoning. **Internal** runs the same model, enriched with MC Internal predictions, agentic data discovery, confidence sizing, and hybrid scripted+LLM risk. The scoreboard answers one question: does prediction data actually win?
 
-**LLM:** [Google Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash) (`gemini-3.5-flash`, Vertex global endpoint) via **Google ADK** (`LlmAgent` + `Workflow`) — Twin Ledger decisions, intraday trailing-stop planning, and DataBento discovery planners.
+**LLM:** [Google Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash) — Vertex model ID **`gemini-3.5-flash`** on endpoint **`global`** (`GEMINI_VERTEX_LOCATION=global`; Agent Engine stays in `GCP_REGION=us-central1`). Used via **Google ADK** for Twin Ledger decisions, intraday trailing-stop planning, and DataBento discovery planners.
 
 **Orchestration:** [Agent Development Kit (ADK)](https://google.github.io/adk-docs/) — multi-agent coordinators, `FunctionTool` wrappers for Alpaca/MarketCrunch/DataBento, optional MCP stdio server for external tool connections.
+
+**Competition docs:** [docs/SUBMISSION.md](docs/SUBMISSION.md) — ADK roles, A2A/Agent Engine, grounding/RAG narrative for judges. Verify A2A: `python scripts/verify_a2a.py`.
 
 ---
 
@@ -38,11 +42,38 @@ ADK (agents/)
 ├── twin_ledger_internal/ ─── same + MarketCrunch + DataBento tools
 └── src/adk/mcp/server.py ─── MCP tools (Alpaca, MC, DataBento, leaderboard)
 
-Cloud Run (optional)
-├── 4:10 PM ET  → /jobs/overnight
-├── */5 9–15 ET → /jobs/risk
-└── /dashboard  → audit trail UI
+Cloud Scheduler (production)
+├── 6 jobs → Vertex Agent Engine :streamQuery (overnight, risk, chase × 2 traders)
+
+Cloud Run
+├── /dashboard  → audit UI, read-only chat, learning panel
+└── /api/*      → agent-activity, learning, performance (no LLM required)
 ```
+
+### ADK agent map
+
+| Agent | Type | Role |
+|-------|------|------|
+| `twin_ledger_{baseline,internal}` | `LlmAgent` chat | Coordinator — scheduler callbacks + dashboard tools |
+| `{system}_data` | `LlmAgent` task | Fetch account, OHLCV, news, MC/discovery context |
+| `{system}_signal` | `LlmAgent` task | Structured BUY/SELL/HOLD/CLOSE (Baseline: + Google Search grounding) |
+| Risk / Execution / Monitor | Deterministic Python | Invoked via `FunctionTool` on scheduler path |
+| Discovery | Internal only | DataBento catalog probes before overnight if stale |
+
+### A2A & Agent Engine
+
+Each trader deploys to **Vertex AI Agent Engine** with `google-adk[a2a]` in requirements. Cloud Scheduler and operators invoke `stream_query` on the engine REST API. In-engine crews delegate via ADK `sub_agents`. Run `python scripts/verify_a2a.py` to confirm engines, requirements, and local ADK tree.
+
+### Grounding & RAG
+
+| Source | Used by |
+|--------|---------|
+| **Google Search** (`GoogleSearch` tool) | Baseline Signal — macro/ETF news (`BASELINE_GOOGLE_SEARCH_GROUNDING=true`) |
+| **Alpaca news API** | Data agents |
+| **MC predictions** | Internal Signal + sizing (private RAG) |
+| **DataBento discovery features** | Internal Signal (`approved_datasources.json`) |
+| **Learning memory** | Signal + Risk prompts (`learning/{role}_{system}.json`) |
+| **GCS audit log** | Dashboard chat tools (retrieval, no vector DB) |
 
 ### ADK local dev
 
@@ -106,7 +137,8 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.template .env   # fill in API keys
-python test_connections.py
+python test_connections.py   # live API smoke (requires .env)
+pytest tests/ -q             # offline unit/smoke tests (no API keys)
 ```
 
 ### Run locally
@@ -133,7 +165,7 @@ Every action is logged to `data/audit_events.jsonl` with trace IDs linking full 
 - `ledger_decision`, `order_placed`, `order_skipped`, `order_cancelled_duplicate`  
 - `discovery_probe`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
 
-API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`
+API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
 
 Persistent storage uses two GCS buckets — create them with `./deploy/setup_gcs.sh`, then set `GCS_AUDIT_BUCKET` and `GCS_DATA_BUCKET` in `.env`.
 
@@ -149,7 +181,8 @@ trading-agents/
 │   ├── agents/             # Data, signal, risk, execution, discovery agents
 │   ├── systems/            # baseline_system.py, internal_system.py
 │   ├── strategies/         # Allocator, order manager, order dedup
-│   ├── apis/               # Alpaca, MarketCrunch, DataBento, price fetcher
+│   ├── apis/               # Alpaca, MarketCrunch, DataBento, grounding, price fetcher
+│   ├── learning/           # Per-agent learning loops (audit → reflection → prompt)
 │   ├── discovery/          # Catalog, planner, evaluator, feature formulas
 │   ├── risk/               # Intraday monitor, trailing planner
 │   ├── audit/              # Event tracer + dashboard store
@@ -159,6 +192,10 @@ trading-agents/
 │   └── logger.py
 ├── data/                   # approved_datasources.json, audit_events.jsonl, risk state
 ├── deploy/                 # Cloud Run + Scheduler setup
+├── tests/                  # pytest smoke tests (config, ADK imports, grounding)
+├── docs/                   # SUBMISSION.md for judges
+├── scripts/                # verify_a2a.py, GCS sync helpers
+├── LICENSE
 ├── logs/
 └── requirements.txt
 ```
@@ -181,6 +218,10 @@ Environment variables (`.env`):
 | `DB_*` | PostgreSQL (optional) |
 | `SCHEDULER_SECRET` | Cloud Run job auth |
 | `GCS_RISK_STATE_BUCKET`, `GCS_AUDIT_BUCKET` | Cloud Run persistence |
+| `LEARNING_ENABLED`, `LEARNING_LOOKBACK_DAYS` | Agent learning loops |
+| `BASELINE_GOOGLE_SEARCH_GROUNDING` | Google Search on Baseline signal (default `true`) |
+| `DASHBOARD_CHAT_READ_ONLY` | Dashboard chat cannot place orders |
+| `AGENT_ENGINE_BASELINE_ID`, `AGENT_ENGINE_INTERNAL_ID` | Vertex Agent Engine resource IDs |
 
 Trading universe and thresholds live in `src/config.py`:
 
@@ -213,6 +254,7 @@ python test_connections.py
 
 | Issue | Fix |
 |-------|-----|
+| `pytest` failures on model ID | Ensure `.env` has `GEMINI_FLASH_MODEL=gemini-3.5-flash` |
 | `ModuleNotFoundError: src` | Run from repo root with venv active |
 | Duplicate open orders | `python main.py --reconcile-orders` |
 | Stale discovery | `python main.py --discovery --force` |

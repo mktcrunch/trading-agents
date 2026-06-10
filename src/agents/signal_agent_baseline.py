@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from src import config
 from src.apis.gemini_client import get_genai_client
+from src.apis.grounding import google_search_grounding_config
 from src.agents.ledger_utils import GEMINI_FLASH_MODEL, parse_trading_decisions
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
@@ -143,9 +144,15 @@ Example:
                 prompt = self._build_ledger_prompt(
                     competition, technical_data, learning_block=learning_block
                 )
+                gen_config = (
+                    google_search_grounding_config()
+                    if config.BASELINE_GOOGLE_SEARCH_GROUNDING
+                    else None
+                )
                 response = self.client.models.generate_content(
                     model=GEMINI_FLASH_MODEL,
                     contents=prompt,
+                    config=gen_config,
                 )
                 decisions = parse_trading_decisions(response.text, self.ticker_universe)
 

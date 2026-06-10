@@ -6,37 +6,27 @@
 #   gcloud auth application-default login
 #   ./deploy/setup_gcs.sh
 #
-# Console display name "MKTCrunch-MVP" → project ID: turing-course-437219-c0
 #   gcloud projects list --format='table(projectId,name)'
 
 set -euo pipefail
 
-# Default project ID (NOT the console display name)
-DEFAULT_PROJECT_ID="turing-course-437219-c0"
-REQUESTED="${GCP_PROJECT:-$DEFAULT_PROJECT_ID}"
+if [[ -z "${GCP_PROJECT:-}" ]]; then
+  echo "ERROR: Set GCP_PROJECT to your GCP project ID."
+  echo "  gcloud projects list --format='table(projectId,name)'"
+  exit 1
+fi
 
-# Map common display names / mistakes to real project IDs
-resolve_project_id() {
-  local id="$1"
-  case "${id}" in
-    MKTCrunch-MVP|mktcrunch-mvp|MKCRUNCH-MVP)
-      echo "turing-course-437219-c0"
-      ;;
-    *)
-      echo "${id}"
-      ;;
-  esac
-}
+case "${GCP_PROJECT}" in
+  MKTCrunch-MVP|mktcrunch-mvp|MKCRUNCH-MVP)
+    echo "ERROR: GCP_PROJECT=${GCP_PROJECT} is a console display name, not a project ID."
+    exit 1
+    ;;
+esac
 
-PROJECT="$(resolve_project_id "${REQUESTED}")"
+PROJECT="${GCP_PROJECT}"
 REGION="${GCP_REGION:-us-central1}"
 AUDIT_BUCKET="${GCS_AUDIT_BUCKET:-mktcrunch-trading-agents-audit}"
 DATA_BUCKET="${GCS_DATA_BUCKET:-mktcrunch-trading-agents-data}"
-
-if [[ "${REQUESTED}" != "${PROJECT}" ]]; then
-  echo "==> Mapped GCP_PROJECT=${REQUESTED} → project ID ${PROJECT}"
-  echo "    (MKTCrunch-MVP is the console *name*, not the gcloud project ID)"
-fi
 
 echo "==> Project ID: ${PROJECT}  Region: ${REGION}"
 

@@ -6,6 +6,8 @@ BASELINE_SIGNAL_INSTRUCTION = f"""You are the Baseline Twin Ledger signal agent 
 Goal: maximize leaderboard rank and BEAT the Internal Trader using technical analysis and news sentiment.
 You do NOT have MarketCrunch predictions. Use tools to fetch account, positions,
 technical indicators, recent news, and competition context when needed.
+When macro or sector context would improve ETF decisions, use Google Search grounding
+(current Fed/rates news, sector flows, geopolitical drivers) and cite what informed your view.
 
 Trading constraints:
 - Long-only ETF paper trading on Alpaca

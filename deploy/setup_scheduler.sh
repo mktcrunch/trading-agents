@@ -2,7 +2,7 @@
 # Set up Cloud Scheduler jobs to trigger Vertex AI Reasoning Engines directly.
 #
 # Usage:
-#   export GCP_PROJECT=turing-course-437219-c0
+#   export GCP_PROJECT=your-gcp-project-id
 #   export GCP_REGION=us-central1
 #   ./deploy/setup_scheduler.sh
 
@@ -11,8 +11,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-DEFAULT_PROJECT_ID="turing-course-437219-c0"
-PROJECT="${GCP_PROJECT:-$DEFAULT_PROJECT_ID}"
+: "${GCP_PROJECT:?Set GCP_PROJECT to your GCP project ID}"
+PROJECT="${GCP_PROJECT}"
 REGION="${GCP_REGION:-us-central1}"
 SERVICE="${SERVICE_NAME:-trading-agents}"
 SA_EMAIL="${SERVICE_SA:-${SERVICE}@${PROJECT}.iam.gserviceaccount.com}"

@@ -8,7 +8,7 @@ Twin Ledger runs on **Google ADK** for competition compliance:
 |-------|----------------|
 | Orchestration | ADK `Workflow` + `LlmAgent` multi-agent coordinators |
 | Tools | ADK `FunctionTool` wrappers + optional MCP stdio server |
-| LLM | Gemini 2.5 Flash (`USE_ADK=true`) or Vertex (`GOOGLE_GENAI_USE_VERTEXAI=true`) |
+| LLM | Gemini 3.5 Flash (`gemini-3.5-flash`, Vertex `global` endpoint) |
 | Local dev | `adk web agents` → `twin_ledger_baseline` / `twin_ledger_internal` |
 
 ```bash
@@ -31,7 +31,7 @@ Competition stack: **Gemini on Vertex** + **ADK on Agent Engine** + **Cloud Run*
 gcloud auth login
 gcloud auth application-default login
 
-export GCP_PROJECT=turing-course-437219-c0
+export GCP_PROJECT=your-gcp-project-id
 export GCP_REGION=us-central1
 
 chmod +x deploy/setup_vertex.sh deploy/sync_agent_src.sh
@@ -49,7 +49,7 @@ IDs are saved to `deploy/agent_engine_ids.env` (gitignored).
 
 ```bash
 export GOOGLE_GENAI_USE_VERTEXAI=true
-export GCP_PROJECT=turing-course-437219-c0
+export GCP_PROJECT=your-gcp-project-id
 export GCP_REGION=us-central1
 gcloud auth application-default login
 
@@ -62,6 +62,21 @@ GOOGLE_GENAI_USE_VERTEXAI=true adk web agents
 `VERTEX_MODE=true ./deploy/setup_cloud_run.sh` sets `GOOGLE_GENAI_USE_VERTEXAI=true` and uses the service account for Gemini (no `GEMINI_API_KEY` secret). The service account needs `roles/aiplatform.user`.
 
 **Gemini 3.5 on Vertex:** model calls use `GEMINI_VERTEX_LOCATION=global` (required for `gemini-3.5-flash`). Agent Engine, Cloud Run, and GCS stay in `GCP_REGION=us-central1`.
+
+### A2A verification
+
+Agent Engine deploys include `google-adk[a2a]` (see `deploy/agent_engine_requirements.txt`). After deploy:
+
+```bash
+python scripts/verify_a2a.py
+```
+
+Checks requirements, local ADK `sub_agents` tree, and live Reasoning Engine REST resources (`stream_query` exposed). Submission copy: [docs/SUBMISSION.md](../docs/SUBMISSION.md).
+
+### Grounding
+
+- **Baseline Signal:** Grounding with Google Search (`BASELINE_GOOGLE_SEARCH_GROUNDING=true`, default)
+- **Internal Signal:** Private-data RAG — MC predictions + gate-approved DataBento features + learning memory
 
 ## Architecture
 
@@ -91,7 +106,7 @@ Trailing stop state persists in `data/risk_state_{system}.json` locally, or in G
 
 ## GCS persistence (do this first)
 
-Create buckets in **MKTCrunch-MVP** and upload local history:
+Create buckets in your GCP project and upload local history:
 
 ```bash
 gcloud auth login
@@ -99,11 +114,11 @@ gcloud auth application-default login
 ./deploy/setup_gcs.sh
 ```
 
-**Note:** The console shows **MKTCrunch-MVP** as the project *name*. The gcloud *project ID* is `turing-course-437219-c0`. Do **not** set `GCP_PROJECT=MKTCrunch-MVP` — that will fail. The script auto-maps that name to the correct ID if you have it exported.
+**Note:** Use the gcloud *project ID*, not the console display name. List IDs with `gcloud projects list --format='table(projectId,name)'`.
 
-Buckets:
+Buckets (default names — override with `GCS_*` env vars):
 - `gs://mktcrunch-trading-agents-audit` — `audit/audit_events.jsonl`
-- `gs://mktcrunch-trading-agents-data` — `data/*.json`, `risk_state/*.json`
+- `gs://mktcrunch-trading-agents-data` — `data/*.json`, `risk_state/*.json`, `learning/*.json`
 
 Add the printed `GCS_*` vars to `.env`. Re-upload anytime:
 
@@ -145,7 +160,7 @@ Every action is recorded to `data/audit_events.jsonl` with a `trace_id` linking 
 
 Set `GCS_AUDIT_BUCKET` on Cloud Run to persist audit log across container restarts.
 
-API endpoints: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`
+API endpoints: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
 
 ## Manual triggers
 

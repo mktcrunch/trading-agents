@@ -95,21 +95,29 @@ DAILY_COORDINATOR_FALLBACK = os.getenv("DAILY_COORDINATOR_FALLBACK", "true").low
 )
 USE_VERTEX_AI = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() in ("1", "true", "yes")
 
-_GCP_PROJECT_ALIASES = {
-    "mktcrunch-mvp": "turing-course-437219-c0",
-    "MKTCrunch-MVP": "turing-course-437219-c0",
-    "MKCRUNCH-MVP": "turing-course-437219-c0",
-}
+_DISPLAY_NAME_PROJECT_IDS = frozenset({
+    "mktcrunch-mvp", "MKTCrunch-MVP", "MKCRUNCH-MVP",
+})
 
 
 def _normalize_gcp_project(project: str) -> str:
     if not project:
         return ""
-    return _GCP_PROJECT_ALIASES.get(project, project)
+    if project in _DISPLAY_NAME_PROJECT_IDS:
+        raise ValueError(
+            f"GCP_PROJECT={project!r} looks like a console display name, not a project ID. "
+            "Run: gcloud projects list --format='value(projectId)'"
+        )
+    return project
 
 
 _raw_gcp_project = os.getenv("GCP_PROJECT", os.getenv("GOOGLE_CLOUD_PROJECT", ""))
-GCP_PROJECT = _normalize_gcp_project(_raw_gcp_project)
+try:
+    GCP_PROJECT = _normalize_gcp_project(_raw_gcp_project)
+except ValueError as e:
+    import warnings
+    warnings.warn(str(e))
+    GCP_PROJECT = ""
 GCP_REGION = os.getenv("GCP_REGION", "us-central1")
 # Gemini 3.5+ on Vertex is served from the global endpoint; Agent Engine / Cloud Run stay regional.
 GEMINI_VERTEX_LOCATION = os.getenv("GEMINI_VERTEX_LOCATION", "global")
@@ -312,6 +320,11 @@ AUDIT_ENABLED = os.getenv("AUDIT_ENABLED", "true").lower() == "true"
 LEARNING_ENABLED = os.getenv("LEARNING_ENABLED", "true").lower() in ("1", "true", "yes")
 LEARNING_USE_LLM = os.getenv("LEARNING_USE_LLM", "true").lower() in ("1", "true", "yes")
 LEARNING_LOOKBACK_DAYS = int(os.getenv("LEARNING_LOOKBACK_DAYS", "7"))
+
+# Baseline signal: Grounding with Google Search (public macro/news context)
+BASELINE_GOOGLE_SEARCH_GROUNDING = os.getenv(
+    "BASELINE_GOOGLE_SEARCH_GROUNDING", "true"
+).lower() in ("1", "true", "yes")
 
 # ============================================================================
 # LOGGING
