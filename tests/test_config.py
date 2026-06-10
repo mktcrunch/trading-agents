@@ -18,5 +18,6 @@ def test_learning_enabled_by_default():
     assert config.LEARNING_ENABLED is True
 
 
-def test_baseline_google_search_grounding_default():
+def test_signal_google_search_grounding_default():
+    assert config.SIGNAL_GOOGLE_SEARCH_GROUNDING is True
     assert config.BASELINE_GOOGLE_SEARCH_GROUNDING is True

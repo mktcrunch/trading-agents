@@ -75,8 +75,8 @@ Checks requirements, local ADK `sub_agents` tree, and live Reasoning Engine REST
 
 ### Grounding
 
-- **Baseline Signal:** Grounding with Google Search (`BASELINE_GOOGLE_SEARCH_GROUNDING=true`, default)
-- **Internal Signal:** Private-data RAG — MC predictions + gate-approved DataBento features + learning memory
+- **Both signal agents:** Grounding with Google Search (`SIGNAL_GOOGLE_SEARCH_GROUNDING=true`, default)
+- **Internal Signal (incremental):** MC predictions + gate-approved DataBento features + learning memory
 
 ## Architecture
 

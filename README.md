@@ -56,7 +56,7 @@ Cloud Run
 |-------|------|------|
 | `twin_ledger_{baseline,internal}` | `LlmAgent` chat | Coordinator — scheduler callbacks + dashboard tools |
 | `{system}_data` | `LlmAgent` task | Fetch account, OHLCV, news, MC/discovery context |
-| `{system}_signal` | `LlmAgent` task | Structured BUY/SELL/HOLD/CLOSE (Baseline: + Google Search grounding) |
+| `{system}_signal` | `LlmAgent` task | Structured BUY/SELL/HOLD/CLOSE (+ Google Search grounding on both) |
 | Risk / Execution / Monitor | Deterministic Python | Invoked via `FunctionTool` on scheduler path |
 | Discovery | Internal only | DataBento catalog probes before overnight if stale |
 
@@ -68,7 +68,7 @@ Each trader deploys to **Vertex AI Agent Engine** with `google-adk[a2a]` in requ
 
 | Source | Used by |
 |--------|---------|
-| **Google Search** (`GoogleSearch` tool) | Baseline Signal — macro/ETF news (`BASELINE_GOOGLE_SEARCH_GROUNDING=true`) |
+| **Google Search** (`GoogleSearch` tool) | Both signal agents — macro/ETF news (`SIGNAL_GOOGLE_SEARCH_GROUNDING=true`) |
 | **Alpaca news API** | Data agents |
 | **MarketCrunch ensemble** (50M+ params, 1B+ datapoints) | Internal Signal + sizing + intraday risk gate (private RAG) |
 | **DataBento discovery features** | Internal Signal (`approved_datasources.json`) |
@@ -226,7 +226,7 @@ Environment variables (`.env`):
 | `SCHEDULER_SECRET` | Cloud Run job auth |
 | `GCS_RISK_STATE_BUCKET`, `GCS_AUDIT_BUCKET` | Cloud Run persistence |
 | `LEARNING_ENABLED`, `LEARNING_LOOKBACK_DAYS` | Agent learning loops |
-| `BASELINE_GOOGLE_SEARCH_GROUNDING` | Google Search on Baseline signal (default `true`) |
+| `SIGNAL_GOOGLE_SEARCH_GROUNDING` | Google Search on both signal agents (default `true`) |
 | `DASHBOARD_CHAT_READ_ONLY` | Dashboard chat cannot place orders |
 | `AGENT_ENGINE_BASELINE_ID`, `AGENT_ENGINE_INTERNAL_ID` | Vertex Agent Engine resource IDs |
 

@@ -348,10 +348,13 @@ LEARNING_ENABLED = os.getenv("LEARNING_ENABLED", "true").lower() in ("1", "true"
 LEARNING_USE_LLM = os.getenv("LEARNING_USE_LLM", "true").lower() in ("1", "true", "yes")
 LEARNING_LOOKBACK_DAYS = int(os.getenv("LEARNING_LOOKBACK_DAYS", "7"))
 
-# Baseline signal: Grounding with Google Search (public macro/news context)
-BASELINE_GOOGLE_SEARCH_GROUNDING = os.getenv(
-    "BASELINE_GOOGLE_SEARCH_GROUNDING", "true"
-).lower() in ("1", "true", "yes")
+# Signal agents: Grounding with Google Search (public macro/news — both traders)
+_SIGNAL_GROUNDING_ENV = os.getenv(
+    "SIGNAL_GOOGLE_SEARCH_GROUNDING",
+    os.getenv("BASELINE_GOOGLE_SEARCH_GROUNDING", "true"),
+)
+SIGNAL_GOOGLE_SEARCH_GROUNDING = _SIGNAL_GROUNDING_ENV.lower() in ("1", "true", "yes")
+BASELINE_GOOGLE_SEARCH_GROUNDING = SIGNAL_GOOGLE_SEARCH_GROUNDING  # backward compat
 
 # ============================================================================
 # LOGGING

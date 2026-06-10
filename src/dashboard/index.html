@@ -1326,8 +1326,8 @@
       This scoreboard is the experiment: who adapts faster as the market moves?
       <div class="mc-model-panel">
         <h4>Two architectures, one scoreboard</h4>
-        <p><strong>Baseline</strong> — public market data and Google Search grounding → Gemini ledger decisions → risk → execution.</p>
-        <p style="margin-top:0.45rem"><strong>Internal</strong> — same pipeline, plus MarketCrunch’s proprietary ensemble forecasts, discovered vendor features, and prediction-aware sizing and risk. The only deliberate difference is the signal stack.</p>
+        <p><strong>Baseline</strong> — public market data, Alpaca news, and Google Search grounding → Gemini ledger decisions → risk → execution.</p>
+        <p style="margin-top:0.45rem"><strong>Internal</strong> — <em>same public stack</em>, plus MarketCrunch ensemble forecasts, discovered vendor features, and prediction-aware sizing and risk. One incremental layer on top of identical public context.</p>
         <p style="margin-top:0.45rem">MarketCrunch models are trained at scale — <strong>50M+ parameters</strong> across <strong>1B+ datapoints</strong> — and served into Internal’s agent crew at decision time. Baseline never receives that layer.</p>
       </div>
       <div class="llm-tag">LLM: Google Gemini 3.5 Flash — trading decisions, trailing stops, discovery planning</div>
@@ -1683,15 +1683,15 @@
       <div class="arch-detail-card internal">
         <h4>5a · Internal enrichment <span class="mc-ip-badge">MC Internal</span></h4>
         <ul>
-          <li>MarketCrunch forecasts per ETF — direction, expected move, confidence</li>
-          <li>Technicals + prediction context merged into the Internal signal prompt</li>
+          <li>Same public stack as Baseline: technicals, Alpaca news, Google Search grounding</li>
+          <li>Incremental: MarketCrunch forecasts per ETF — direction, expected move, confidence</li>
           <li>Gate-approved vendor features from the discovery pipeline</li>
           <li>Confidence-aware position sizing on top of Gemini ledger decisions</li>
         </ul>
       </div>
       <div class="arch-detail-card baseline">
         <h4>5b · Baseline signal</h4>
-        <p>Gemini direct call (<code>prefer_direct=True</code>) — technicals + news + competitor snapshot + learning block → structured decisions.</p>
+        <p>Gemini direct call (<code>prefer_direct=True</code>) — technicals + news + Google Search grounding + competitor snapshot + learning block → structured decisions.</p>
       </div>
       <div class="arch-detail-card shared">
         <h4>6 · Execute</h4>
@@ -1865,7 +1865,7 @@
         <div class="subtitle">Technicals + pure LLM reasoning · 6-agent specialist crew</div>
         <ul>
           <li><strong>Agents:</strong> Coordinator routes data → signal → risk → execution → monitor (no Discovery)</li>
-          <li><strong>Signal:</strong> RSI, MACD, Bollinger, news — public data only</li>
+          <li><strong>Signal:</strong> RSI, MACD, Bollinger, news, Google Search grounding — public data only</li>
           <li><strong>Sizing:</strong> LLM size_pct → equal-weight allocation (max 10%)</li>
           <li><strong>Overnight:</strong> DAY limit orders, chased if unfilled</li>
           <li><strong>Trailing stops:</strong> Pure LLM-planned activation &amp; profit lock</li>
@@ -1876,17 +1876,16 @@
       </div>
       <div class="arch-arena-card internal">
         <h4>Internal · System B</h4>
-        <div class="subtitle"><span class="mc-ip-badge">MC Internal IP</span> vs Baseline public-data-only stack</div>
+        <div class="subtitle">Same public stack as Baseline + <span class="mc-ip-badge">MC Internal IP</span></div>
         <ul>
           <li><strong>Agents:</strong> Same 6-role crew + separate Discovery agent (<span class="mc-ip-badge">MC Internal IP</span> only)</li>
-          <li><strong>MC Internal IP:</strong> Data, Signal, Risk; Execution uses confidence sizing from snapshot</li>
-          <li><strong>Signal:</strong> MarketCrunch forecasts + vendor features + technicals in one Gemini prompt</li>
+          <li><strong>Signal:</strong> Same public context as Baseline, plus MarketCrunch forecasts and vendor features</li>
           <li><strong>Sizing:</strong> confidence-based allocation from the prediction snapshot (max 10% per position)</li>
           <li><strong>Overnight:</strong> Same execution path; prediction snapshot passed to sizing layer</li>
           <li><strong>Trailing stops:</strong> Scripted 1%/70% floor + LLM refinement (hybrid)</li>
           <li><strong>Base stop:</strong> ATR × 1.5 dynamic stop (fallback −1%)</li>
           <li><strong>Prediction gate:</strong> <span class="mc-ip-badge">MC Internal</span> defers exit when short-horizon prediction disagrees</li>
-          <li><strong>Edge hypothesis:</strong> MC Internal prediction + vendor data stack beats technicals-only Baseline</li>
+          <li><strong>Edge hypothesis:</strong> MC Internal layer beats Baseline when public context is held equal</li>
         </ul>
       </div>
     </div>

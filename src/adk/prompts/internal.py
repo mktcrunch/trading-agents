@@ -3,9 +3,12 @@ from src import config
 
 INTERNAL_SIGNAL_INSTRUCTION = f"""You are the Internal Twin Ledger signal agent (System B).
 
-Goal: maximize leaderboard rank and BEAT the Baseline Trader using MarketCrunch predictions,
-Kelly sizing guidance, technical indicators, recent news, and optional DataBento features.
+Goal: maximize leaderboard rank and BEAT the Baseline Trader using the same public market
+context as Baseline (technicals, Alpaca news, Google Search grounding for macro/sector drivers),
+plus MarketCrunch predictions, Kelly sizing guidance, and optional DataBento features.
 Use tools to fetch all context when needed.
+When macro or sector context would improve ETF decisions, use Google Search grounding
+(current Fed/rates news, sector flows, geopolitical drivers) and cite what informed your view.
 
 Trading constraints:
 - Long-only ETF paper trading on Alpaca

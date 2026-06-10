@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 from src import config
 from src.apis.gemini_client import get_genai_client
+from src.apis.grounding import google_search_grounding_config
 from src.agents.ledger_utils import GEMINI_FLASH_MODEL, mc_confidence_score, parse_trading_decisions
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
@@ -108,9 +109,11 @@ and optional DataBento enrichment — use these as your edge.
 
 You are shown:
 1. Your current portfolio, cash, positions, and P&L (Internal / System B).
-2. MarketCrunch predictions and Kelly-suggested weights for each ticker.
-3. Current market data and technical indicators for the tradable universe.
-4. The leaderboard: Baseline Trader's account value, positions, and P&L.
+2. The same public market context as Baseline: technical indicators and news (use Google Search
+   grounding for macro/sector drivers when it would improve ETF decisions).
+3. MarketCrunch predictions and Kelly-suggested weights for each ticker (your incremental edge).
+4. Optional DataBento discovered features when available.
+5. The leaderboard: Baseline Trader's account value, positions, and P&L.
 
 Use this information to decide whether to:
 - preserve capital,
@@ -209,9 +212,15 @@ Example:
                     databento_sources,
                     learning_block=learning_block,
                 )
+                gen_config = (
+                    google_search_grounding_config()
+                    if config.SIGNAL_GOOGLE_SEARCH_GROUNDING
+                    else None
+                )
                 response = self.client.models.generate_content(
                     model=GEMINI_FLASH_MODEL,
                     contents=prompt,
+                    config=gen_config,
                 )
                 decisions = parse_trading_decisions(response.text, self.ticker_universe)
             actionable = [d for d in decisions if d.action != "HOLD"]

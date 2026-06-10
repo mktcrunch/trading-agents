@@ -11,11 +11,15 @@ from src.adk.mcp.toolset import optional_mcp_tools
 from src.adk.tools import baseline_data_tools, internal_data_tools
 
 
-def _baseline_signal_tools() -> list:
-    tools = baseline_data_tools() + optional_mcp_tools()
-    if config.BASELINE_GOOGLE_SEARCH_GROUNDING:
+def _with_google_search_tools(tools: list) -> list:
+    if config.SIGNAL_GOOGLE_SEARCH_GROUNDING:
+        tools = list(tools)
         tools.append(GoogleSearchTool(bypass_multi_tools_limit=True))
     return tools
+
+
+def _baseline_signal_tools() -> list:
+    return _with_google_search_tools(baseline_data_tools() + optional_mcp_tools())
 
 
 def build_baseline_signal_agent() -> LlmAgent:
@@ -36,7 +40,7 @@ def build_internal_signal_agent() -> LlmAgent:
         name="internal_signal",
         model=adk_model(),
         instruction=INTERNAL_SIGNAL_INSTRUCTION,
-        tools=internal_data_tools() + optional_mcp_tools(),
+        tools=_with_google_search_tools(internal_data_tools() + optional_mcp_tools()),
         output_schema=TradingDecisionsResponse,
         mode="task",
     )

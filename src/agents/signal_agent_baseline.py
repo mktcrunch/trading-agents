@@ -146,7 +146,7 @@ Example:
                 )
                 gen_config = (
                     google_search_grounding_config()
-                    if config.BASELINE_GOOGLE_SEARCH_GROUNDING
+                    if config.SIGNAL_GOOGLE_SEARCH_GROUNDING
                     else None
                 )
                 response = self.client.models.generate_content(
