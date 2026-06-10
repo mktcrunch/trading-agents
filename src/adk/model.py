@@ -10,8 +10,10 @@ def configure_genai_env() -> None:
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "1"
         if config.GCP_PROJECT:
             os.environ.setdefault("GOOGLE_CLOUD_PROJECT", config.GCP_PROJECT)
-        if config.GCP_REGION:
-            os.environ.setdefault("GOOGLE_CLOUD_LOCATION", config.GCP_REGION)
+        # Gemini model calls (global); Agent Engine resources remain in GCP_REGION.
+        os.environ["GOOGLE_CLOUD_LOCATION"] = (
+            config.GEMINI_VERTEX_LOCATION or config.GCP_REGION
+        )
     elif config.GEMINI_API_KEY:
         os.environ.setdefault("GOOGLE_API_KEY", config.GEMINI_API_KEY)
 

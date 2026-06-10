@@ -11,6 +11,7 @@ from src.apis.gemini_client import get_genai_client
 from src.agents.ledger_utils import GEMINI_FLASH_MODEL, mc_confidence_score, parse_trading_decisions
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
+from src.learning.context import build_signal_learning_block
 from src.models.signal import Signal
 from src.models.trading_decision import TradingDecision
 from src.strategies.allocator import PositionAllocator
@@ -69,6 +70,7 @@ class InternalSignalAgent(BaseAgent):
         mc_predictions: Dict[str, Dict],
         kelly_context: Dict[str, Dict],
         databento_sources: Optional[Dict[str, Dict]] = None,
+        learning_block: str = "",
     ) -> str:
         market_lines = []
         for ticker in self.ticker_universe:
@@ -130,7 +132,10 @@ Trading constraints:
 - For CLOSE: exit the full existing position (size_pct ignored)
 - For HOLD: no trade
 - Minimum confidence for BUY: {self.confidence_threshold}
+{f'''
+{learning_block}
 
+''' if learning_block else ''}
 Competition context:
 {json.dumps(competition, indent=2)}
 
@@ -175,6 +180,7 @@ Example:
         prefer_direct: bool = False,
     ) -> List[TradingDecision]:
         competition = competition or build_competition_context("internal")
+        learning_block = build_signal_learning_block("internal") if config.LEARNING_ENABLED else ""
 
         try:
             if config.USE_ADK and not prefer_direct:
@@ -188,6 +194,7 @@ Example:
                         "mc_predictions": mc_predictions,
                         "kelly_context": kelly_context,
                         "databento_sources": databento_sources or {},
+                        "signal_learning": learning_block,
                     },
                     session_id="internal_signal",
                     valid_tickers=self.ticker_universe,
@@ -195,7 +202,12 @@ Example:
             else:
                 kelly_context = self._kelly_context(mc_predictions)
                 prompt = self._build_ledger_prompt(
-                    competition, technical_data, mc_predictions, kelly_context, databento_sources
+                    competition,
+                    technical_data,
+                    mc_predictions,
+                    kelly_context,
+                    databento_sources,
+                    learning_block=learning_block,
                 )
                 response = self.client.models.generate_content(
                     model=GEMINI_FLASH_MODEL,

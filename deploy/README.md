@@ -61,6 +61,8 @@ GOOGLE_GENAI_USE_VERTEXAI=true adk web agents
 
 `VERTEX_MODE=true ./deploy/setup_cloud_run.sh` sets `GOOGLE_GENAI_USE_VERTEXAI=true` and uses the service account for Gemini (no `GEMINI_API_KEY` secret). The service account needs `roles/aiplatform.user`.
 
+**Gemini 3.5 on Vertex:** model calls use `GEMINI_VERTEX_LOCATION=global` (required for `gemini-3.5-flash`). Agent Engine, Cloud Run, and GCS stay in `GCP_REGION=us-central1`.
+
 ## Architecture
 
 ```

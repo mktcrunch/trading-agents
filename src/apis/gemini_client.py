@@ -12,6 +12,6 @@ def get_genai_client() -> genai.Client:
         return genai.Client(
             vertexai=True,
             project=config.GCP_PROJECT,
-            location=config.GCP_REGION,
+            location=config.GEMINI_VERTEX_LOCATION or config.GCP_REGION,
         )
     return genai.Client(api_key=config.GEMINI_API_KEY)

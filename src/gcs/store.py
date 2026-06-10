@@ -124,12 +124,20 @@ class GCSStore:
         if not self.data_bucket:
             return results
 
+        from src.learning.store import ALL_LEARNING_ROLES
+
         data_files = [
             (config.DATA_DIR / "approved_datasources.json", "data/approved_datasources.json"),
             (config.DATA_DIR / "discovery_registry.json", "data/discovery_registry.json"),
             (config.DATA_DIR / "risk_state_baseline.json", "risk_state/baseline.json"),
             (config.DATA_DIR / "risk_state_internal.json", "risk_state/internal.json"),
         ]
+        for role in ALL_LEARNING_ROLES:
+            for system in ("baseline", "internal"):
+                if role == "discovery" and system != "internal":
+                    continue
+                local_path = config.DATA_DIR / f"learning_{role}_{system}.json"
+                data_files.append((local_path, f"learning/{role}_{system}.json"))
         for local_path, blob_name in data_files:
             if local_path.exists():
                 results[local_path.name] = self.upload_file(
@@ -149,12 +157,20 @@ class GCSStore:
         if not self.data_bucket:
             return results
 
+        from src.learning.store import ALL_LEARNING_ROLES
+
         mappings = [
             (config.DATA_DIR / "approved_datasources.json", "data/approved_datasources.json"),
             (config.DATA_DIR / "discovery_registry.json", "data/discovery_registry.json"),
             (config.DATA_DIR / "risk_state_baseline.json", "risk_state/baseline.json"),
             (config.DATA_DIR / "risk_state_internal.json", "risk_state/internal.json"),
         ]
+        for role in ALL_LEARNING_ROLES:
+            for system in ("baseline", "internal"):
+                if role == "discovery" and system != "internal":
+                    continue
+                local_path = config.DATA_DIR / f"learning_{role}_{system}.json"
+                mappings.append((local_path, f"learning/{role}_{system}.json"))
         for local_path, blob_name in mappings:
             gcs_ts = self.blob_updated(self.data_bucket, blob_name)
             local_ts = local_path.stat().st_mtime if local_path.exists() else None

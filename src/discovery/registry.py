@@ -19,6 +19,19 @@ def _empty_registry() -> Dict:
 
 
 def load_registry() -> Dict:
+    try:
+        from src.gcs.store import get_gcs_store
+
+        store = get_gcs_store()
+        if store.data_bucket:
+            blob = "data/discovery_registry.json"
+            gcs_ts = store.blob_updated(store.data_bucket, blob)
+            local_ts = REGISTRY_PATH.stat().st_mtime if REGISTRY_PATH.exists() else None
+            if gcs_ts is not None and (local_ts is None or gcs_ts > local_ts):
+                store.download_file(store.data_bucket, blob, REGISTRY_PATH)
+    except Exception:
+        pass
+
     if not REGISTRY_PATH.exists():
         return _empty_registry()
     try:

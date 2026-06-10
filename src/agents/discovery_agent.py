@@ -126,7 +126,7 @@ class DiscoveryAgent(BaseAgent):
             feature_specs=feature_specs,
             include_baseline=self.cfg.get("include_baseline_features", True),
         )
-        approved = evaluate_all_features(
+        eval_result = evaluate_all_features(
             panel=panel,
             universe=self.universe,
             dataset=target.dataset,
@@ -135,6 +135,8 @@ class DiscoveryAgent(BaseAgent):
             feature_specs=feature_specs,
             include_baseline=self.cfg.get("include_baseline_features", True),
         )
+        approved = eval_result["approved"]
+        feature_evaluations = eval_result["evaluations"]
         ticker_features = latest_ticker_features(
             panel, prefix=prefix, definitions=definitions
         )
@@ -148,6 +150,7 @@ class DiscoveryAgent(BaseAgent):
             "schema": target.schema,
             "status": "approved" if approved else "rejected",
             "approved_count": len(approved),
+            "rejected_count": len(feature_evaluations) - len(approved),
             "best_ic": best_ic,
             "sample_rows": len(panel),
             "sources": approved,
@@ -157,6 +160,7 @@ class DiscoveryAgent(BaseAgent):
             "feature_strategy": feature_strategy,
             "proposed_features": feature_specs,
             "approved_feature_ids": [s["id"] for s in approved],
+            "feature_evaluations": feature_evaluations,
         }
 
     async def _run_legacy_discovery(self, client: DataBentoClient) -> Dict:
@@ -230,9 +234,10 @@ class DiscoveryAgent(BaseAgent):
             probe_summaries.append({
                 k: result[k]
                 for k in (
-                    "dataset", "schema", "status", "approved_count",
+                    "dataset", "schema", "status", "approved_count", "rejected_count",
                     "best_ic", "sample_rows", "rationale", "action", "error",
                     "feature_strategy", "proposed_features", "approved_feature_ids",
+                    "feature_evaluations",
                 )
                 if k in result
             })
@@ -260,15 +265,18 @@ class DiscoveryAgent(BaseAgent):
             )
             self.log_action(
                 f"Probe {target.dataset}/{target.schema}: {result['status']} "
-                f"({result['approved_count']} approved)",
+                f"({result['approved_count']} approved, "
+                f"{result.get('rejected_count', 0)} rejected)",
                 data={
                     "dataset": target.dataset,
                     "schema": target.schema,
                     "status": result["status"],
                     "approved_count": result["approved_count"],
+                    "rejected_count": result.get("rejected_count", 0),
                     "best_ic": result["best_ic"],
                     "feature_strategy": result.get("feature_strategy"),
                     "proposed_features": result.get("proposed_features"),
+                    "feature_evaluations": result.get("feature_evaluations"),
                 },
                 event_type="discovery_probe",
             )

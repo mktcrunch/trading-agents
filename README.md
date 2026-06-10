@@ -2,9 +2,9 @@
 
 **Twin Ledger** runs where static benchmarks fall short: live paper markets on Alpaca, with real prices, real competition, and new decisions every session. Two autonomous agents trade head-to-head and generate outcomes you can audit end to end.
 
-**Baseline** trades on technicals and **Gemini 2.5 Flash** structured reasoning. **Internal** runs the same model, enriched with MarketCrunch predictions, agentic DataBento discovery, Kelly sizing, and hybrid scripted+LLM risk. The scoreboard answers one question: does prediction data actually win?
+**Baseline** trades on technicals and **Gemini 3.5 Flash** structured reasoning. **Internal** runs the same model, enriched with MC Internal predictions, agentic data discovery, confidence sizing, and hybrid scripted+LLM risk. The scoreboard answers one question: does prediction data actually win?
 
-**LLM:** [Google Gemini 2.5 Flash](https://ai.google.dev/gemini-api/docs/models) (`gemini-2.5-flash`) via **Google ADK** (`LlmAgent` + `Workflow`) — Twin Ledger decisions, intraday trailing-stop planning, and DataBento discovery planners.
+**LLM:** [Google Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash) (`gemini-3.5-flash`, Vertex global endpoint) via **Google ADK** (`LlmAgent` + `Workflow`) — Twin Ledger decisions, intraday trailing-stop planning, and DataBento discovery planners.
 
 **Orchestration:** [Agent Development Kit (ADK)](https://google.github.io/adk-docs/) — multi-agent coordinators, `FunctionTool` wrappers for Alpaca/MarketCrunch/DataBento, optional MCP stdio server for external tool connections.
 
@@ -15,7 +15,7 @@
 | | Baseline | Internal |
 |---|----------|----------|
 | **Account** | Alpaca paper #1 | Alpaca paper #2 |
-| **Signals** | Gemini 2.5 Flash ledger decisions, Alpaca OHLCV only | Same + MC predictions + discovered features |
+| **Signals** | Gemini 3.5 Flash ledger decisions, Alpaca OHLCV only | Same + MC Internal predictions + discovered features |
 | **Sizing** | `size_pct` from LLM (max 10%/position) | Ledger decisions + Kelly on BUYs |
 | **Discovery** | — | Agentic DataBento catalog scan, LLM feature formulas |
 | **Overnight orders** | OPG limit ±0.5% from close | Same |
@@ -174,7 +174,9 @@ Environment variables (`.env`):
 | `MC_API_KEY_ID`, `MC_API_SECRET_KEY` | MarketCrunch API |
 | `ALPACA_API_KEY_BASELINE`, `ALPACA_SECRET_KEY_BASELINE` | Baseline paper account |
 | `ALPACA_API_KEY_INTERNAL`, `ALPACA_SECRET_KEY_INTERNAL` | Internal paper account |
-| `GEMINI_API_KEY` | Gemini 2.5 Flash (decisions, trailing, discovery) |
+| `GEMINI_API_KEY` | Optional — only if not using Vertex (`GOOGLE_GENAI_USE_VERTEXAI=false`) |
+| `GEMINI_FLASH_MODEL` | Default `gemini-3.5-flash` |
+| `GEMINI_VERTEX_LOCATION` | Default `global` (Vertex Gemini endpoint; separate from `GCP_REGION`) |
 | `DATABENTO_API_KEY` | Discovery pipeline |
 | `DB_*` | PostgreSQL (optional) |
 | `SCHEDULER_SECRET` | Cloud Run job auth |

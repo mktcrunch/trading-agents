@@ -1,11 +1,13 @@
 {
   "display_name": "Twin Ledger Baseline",
-  "description": "ADK multi-agent baseline trader (System A) — technicals + Gemini 2.5 Flash, competes vs Internal on Alpaca paper.",
+  "description": "ADK multi-agent baseline trader (System A) — technicals + Gemini 3.5 Flash, competes vs Internal on Alpaca paper.",
   "env_vars": {
     "GOOGLE_GENAI_USE_VERTEXAI": "1",
     "USE_ADK": "true",
     "USE_ADK_WORKFLOW": "true",
-    "GEMINI_FLASH_MODEL": "gemini-2.5-flash",
+    "GEMINI_FLASH_MODEL": "gemini-3.5-flash",
+    "GEMINI_VERTEX_LOCATION": "global",
+    "GCP_REGION": "us-central1",
     "TRADING_ENABLED": "true"
   }
 }

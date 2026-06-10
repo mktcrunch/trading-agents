@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from src import config
 from src.apis.gemini_client import get_genai_client
 from src.agents.ledger_utils import GEMINI_FLASH_MODEL, parse_ledger_response
+from src.learning.context import build_risk_learning_block
 from src.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -85,10 +86,13 @@ class TrailingPlanner:
         momentum_5d: Optional[float],
     ) -> str:
         bounds = self._bounds()
+        risk_learning = ""
+        if config.LEARNING_ENABLED:
+            risk_learning = build_risk_learning_block(self.system)
+        learning_section = f"\n\n{risk_learning}\n" if risk_learning else ""
         return f"""You are a risk manager for a baseline ETF trading agent (technicals only).
 
-Set trailing profit-lock policy for an open position. Baseline uses PURE LLM trailing — no fixed rules.
-
+Set trailing profit-lock policy for an open position. Baseline uses PURE LLM trailing — no fixed rules.{learning_section}
 Position:
 - Ticker: {ticker}
 - Entry: ${entry:.2f} | Current: ${current_price:.2f}
@@ -123,9 +127,11 @@ Return ONLY JSON:
                 f"target={est.get('target_delta_numeric', 0):.2f}%, "
                 f"confidence={est.get('confidence', 'Unknown')}"
             )
-
-        return f"""You are a risk manager for the internal ETF agent (MarketCrunch predictions + scripted stops).
-
+        risk_learning = ""
+        if config.LEARNING_ENABLED:
+            risk_learning = build_risk_learning_block(self.system)
+        learning_section = f"\n\n{risk_learning}\n" if risk_learning else ""
+        return f"""You are a risk manager for the internal ETF agent (MarketCrunch predictions + scripted stops).{learning_section}
 Scripted floor (never go looser than this):
 - activation_threshold >= {scripted_act} (1%)
 - profit_lock_fraction >= {scripted_lock} (70% lock)

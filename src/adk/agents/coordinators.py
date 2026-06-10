@@ -14,6 +14,10 @@ from src.adk.tools.alpaca_tools import (
     run_post_open_chase,
 )
 from src.adk.tools.dashboard_tools import (
+    get_agent_activity,
+    get_agent_learning,
+    get_data_discovery_trail,
+    get_proprietary_data_usage,
     get_recent_trading_activity,
     get_trader_status,
 )
@@ -45,6 +49,9 @@ def build_baseline_root_agent() -> LlmAgent:
         tools=[
             FunctionTool(get_trader_status),
             FunctionTool(get_recent_trading_activity),
+            FunctionTool(get_data_discovery_trail),
+            FunctionTool(get_proprietary_data_usage),
+            FunctionTool(get_agent_activity),
             FunctionTool(run_daily_trading_workflow),
             FunctionTool(execute_trading_decisions),
             FunctionTool(run_intraday_risk_check),
@@ -76,6 +83,79 @@ Answer questions about portfolio status, open positions, leaderboard, recent dec
 - get_trader_status(system=...)
 - get_recent_trading_activity(system=..., hours=72)
 
+For data discovery (probes, approvals, rejections, registry runs, gate criteria):
+- get_data_discovery_trail(hours=168)
+
+For proprietary / enrichment data used in trading (signal API, discovered features):
+- get_proprietary_data_usage(system=..., hours=72)
+
+For per-agent activity (what did risk/execution/signal/data/monitor/coordinator do):
+- get_agent_activity(system=..., agent_role=..., hours=24)
+  Roles: coordinator, data, signal, risk, execution, monitor, discovery, all.
+  This reads the audit log — you do NOT need run_intraday_risk_check to answer
+  historical risk questions.
+
+For agent learning memory (lessons from recent audit outcomes for ANY crew agent):
+- get_agent_learning(system=..., agent_role=...)
+  Roles: coordinator, data, signal, risk, execution, monitor, discovery (internal only), or all.
+  Returns lessons_learned, bad_patterns, do_more, scorecard, recent_events.
+  Use agent_role=signal (or risk, execution, etc.) when the user asks about one agent's learning.
+  IMPORTANT: If scorecard shows decisions_logged > 0 but decisions_scored == 0, trades are
+  pending next-day outcome scoring — do NOT claim execution paralysis or pipeline failure.
+  If event counts in scorecard are > 0, the agent was active in the window.
+
+Each trader has 6 specialists: Coordinator, Data, Signal, Risk, Execution, Monitor.
+Internal also has a 7th Discovery agent (MC Internal IP only — Baseline never runs it).
+Always use get_agent_activity when asked what a specific agent did today.
+
+SPECIFIC agent questions (user names one agent, clicks a crew chip, or says agent_role=X):
+- Call get_agent_activity with THAT agent_role only — never "all".
+- Answer ONLY about focused_agent events. Do NOT list the full crew or other agents' duties
+  at the top (no Signal/Risk/Execution blurbs).
+- End with one short line: "Also ask about: …" using other_agents_you_can_ask from the tool.
+
+Full crew listing ONLY when the user asks "what agents are available", "list the crew",
+"what happened today" (vague), or agent_role=all.
+
+Internal DATA agent: Discovery is a separate Internal-only agent (MC Internal IP) that
+runs catalog probes. The Data agent LOADS gate-approved vendor features from discovery
+output — report vendor_features_from_discovery and enrichment_events from
+get_agent_activity. For probe details use get_data_discovery_trail (agent_role=discovery).
+
+Never claim you cannot report risk activity — use get_agent_activity with agent_role=risk.
+Intraday risk: deterministic scheduler path (run_intraday_risk_check) but Gemini plans
+trailing stops inside each cycle (trailing_stop_planned events).
+
+Always call the relevant tool before saying information is unavailable. Discovery trails
+live in the audit log (discovery_probe events), discovery_registry.json, and
+approved_datasources.json — get_data_discovery_trail aggregates all three.
+
+Data discovery approval facts (do not contradict these):
+- Discovery is MC Internal proprietary IP — Internal overnight only; Baseline never runs it.
+- Discovery is a SEPARATE step from trading; internal overnight runs discovery first
+  if approved sources are stale (>24h), then loads cached features for signals.
+- Approval is AUTOMATIC inside discovery — three statistical gates (MI, IC/t-stat,
+  incremental alpha). No human approval step.
+- Baseline formulas (volume_zscore, momentum_5d, range_pct, close_vs_sma20) and
+  LLM-proposed formulas are BOTH evaluated on vendor OHLCV bars during probes.
+  They are NOT exempt from gates. Failed features have rejected_count > 0 on probes.
+- Alpaca OHLCV technicals used by the Baseline trader are a different path and do
+  NOT go through the discovery approval pipeline.
+
+Use generic labels in replies: "proprietary signal API", "discovered market features",
+"data discovery agent", "vendor OHLCV datasets" — do not refuse discovery questions
+if tools return data. Explain rejections using feature_evaluations on each probe: for each feature show
+status, failed_gate, metrics (mi, ic, t_stat, incremental_alpha, coverage), and
+gates[].passed vs gates[].threshold. Also use approval_criteria.gates for threshold defs.
+
+For "what was discovered today?" always read cache_status from get_data_discovery_trail:
+- If cache_status.ran_in_last_24h is false, say no run TODAY, then report the LAST run
+  (cache_status.last_run_at, dataset/schema, computed_feature_names).
+- If tickers exist but cache_status.gate_approved_for_trading is false, explain that
+  features were computed but FAILED approval gates (approved_source_count=0) — do not
+  describe them as newly discovered or approved sources.
+- Distinguish computed cache values vs gate-approved sources.
+
 If the user asks to trade, run overnight workflow, risk check, or chase orders, explain
 that execution is disabled from the web dashboard and must be triggered via Cloud Scheduler
 or operator CLI — you cannot do it from chat.
@@ -98,6 +178,10 @@ def build_dashboard_readonly_agent(system: str) -> LlmAgent:
         tools=[
             FunctionTool(get_trader_status),
             FunctionTool(get_recent_trading_activity),
+            FunctionTool(get_data_discovery_trail),
+            FunctionTool(get_proprietary_data_usage),
+            FunctionTool(get_agent_activity),
+            FunctionTool(get_agent_learning),
         ],
         mode="chat",
     )
@@ -113,6 +197,9 @@ def build_internal_root_agent() -> LlmAgent:
         tools=[
             FunctionTool(get_trader_status),
             FunctionTool(get_recent_trading_activity),
+            FunctionTool(get_data_discovery_trail),
+            FunctionTool(get_proprietary_data_usage),
+            FunctionTool(get_agent_activity),
             FunctionTool(run_daily_trading_workflow),
             FunctionTool(execute_trading_decisions),
             FunctionTool(run_intraday_risk_check),

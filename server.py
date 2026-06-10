@@ -103,6 +103,26 @@ class JobHandler(BaseHTTPRequestHandler):
             _json_response(self, 200, chat_status())
             return
 
+        if path == "/api/agent-activity":
+            from src.dashboard.coordinator_chat import query_agent_activity
+
+            q = self._query()
+            system = q.get("system", "baseline")
+            agent_role = q.get("agent_role", "all")
+            hours = int(q.get("hours", 24))
+            limit = int(q.get("limit", 30))
+            _json_response(self, 200, query_agent_activity(system, agent_role, hours, limit))
+            return
+
+        if path == "/api/learning":
+            from src.adk.tools.dashboard_tools import get_agent_learning
+
+            q = self._query()
+            system = q.get("system", "baseline")
+            agent_role = q.get("agent_role", "all")
+            _json_response(self, 200, get_agent_learning(system, agent_role))
+            return
+
         _json_response(self, 404, {"error": "not found"})
 
     def _read_json_body(self) -> dict:

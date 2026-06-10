@@ -81,7 +81,7 @@ DB_CONNECTION_STRING = (
 # GOOGLE CLOUD / GEMINI
 # ============================================================================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_FLASH_MODEL = os.getenv("GEMINI_FLASH_MODEL", "gemini-2.5-flash")
+GEMINI_FLASH_MODEL = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.5-flash")
 
 # ============================================================================
 # ADK (Agent Development Kit) — Google AI Agents Challenge
@@ -110,9 +110,14 @@ def _normalize_gcp_project(project: str) -> str:
 
 _raw_gcp_project = os.getenv("GCP_PROJECT", os.getenv("GOOGLE_CLOUD_PROJECT", ""))
 GCP_PROJECT = _normalize_gcp_project(_raw_gcp_project)
-GCP_REGION = os.getenv("GCP_REGION", os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"))
+GCP_REGION = os.getenv("GCP_REGION", "us-central1")
+# Gemini 3.5+ on Vertex is served from the global endpoint; Agent Engine / Cloud Run stay regional.
+GEMINI_VERTEX_LOCATION = os.getenv("GEMINI_VERTEX_LOCATION", "global")
 if GCP_PROJECT:
     os.environ.setdefault("GOOGLE_CLOUD_PROJECT", GCP_PROJECT)
+if USE_VERTEX_AI:
+    os.environ.setdefault("GOOGLE_CLOUD_LOCATION", GEMINI_VERTEX_LOCATION)
+else:
     os.environ.setdefault("GOOGLE_CLOUD_LOCATION", GCP_REGION)
 
 # ============================================================================
@@ -302,6 +307,11 @@ AGENT_ENGINE_INTERNAL_ID = os.getenv("AGENT_ENGINE_INTERNAL_ID", "")
 # Audit trail
 AUDIT_LOG_PATH = DATA_DIR / "audit_events.jsonl"
 AUDIT_ENABLED = os.getenv("AUDIT_ENABLED", "true").lower() == "true"
+
+# Agent learning loops (audit → reflection → prompt injection)
+LEARNING_ENABLED = os.getenv("LEARNING_ENABLED", "true").lower() in ("1", "true", "yes")
+LEARNING_USE_LLM = os.getenv("LEARNING_USE_LLM", "true").lower() in ("1", "true", "yes")
+LEARNING_LOOKBACK_DAYS = int(os.getenv("LEARNING_LOOKBACK_DAYS", "7"))
 
 # ============================================================================
 # LOGGING

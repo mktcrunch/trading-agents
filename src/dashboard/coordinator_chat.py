@@ -20,34 +20,13 @@ logger = setup_logger(__name__)
 _session_service = InMemorySessionService()
 
 
-_EXECUTION_PHRASES = (
-    "run daily trading workflow",
-    "daily trading workflow",
-    "run intraday risk check",
-    "intraday risk check",
-    "intraday risk",
-    "run post-open chase",
-    "post-open chase",
-    "post open chase",
-    "execute_trading_decisions",
-    "place order",
-    "place orders",
-    "run overnight",
-)
-
-
-def _looks_like_execution_request(message: str) -> bool:
-    text = message.strip().lower()
-    return any(p in text for p in _EXECUTION_PHRASES)
-
-
 def chat_status() -> Dict[str, Any]:
     """Return whether dashboard chat is available and which backend is active."""
     read_only = config.DASHBOARD_CHAT_READ_ONLY
     backend = "local" if read_only else _resolve_backend()
     warning = (
-        "Read-only mode: chat can query portfolio and audit history only. "
-        "Trading, risk, and chase workflows cannot be triggered from the web app."
+        "Read-only mode: chat can query portfolio, audit history, and per-agent activity. "
+        "Scheduler workflows (daily run, risk check, chase) cannot be triggered from the web app."
         if read_only
         else (
             "Execution enabled: messages matching scheduler phrases "
@@ -65,6 +44,31 @@ def chat_status() -> Dict[str, Any]:
         "execution_blocked": read_only,
         "warning": warning,
     }
+
+
+def query_agent_activity(
+    system: str,
+    agent_role: str = "all",
+    hours: int = 24,
+    limit: int = 30,
+) -> Dict[str, Any]:
+    """Direct audit query — always allowed from the dashboard (no LLM, no execution)."""
+    from src.adk.tools.dashboard_tools import format_agent_activity_report, get_agent_activity
+
+    system = (system or "").strip().lower()
+    if system not in ("baseline", "internal"):
+        return {"success": False, "error": "system must be baseline or internal"}
+
+    data = get_agent_activity(
+        system=system,
+        agent_role=agent_role,
+        hours=hours,
+        limit=limit,
+    )
+    if data.get("success"):
+        data["report"] = format_agent_activity_report(data)
+        data["read_only"] = True
+    return data
 
 
 def _is_cloud_run() -> bool:
@@ -234,17 +238,7 @@ async def run_coordinator_chat(
     if not message:
         return {"success": False, "error": "message is required"}
 
-    if config.DASHBOARD_CHAT_READ_ONLY and _looks_like_execution_request(message):
-        return {
-            "success": False,
-            "error": (
-                "Execution is disabled from the dashboard (DASHBOARD_CHAT_READ_ONLY=true). "
-                "Use Cloud Scheduler or operator CLI to run trading workflows."
-            ),
-            "read_only": True,
-            "blocked": True,
-        }
-
+    # Read-only mode uses an agent with audit tools only — no execution tools to invoke.
     session_id = session_id or str(uuid.uuid4())
     user_id = user_id or f"dashboard_{system}"
 

@@ -1,4 +1,4 @@
-"""Deterministic daily trading pipeline (data → signal → execute).
+"""Deterministic daily trading pipeline (discovery → data → signal → execute).
 
 Used as the primary path for scheduler messages and as a fallback when the
 coordinator LLM does not complete the overnight workflow.
@@ -6,7 +6,7 @@ coordinator LLM does not complete the overnight workflow.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from src import config
 from src.adk.tools.alpaca_tools import execute_trading_decisions, get_technical_indicators
@@ -22,6 +22,36 @@ from src.models.trading_decision import TradingDecision
 logger = setup_logger(__name__)
 
 
+async def _ensure_discovery_fresh() -> Dict[str, Any]:
+    """Run agentic discovery if approved sources are missing or stale (>24h)."""
+    from src.agents.discovery_agent import DiscoveryAgent
+    from src.discovery.approved_sources import is_stale, load_approved_sources
+
+    stale = is_stale()
+    agent = DiscoveryAgent()
+    try:
+        result = await agent.ensure_fresh_sources(force=False)
+        summary = result.get("summary") or {}
+        return {
+            "success": True,
+            "refreshed": stale,
+            "approved_count": summary.get("approved_count", 0),
+            "tickers_with_features": summary.get("tickers_with_features", 0),
+            "probes_run": summary.get("probes_run"),
+            "generated_at": result.get("generated_at"),
+        }
+    except Exception as e:
+        logger.warning(f"[daily_pipeline] Discovery failed: {e}")
+        cached = load_approved_sources()
+        return {
+            "success": False,
+            "refreshed": False,
+            "error": str(e),
+            "approved_count": (cached.get("summary") or {}).get("approved_count", 0),
+            "generated_at": cached.get("generated_at"),
+        }
+
+
 async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
     """Run full overnight workflow without relying on coordinator LLM chaining."""
     if system not in ("baseline", "internal"):
@@ -33,6 +63,19 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
         logger.warning(f"GCS audit hydrate failed: {e}")
 
     logger.info(f"[daily_pipeline] Starting deterministic workflow for {system}")
+
+    if config.LEARNING_ENABLED:
+        try:
+            from src.learning.reflection import refresh_system_learning
+
+            await refresh_system_learning(system)
+        except Exception as e:
+            logger.warning(f"[daily_pipeline] Learning refresh failed: {e}")
+
+    discovery_meta: Dict[str, Any] | None = None
+    if system == "internal":
+        logger.info("[daily_pipeline] Ensuring data discovery sources are fresh")
+        discovery_meta = await _ensure_discovery_fresh()
 
     tech_result = get_technical_indicators(system=system, lookback_days=90)
     technical_data = tech_result.get("technical_data") or {}
@@ -65,13 +108,16 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
         )
 
     if not decisions:
-        return {
+        out: Dict[str, Any] = {
             "success": True,
             "pipeline": "deterministic",
             "system": system,
             "orders_placed": 0,
             "message": "No decisions returned from signal step",
         }
+        if discovery_meta:
+            out["discovery"] = discovery_meta
+        return out
 
     decisions_json = json.dumps(
         [d.to_dict() for d in decisions if isinstance(d, TradingDecision)],
@@ -92,10 +138,13 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
     if metrics:
         await monitor.log_daily_performance(metrics)
 
-    return {
+    out = {
         "pipeline": "deterministic",
         "system": system,
         "decisions_count": len(decisions),
         "actionable_count": len([d for d in decisions if d.action != "HOLD"]),
         **result,
     }
+    if discovery_meta:
+        out["discovery"] = discovery_meta
+    return out

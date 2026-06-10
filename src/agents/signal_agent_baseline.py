@@ -12,6 +12,7 @@ from src.apis.gemini_client import get_genai_client
 from src.agents.ledger_utils import GEMINI_FLASH_MODEL, parse_trading_decisions
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
+from src.learning.context import build_signal_learning_block
 from src.models.signal import Signal
 from src.models.trading_decision import TradingDecision
 from src.logger import setup_logger
@@ -38,6 +39,7 @@ class BaselineSignalAgent(BaseAgent):
         self,
         competition: Dict,
         technical_data: Dict[str, Dict],
+        learning_block: str = "",
     ) -> str:
         market_lines = []
         for ticker in self.ticker_universe:
@@ -81,7 +83,10 @@ Trading constraints:
 - For SELL: size_pct = fraction of existing position to sell (0.01–1.0)
 - For CLOSE: exit the full existing position (size_pct ignored)
 - For HOLD: no trade
+{f'''
+{learning_block}
 
+''' if learning_block else ''}
 Competition context:
 {json.dumps(competition, indent=2)}
 
@@ -119,6 +124,7 @@ Example:
     ) -> List[TradingDecision]:
         """Twin Ledger decision step: ADK LlmAgent or direct Gemini call."""
         competition = competition or build_competition_context("baseline")
+        learning_block = build_signal_learning_block("baseline") if config.LEARNING_ENABLED else ""
 
         try:
             if config.USE_ADK and not prefer_direct:
@@ -128,12 +134,15 @@ Example:
                     user_payload={
                         "competition": competition,
                         "technical_data": technical_data,
+                        "signal_learning": learning_block,
                     },
                     session_id="baseline_signal",
                     valid_tickers=self.ticker_universe,
                 )
             else:
-                prompt = self._build_ledger_prompt(competition, technical_data)
+                prompt = self._build_ledger_prompt(
+                    competition, technical_data, learning_block=learning_block
+                )
                 response = self.client.models.generate_content(
                     model=GEMINI_FLASH_MODEL,
                     contents=prompt,
