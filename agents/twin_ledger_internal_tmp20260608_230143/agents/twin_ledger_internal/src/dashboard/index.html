@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Twin Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #09090b;
+      --bg-elevated: #111114;
+      --card: #18181b;
+      --card-hover: #1f1f24;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --text: #f5f5f7;
+      --muted: #a1a1aa;
+      --subtle: #71717a;
+      --accent: #c4b5fd;
+      --accent-deep: #7c3aed;
+      --accent-glow: rgba(167, 139, 250, 0.12);
+      --hero-from: #1b1938;
+      --hero-to: #111114;
+      --green: #4ade80;
+      --red: #fb7185;
+      --amber: #fbbf24;
+      --baseline: #38bdf8;
+      --internal: #a78bfa;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+      --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.18), transparent),
+        radial-gradient(ellipse 60% 40% at 100% 0%, rgba(56, 189, 248, 0.08), transparent);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 1.25rem 1.5rem 2rem;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+    h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;
+      padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+    }
+    .brand-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+    }
+    .meta { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); }
+    .tabs {
+      display: flex; gap: 0.35rem; margin-bottom: 1.25rem;
+      padding: 0.25rem; background: var(--bg-elevated);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      width: fit-content;
+    }
+    .tab {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .tab:hover { color: var(--text); background: var(--card); }
+    .tab.active {
+      background: var(--accent-glow);
+      border-color: rgba(196, 181, 253, 0.35);
+      color: var(--accent);
+    }
+    .view { display: none; }
+    .view.active { display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.15rem;
+      transition: border-color 0.15s;
+    }
+    .card:hover { border-color: var(--border-strong); }
+    .card .label {
+      font-size: 0.68rem; color: var(--subtle);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      font-family: var(--mono); font-weight: 500;
+    }
+    .card .value {
+      font-size: 1.75rem; font-weight: 700; margin-top: 0.3rem;
+      font-family: var(--mono); letter-spacing: -0.03em;
+    }
+    .card .sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.25rem; font-family: var(--mono); }
+    .card.baseline { border-left: 3px solid var(--baseline); }
+    .card.internal { border-left: 3px solid var(--internal); }
+    .leader-banner {
+      background: linear-gradient(135deg, var(--hero-from) 0%, var(--card) 100%);
+      border: 1px solid rgba(196, 181, 253, 0.2);
+      border-radius: var(--radius);
+      padding: 1.35rem 1.5rem;
+      margin-bottom: 1.25rem;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset;
+    }
+    .leader-banner .gap {
+      font-size: 1.9rem; font-weight: 700;
+      font-family: var(--mono); color: var(--accent);
+    }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    @media (max-width: 800px) { .compare-grid { grid-template-columns: 1fr; } }
+    .filters {
+      display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center;
+    }
+    select, button {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-family: var(--mono);
+    }
+    button.primary {
+      cursor: pointer;
+      background: var(--accent-deep);
+      border-color: rgba(196, 181, 253, 0.4);
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    button.primary:hover { background: #6d28d9; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    th {
+      color: var(--subtle); font-weight: 600; font-size: 0.65rem;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      font-family: var(--mono);
+    }
+    td { font-family: var(--mono); font-size: 0.78rem; }
+    tr:hover { background: var(--accent-glow); }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.25rem;
+    }
+    .panel h2 {
+      padding: 0.7rem 1rem; font-size: 0.72rem;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .panel-body { padding: 0; max-height: 480px; overflow: auto; }
+    .panel-body.padded { padding: 1rem; max-height: none; }
+    .badge {
+      display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px;
+      font-size: 0.7rem; font-weight: 600;
+    }
+    .badge-ok { background: rgba(74, 222, 128, 0.12); color: var(--green); border: 1px solid rgba(74, 222, 128, 0.25); }
+    .badge-error { background: rgba(251, 113, 133, 0.12); color: var(--red); border: 1px solid rgba(251, 113, 133, 0.25); }
+    .badge-type { background: rgba(196, 181, 253, 0.1); color: var(--accent); border: 1px solid rgba(196, 181, 253, 0.2); }
+    .badge-baseline { background: rgba(56, 189, 248, 0.1); color: var(--baseline); border: 1px solid rgba(56, 189, 248, 0.25); }
+    .badge-internal { background: rgba(167, 139, 250, 0.1); color: var(--internal); border: 1px solid rgba(167, 139, 250, 0.25); }
+    .trace-link { color: var(--accent); cursor: pointer; text-decoration: none; border-bottom: 1px solid rgba(196, 181, 253, 0.4); }
+    .trace-link:hover { color: #e9d5ff; }
+    .trace-missing { color: var(--muted); }
+    .mono { font-family: var(--mono); font-size: 0.78rem; }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+    #trace-modal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(9, 9, 11, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100; align-items: center; justify-content: center; padding: 1rem;
+    }
+    #trace-modal.open { display: flex; }
+    .modal-content {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      max-width: 900px; width: 100%; max-height: 85vh; overflow: auto; padding: 1.25rem;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+    }
+    .trace-action {
+      margin-top: 0.35rem;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .trace-fields { margin-top: 0.5rem; font-size: 0.82rem; line-height: 1.55; }
+    .trace-fields div { margin-bottom: 0.35rem; }
+    .trace-fields .field-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; }
+    .modal-content pre {
+      background: var(--bg); padding: 0.75rem; border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: auto; font-size: 0.75rem; margin-top: 0.5rem;
+      max-height: 360px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .close-btn { float: right; background: transparent; border: 1px solid var(--border); cursor: pointer; color: var(--text); padding: 0.35rem 0.65rem; border-radius: 6px; }
+    .chart-wrap { height: 180px; position: relative; margin-top: 0.5rem; }
+    canvas { width: 100%; height: 100%; }
+    .sys-tag { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+    .error-banner {
+      display: none;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.35);
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+    }
+    .error-banner.visible { display: block; }
+    .mission {
+      background: linear-gradient(160deg, var(--hero-from) 0%, var(--card) 55%, var(--bg-elevated) 100%);
+      border: 1px solid rgba(196, 181, 253, 0.18);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.4rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: rgba(245, 245, 247, 0.82);
+    }
+    .mission strong { color: var(--text); font-weight: 600; }
+    .mission em { color: var(--accent); font-style: normal; font-weight: 500; }
+    .mission .llm-tag {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      background: rgba(124, 58, 237, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(196, 181, 253, 0.25);
+      letter-spacing: 0.02em;
+    }
+    .universe-block { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+    .universe-block .universe-rationale { font-size: 0.84rem; color: var(--muted); margin-bottom: 0.65rem; }
+    .ticker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.45rem;
+      margin-top: 0.5rem;
+    }
+    .ticker-chip {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      transition: border-color 0.15s;
+    }
+    .ticker-chip:hover { border-color: rgba(196, 181, 253, 0.3); }
+    .ticker-chip .sym { font-weight: 600; color: var(--baseline); font-family: var(--mono); }
+    .ticker-chip .bucket { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand-tag">Twin Ledger</div>
+      <h1>Live Scoreboard</h1>
+      <p class="meta">LIVE · GEMINI 2.5 FLASH · MARKET BENCHMARK</p>
+    </div>
+    <button class="primary" onclick="refresh()">Refresh</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="performance" onclick="switchView('performance')">Performance</button>
+    <button class="tab" data-view="decisions" onclick="switchView('decisions')">Decisions</button>
+  </div>
+
+  <!-- PERFORMANCE VIEW -->
+  <div id="view-performance" class="view active">
+    <div class="mission">
+      <strong>The market is the only benchmark that never stops moving</strong> — prices shift, competitors react, and yesterday's edge fades overnight.
+      Twin Ledger puts two autonomous traders in that arena with real prices, real orders, and a live scoreboard.
+      <br><br>
+      <strong>Twin Ledger</strong> is our live experiment — not a backtest, not a replay of history.
+      Two agents start with the same capital and compete head-to-head on separate Alpaca accounts, every day generating new decisions, orders, and outcomes.
+      <strong>Baseline</strong> trades on technicals and structured LLM reasoning alone.
+      <strong>Internal</strong> adds MarketCrunch predictions, Kelly sizing, and agentic DataBento discovery — testing whether proprietary signal data is a real edge.
+      This scoreboard is the experiment: who adapts faster as the market moves?
+      <div class="llm-tag">LLM: Google Gemini 2.5 Flash — trading decisions, trailing stops, discovery planning</div>
+      <div class="universe-block" id="universe-block"></div>
+    </div>
+    <div id="perf-error" class="error-banner"></div>
+    <div class="leader-banner" id="leader-banner"></div>
+    <div class="compare-grid" id="compare-cards"></div>
+
+    <div class="compare-grid">
+      <div class="panel">
+        <h2>Baseline Positions</h2>
+        <div class="panel-body"><table id="baseline-positions"><thead><tr><th>Ticker</th><th>Qty</th><th>Value</th><th>P&L%</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="panel">
+        <h2>Internal Positions</h2>
+        <div class="panel-body"><table id="internal-positions"><thead><tr><th>Ticker</th><th>Qty</th><th>Value</th><th>P&L%</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Portfolio Value History</h2>
+      <div class="panel-body padded">
+        <div class="filters">
+          <label>Range <select id="perf-hours"><option value="168">7d</option><option value="720">30d</option><option value="2160">90d</option></select></label>
+        </div>
+        <div class="chart-wrap"><canvas id="perf-chart"></canvas></div>
+        <p class="meta" style="margin-top:0.75rem" id="perf-updated"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DECISIONS VIEW -->
+  <div id="view-decisions" class="view">
+    <div class="cards" id="summary-cards"></div>
+
+    <div class="filters">
+      <label>System <select id="f-system"><option value="">All</option><option>baseline</option><option>internal</option><option>discovery</option><option>both</option></select></label>
+      <label>Type <select id="f-type"><option value="">All</option></select></label>
+      <label>Hours <select id="f-hours"><option value="24">24h</option><option value="72">72h</option><option value="168">7d</option></select></label>
+    </div>
+
+    <div class="panel">
+      <h2>Recent Jobs</h2>
+      <div class="panel-body"><table id="jobs-table"><thead><tr><th>Trace</th><th>Job</th><th>System</th><th>Started</th><th>Status</th><th>Events</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Decision & Action Timeline</h2>
+      <div class="panel-body"><table id="events-table"><thead><tr><th>Time</th><th>Trace</th><th>System</th><th>Type</th><th>Agent</th><th>Action</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="trace-modal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeTrace()">Close</button>
+      <h3 id="trace-title">Trace</h3>
+      <div id="trace-body"></div>
+    </div>
+  </div>
+
+  <script>
+    let activeView = "performance";
+
+    const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "—";
+    const fmtUsd = (n) => n == null ? "—" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const fmtPct = (n) => n == null ? "—" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
+    const pctClass = (n) => Number(n) >= 0 ? "pos" : "neg";
+
+    async function fetchJSON(url) {
+      const r = await fetch(url);
+      const data = await r.json();
+      if (!r.ok) {
+        const err = new Error(data.error || `HTTP ${r.status}`);
+        err.status = r.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    function showPerfError(msg) {
+      const el = document.getElementById("perf-error");
+      el.textContent = msg;
+      el.classList.add("visible");
+    }
+
+    function clearPerfError() {
+      const el = document.getElementById("perf-error");
+      el.textContent = "";
+      el.classList.remove("visible");
+    }
+
+    function badge(status) {
+      const cls = status === "ok" ? "badge-ok" : "badge-error";
+      return `<span class="badge ${cls}">${status || "ok"}</span>`;
+    }
+
+    function traceCell(traceId) {
+      if (!traceId) return `<span class="trace-missing mono">—</span>`;
+      return `<span class="trace-link mono" onclick="showTrace('${traceId}')">${traceId.slice(0, 8)}</span>`;
+    }
+
+    function switchView(name) {
+      activeView = name;
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === name));
+      document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === `view-${name}`));
+      refresh();
+    }
+
+    function renderUniverse(universe) {
+      const el = document.getElementById("universe-block");
+      if (!universe || !universe.tickers?.length) {
+        el.innerHTML = "";
+        return;
+      }
+      el.innerHTML = `
+        <div><strong>Trading universe</strong> — ${universe.count} ETFs both agents may trade</div>
+        <div class="universe-rationale">${universe.rationale}</div>
+        <div class="ticker-grid">
+          ${universe.tickers.map(t => `
+            <div class="ticker-chip">
+              <span class="sym">${t.ticker}</span> ${t.name}
+              <div class="bucket">${t.bucket}</div>
+              <div>${t.why}</div>
+            </div>
+          `).join("")}
+        </div>`;
+    }
+
+    function renderPerformance(data) {
+      if (!data || !data.live) {
+        showPerfError("Performance data unavailable. Restart the server: python main.py --serve");
+        return;
+      }
+      clearPerfError();
+      renderUniverse(data.universe);
+
+      const live = data.live || {};
+      const lb = live.leaderboard || {};
+      const baseline = live.baseline || {};
+      const internal = live.internal || {};
+      const leaderName = lb.leader === "internal" ? "Internal" : "Baseline";
+
+      document.getElementById("leader-banner").innerHTML = `
+        <div>
+          <div class="meta">Twin Ledger Leaderboard</div>
+          <div style="font-size:1.1rem;margin-top:0.25rem"><strong>${leaderName}</strong> is ahead by <span class="gap">${fmtUsd(lb.gap_usd)}</span></div>
+          <div class="meta" style="margin-top:0.35rem">Starting equity ${fmtUsd(live.starting_equity)} · Updated ${fmtTime(live.updated_at)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="meta">Rank</div>
+          <div style="font-size:1.1rem">Baseline #${lb.baseline_rank} · Internal #${lb.internal_rank}</div>
+        </div>
+      `;
+
+      document.getElementById("compare-cards").innerHTML = `
+        <div class="card baseline">
+          <div class="label"><span class="sys-tag" style="color:var(--baseline)">Baseline</span> Portfolio</div>
+          <div class="value">${fmtUsd(baseline.portfolio_value)}</div>
+          <div class="sub ${pctClass(baseline.pnl_pct)}">P&L ${fmtPct(baseline.pnl_pct)} (${fmtUsd(baseline.pnl)})</div>
+          <div class="sub">Cash ${fmtUsd(baseline.cash)} · ${baseline.position_count || 0} positions</div>
+        </div>
+        <div class="card internal">
+          <div class="label"><span class="sys-tag" style="color:var(--internal)">Internal</span> Portfolio</div>
+          <div class="value">${fmtUsd(internal.portfolio_value)}</div>
+          <div class="sub ${pctClass(internal.pnl_pct)}">P&L ${fmtPct(internal.pnl_pct)} (${fmtUsd(internal.pnl)})</div>
+          <div class="sub">Cash ${fmtUsd(internal.cash)} · ${internal.position_count || 0} positions</div>
+        </div>
+      `;
+
+      const posRow = (p) => `
+        <tr>
+          <td>${p.ticker}</td>
+          <td>${p.qty}</td>
+          <td>${fmtUsd(p.market_value)}</td>
+          <td class="${pctClass(p.unrealized_return_pct)}">${fmtPct(p.unrealized_return_pct)}</td>
+        </tr>`;
+      const emptyRow = `<tr><td colspan="4" class="meta">No open positions</td></tr>`;
+
+      document.querySelector("#baseline-positions tbody").innerHTML =
+        (baseline.positions || []).length ? (baseline.positions || []).map(posRow).join("") : emptyRow;
+      document.querySelector("#internal-positions tbody").innerHTML =
+        (internal.positions || []).length ? (internal.positions || []).map(posRow).join("") : emptyRow;
+
+      drawChart(data.history || {});
+      document.getElementById("perf-updated").textContent =
+        `Snapshots from audit log: ${(data.history?.baseline?.length || 0)} baseline, ${(data.history?.internal?.length || 0)} internal`;
+    }
+
+    function drawChart(history) {
+      const canvas = document.getElementById("perf-chart");
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = rect.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const series = [
+        { key: "baseline", color: "#38bdf8", points: history.baseline || [] },
+        { key: "internal", color: "#a78bfa", points: history.internal || [] },
+      ];
+      const all = series.flatMap(s => s.points.map(p => p.portfolio_value).filter(v => v != null));
+      if (!all.length) {
+        ctx.fillStyle = "#71717a";
+        ctx.font = "13px Inter, sans-serif";
+        ctx.fillText("No portfolio snapshots yet — run a daily job to record history", 12, H / 2);
+        return;
+      }
+
+      const minV = Math.min(...all) * 0.995;
+      const maxV = Math.max(...all) * 1.005;
+      const pad = { l: 48, r: 12, t: 12, b: 28 };
+      const plotW = W - pad.l - pad.r;
+      const plotH = H - pad.t - pad.b;
+
+      const yScale = (v) => pad.t + plotH - ((v - minV) / (maxV - minV || 1)) * plotH;
+
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.t + (plotH * i) / 4;
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+        const val = maxV - ((maxV - minV) * i) / 4;
+        ctx.fillStyle = "#71717a";
+        ctx.font = "10px JetBrains Mono, monospace";
+        ctx.fillText(`$${(val/1000).toFixed(1)}k`, 4, y + 3);
+      }
+
+      series.forEach(s => {
+        const pts = s.points.filter(p => p.portfolio_value != null);
+        if (pts.length < 2) return;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = pad.l + (i / (pts.length - 1)) * plotW;
+          const y = yScale(p.portfolio_value);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      });
+
+      ctx.font = "11px JetBrains Mono, monospace";
+      ctx.fillStyle = "#38bdf8"; ctx.fillText("● Baseline", pad.l, H - 8);
+      ctx.fillStyle = "#a78bfa"; ctx.fillText("● Internal", pad.l + 90, H - 8);
+    }
+
+    async function refreshPerformance() {
+      const hours = document.getElementById("perf-hours").value;
+      let data = null;
+      try {
+        data = await fetchJSON(`/api/performance?hours=${hours}`);
+      } catch (e) {
+        // Fallback: older servers expose performance via /api/summary
+        try {
+          const summary = await fetchJSON(`/api/summary?hours=${hours}`);
+          if (summary.performance?.live) {
+            data = summary.performance;
+          }
+        } catch (_) { /* ignore */ }
+        if (!data?.live) {
+          const hint = e.status === 404
+            ? "Performance API not found — restart the server (python main.py --serve) to load the latest server code."
+            : `Failed to load performance: ${e.message}`;
+          showPerfError(hint);
+          return;
+        }
+      }
+      renderPerformance(data);
+    }
+
+    async function refreshDecisions() {
+      const hours = document.getElementById("f-hours").value;
+      const system = document.getElementById("f-system").value;
+      const eventType = document.getElementById("f-type").value;
+
+      const summary = await fetchJSON(`/api/summary?hours=${hours}`);
+      const events = await fetchJSON(`/api/events?hours=${hours}&limit=200&system=${system}&event_type=${eventType}`);
+
+      const cards = document.getElementById("summary-cards");
+      cards.innerHTML = `
+        <div class="card"><div class="label">Events (${hours}h)</div><div class="value">${summary.total_events}</div></div>
+        <div class="card"><div class="label">Orders</div><div class="value">${summary.orders_placed}</div></div>
+        <div class="card"><div class="label">Ledger Decisions</div><div class="value">${summary.ledger_decisions ?? summary.arena_decisions ?? 0}</div></div>
+        <div class="card"><div class="label">Risk Exits</div><div class="value">${summary.risk_exits}</div></div>
+      `;
+
+      const typeSelect = document.getElementById("f-type");
+      const types = Object.keys(summary.by_event_type || {}).sort();
+      const cur = typeSelect.value;
+      typeSelect.innerHTML = '<option value="">All</option>' + types.map(t => `<option value="${t}">${t}</option>`).join("");
+      typeSelect.value = cur;
+
+      document.querySelector("#jobs-table tbody").innerHTML = (summary.recent_jobs || []).map(j => `
+        <tr>
+          <td>${traceCell(j.trace_id)}</td>
+          <td>${j.job_type}</td>
+          <td>${j.system}</td>
+          <td>${fmtTime(j.started_at)}</td>
+          <td>${badge(j.status)}</td>
+          <td>${j.event_count}</td>
+        </tr>
+      `).join("");
+
+      const decisionTypes = new Set([
+        "ledger_decision", "arena_decision", "order_placed", "order_skipped", "order_cancelled_duplicate",
+        "risk_stop_exit", "risk_eod_exit", "portfolio_snapshot", "job_started", "job_completed",
+      ]);
+
+      document.querySelector("#events-table tbody").innerHTML = (events.events || []).map(e => {
+        const sysBadge = e.system === "baseline" ? "badge-baseline"
+          : e.system === "internal" ? "badge-internal" : "badge-type";
+        return `
+        <tr>
+          <td class="mono">${fmtTime(e.timestamp)}</td>
+          <td>${traceCell(e.trace_id)}</td>
+          <td><span class="badge ${sysBadge}">${e.system}</span></td>
+          <td><span class="badge badge-type">${e.event_type}</span></td>
+          <td>${e.agent || "—"}</td>
+          <td>${(e.action||"").slice(0, 100)}</td>
+          <td>${badge(e.status)}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function refresh() {
+      if (activeView === "performance") await refreshPerformance();
+      else await refreshDecisions();
+    }
+
+    function escHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function traceDetailFields(eventType, payload) {
+      const fields = [];
+      const add = (label, value) => {
+        if (value != null && value !== "") fields.push(
+          `<div><div class="field-label">${label}</div>${escHtml(value)}</div>`
+        );
+      };
+
+      if (eventType === "ledger_decision" || eventType === "arena_decision") {
+        add("Ticker", `${payload.action || ""} ${payload.ticker || ""}`.trim());
+        if (payload.size_pct != null) add("Size", `${(payload.size_pct * 100).toFixed(1)}%`);
+        if (payload.confidence != null) add("Confidence", payload.confidence);
+        add("Rationale", payload.rationale);
+        add("Invalidation", payload.invalidation);
+        add("Competitive note", payload.competitive_note);
+      } else if (eventType === "order_placed") {
+        add("Order", `${payload.side} ${payload.qty} ${payload.ticker} @ $${payload.limit_price} (${payload.time_in_force})`);
+        if (payload.order_id) add("Order ID", payload.order_id);
+      } else if (eventType === "discovery_probe") {
+        add("Dataset", `${payload.dataset}/${payload.schema}`);
+        add("Status", payload.status);
+        if (payload.feature_strategy) add("Feature strategy", payload.feature_strategy);
+      }
+
+      return fields.length
+        ? `<div class="trace-fields">${fields.join("")}</div>`
+        : "";
+    }
+
+    async function showTrace(traceId) {
+      if (!traceId) return;
+      const data = await fetchJSON(`/api/trace/${traceId}`);
+      document.getElementById("trace-title").textContent = `Trace ${traceId} (${data.count} events)`;
+      document.getElementById("trace-body").innerHTML = (data.events || []).map(e => {
+        const payload = e.payload || {};
+        const hasPayload = Object.keys(payload).length > 0;
+        const fields = traceDetailFields(e.event_type, payload);
+        return `
+        <div style="margin-bottom:0.75rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem">
+          <div><strong>${escHtml(e.event_type)}</strong> · ${escHtml(e.agent || "")} · ${badge(e.status)}</div>
+          <div class="meta">${fmtTime(e.timestamp)}${e.job_type ? ` · job: ${escHtml(e.job_type)}` : ""}</div>
+          <div class="trace-action">${escHtml(e.action)}</div>
+          ${fields}
+          ${hasPayload ? `<pre>${escHtml(JSON.stringify(payload, null, 2))}</pre>` : ""}
+        </div>`;
+      }).join("");
+      document.getElementById("trace-modal").classList.add("open");
+    }
+
+    function closeTrace() {
+      document.getElementById("trace-modal").classList.remove("open");
+    }
+
+    ["f-system","f-type","f-hours"].forEach(id => {
+      document.getElementById(id).addEventListener("change", refreshDecisions);
+    });
+    document.getElementById("perf-hours").addEventListener("change", refreshPerformance);
+
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

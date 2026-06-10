@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+logs/
+reports/
+.env
+*.log
+.pytest_cache/
+baseline_trading/tmp/

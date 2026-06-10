@@ -1,0 +1,35 @@
+# Minimal requirements - install these first, then add others as needed
+# This avoids dependency conflicts
+
+# Core
+python-dotenv
+python-dateutil>=2.9.0.post0,<3.0.0
+pytz
+
+# Data
+pandas
+numpy
+scipy
+scikit-learn
+
+# APIs
+requests
+psycopg2-binary
+SQLAlchemy
+
+# Google (Core)
+google-generativeai
+google-auth
+google-cloud-logging
+google-cloud-storage
+google-cloud-aiplatform[agent_engines]>=1.88.0
+
+# Utilities
+tqdm
+
+# Testing
+pytest
+
+# Important: Add these LAST to let pip resolve PyYAML conflict
+google-adk
+alpaca-trade-api

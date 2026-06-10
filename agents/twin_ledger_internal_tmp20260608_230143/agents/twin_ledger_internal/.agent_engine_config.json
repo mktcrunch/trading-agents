@@ -1,0 +1,11 @@
+{
+  "display_name": "Twin Ledger Internal",
+  "description": "ADK multi-agent internal trader (System B) — MarketCrunch predictions, DataBento, Kelly sizing vs Baseline.",
+  "env_vars": {
+    "GOOGLE_GENAI_USE_VERTEXAI": "1",
+    "USE_ADK": "true",
+    "USE_ADK_WORKFLOW": "true",
+    "GEMINI_FLASH_MODEL": "gemini-2.5-flash",
+    "TRADING_ENABLED": "true"
+  }
+}

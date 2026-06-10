@@ -1,0 +1,188 @@
+"""
+Execution Agent (SHARED by both systems)
+Places orders on Alpaca:
+- Overnight: LIMIT orders at MOC ± 0.5%
+- Post-open: Chase unfilled with MARKET orders
+- EOD: Hold/trim based on next-day predictions
+"""
+from typing import Dict, List, Optional
+from src import config
+from src.agents.base_agent import BaseAgent
+from src.apis.alpaca_client import AlpacaClient, round_limit_price
+from src.models.order import Order, OrderType, OrderTimeInForce
+from src.strategies.order_dedup import (
+    filter_orders_for_placement,
+    reconcile_duplicate_open_orders,
+)
+from src.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+
+class ExecutionAgent(BaseAgent):
+    """
+    Executes trades on Alpaca
+    - Manages order placement (limit overnight, market chase)
+    - Tracks execution results
+    - Handles position sizing based on signals
+    """
+
+    def __init__(self, system: str = "baseline"):
+        super().__init__(system=system)
+        self.alpaca_client = AlpacaClient(system=system)
+        self.orders_placed = []
+
+    async def place_overnight_orders(
+        self,
+        position_changes: Dict[str, float],
+        reference_prices: Dict[str, float],
+        current_positions: Optional[Dict] = None,
+    ) -> Dict[str, Optional[str]]:
+        """
+        Place LIMIT orders overnight (OPG time-in-force)
+        Buy: MOC - 0.5%
+        Sell: MOC + 0.5%
+
+        Args:
+            position_changes: Dict mapping ticker -> qty change
+            reference_prices: Dict mapping ticker -> reference price (close)
+
+        Returns:
+            Dict mapping ticker -> order ID (or None if failed)
+        """
+        order_ids = {}
+        offset_pct = config.ORDER_CONFIG.get("overnight_limit_offset_pct", 0.005)
+
+        cancelled = reconcile_duplicate_open_orders(self.alpaca_client)
+        for c in cancelled:
+            self.log_action(
+                f"Cancelled duplicate {c['side']} {c['symbol']} "
+                f"{c['cancelled_qty']:.0f} sh @ ${c['limit_price']:.2f}",
+                data=c,
+                event_type="order_cancelled_duplicate",
+            )
+
+        open_orders = self.alpaca_client.get_orders(status="open")
+        account = self.alpaca_client.get_account() or {}
+        buying_power = float(account.get("buying_power", 0))
+        positions = current_positions or self.alpaca_client.get_positions()
+
+        filtered_changes, skipped = filter_orders_for_placement(
+            position_changes=position_changes,
+            reference_prices=reference_prices,
+            open_orders_raw=open_orders,
+            buying_power=buying_power,
+            current_positions=positions,
+            offset_pct=offset_pct,
+        )
+
+        for skip in skipped:
+            self.log_action(
+                f"Skipped order {skip['ticker']}: {skip['reason']}",
+                data=skip,
+                event_type="order_skipped",
+            )
+
+        if skipped:
+            self.log_action(
+                f"Order filter: {len(filtered_changes)} to place, "
+                f"{len(skipped)} skipped ({len(open_orders)} open orders, "
+                f"${buying_power:,.2f} buying power)",
+            )
+
+        for ticker, qty_change in filtered_changes.items():
+            if qty_change == 0:
+                continue
+
+            ref_price = reference_prices.get(ticker, 0)
+            if not ref_price:
+                self.log_error(f"Missing reference price for {ticker}")
+                continue
+
+            if qty_change > 0:
+                limit_price = round_limit_price(ref_price * (1 - offset_pct))
+                side = "buy"
+            else:
+                limit_price = round_limit_price(ref_price * (1 + offset_pct))
+                side = "sell"
+                qty_change = abs(qty_change)
+
+            try:
+                order_id = self.alpaca_client.place_limit_order(
+                    ticker=ticker,
+                    qty=qty_change,
+                    limit_price=limit_price,
+                    side=side,
+                    time_in_force="opg"
+                )
+                order_ids[ticker] = order_id
+                if order_id:
+                    self.log_action(
+                        f"Placed overnight {side} order: {qty_change} {ticker} @ ${limit_price:.2f}",
+                        data={
+                            "ticker": ticker,
+                            "side": side,
+                            "qty": qty_change,
+                            "limit_price": limit_price,
+                            "order_id": order_id,
+                            "time_in_force": "opg",
+                        },
+                        event_type="order_placed",
+                    )
+                else:
+                    self.log_error(
+                        f"Failed to place overnight {side} order: "
+                        f"{qty_change} {ticker} @ ${limit_price:.2f}"
+                    )
+            except Exception as e:
+                self.log_error(f"Failed to place order for {ticker}: {e}")
+                order_ids[ticker] = None
+
+        return order_ids
+
+    async def chase_unfilled_orders(self, fill_threshold: float = 0.7) -> Dict[str, Optional[str]]:
+        """
+        Post-market-open: chase unfilled orders with MARKET orders
+        If <70% filled, place market order for remaining qty
+
+        Args:
+            fill_threshold: Threshold % for chasing (default 70%)
+
+        Returns:
+            Dict mapping ticker -> new order ID
+        """
+        new_orders = {}
+
+        try:
+            open_orders = self.alpaca_client.get_orders(status="open")
+
+            for order in open_orders:
+                fill_rate = (order.filled_qty / order.qty) if order.qty > 0 else 0
+
+                if fill_rate < fill_threshold:
+                    remaining_qty = order.qty - order.filled_qty
+                    side = "buy" if order.side.value == "buy" else "sell"
+
+                    try:
+                        order_id = self.alpaca_client.place_market_order(
+                            ticker=order.symbol,
+                            qty=remaining_qty,
+                            side=side
+                        )
+                        new_orders[order.symbol] = order_id
+                        self.log_action(
+                            f"Chased unfilled {order.symbol}: {fill_rate*100:.0f}% filled, "
+                            f"placed market for {remaining_qty} {side}"
+                        )
+                    except Exception as e:
+                        self.log_error(f"Failed to chase order for {order.symbol}: {e}")
+
+        except Exception as e:
+            self.log_error(f"Failed to get open orders: {e}")
+
+        return new_orders
+
+    async def execute(self) -> bool:
+        """Execute order management workflow"""
+        self.log_action("Starting execution agent")
+        return True

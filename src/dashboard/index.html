@@ -1,0 +1,2092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b5c3f" />
+  <meta name="color-scheme" content="light" />
+  <title>Twin Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f0f6f2;
+      --bg-elevated: #ffffff;
+      --card: #ffffff;
+      --card-hover: #eef6f1;
+      --border: rgba(13, 74, 58, 0.11);
+      --border-strong: rgba(13, 74, 58, 0.22);
+      --text: #0a2e22;
+      --muted: #4a6b5e;
+      --subtle: #7d9a8f;
+      --accent: #146c4a;
+      --accent-deep: #0b5c3f;
+      --accent-hover: #094a34;
+      --accent-glow: rgba(20, 108, 74, 0.09);
+      --accent-pale: #dceee5;
+      --hero-from: #e6f4ec;
+      --hero-to: #ffffff;
+      --green: #15803d;
+      --red: #b91c1c;
+      --amber: #92610a;
+      --baseline: #0d5c48;
+      --internal: #2f9e72;
+      --shadow-sm: 0 1px 3px rgba(13, 74, 58, 0.07);
+      --shadow-md: 0 6px 20px rgba(13, 74, 58, 0.09);
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+      --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      --radius: 10px;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 85% 55% at 0% 0%, rgba(20, 108, 74, 0.09), transparent 58%),
+        radial-gradient(ellipse 70% 45% at 100% 5%, rgba(47, 158, 114, 0.07), transparent 52%),
+        linear-gradient(180deg, #f8fcfa 0%, var(--bg) 100%);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 1.25rem 1.5rem 2rem;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+    h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;
+      padding: 0.85rem 1rem 1rem;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+    }
+    .brand-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+    }
+    .meta { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); }
+    .tabs {
+      display: flex; gap: 0.35rem; margin-bottom: 1.25rem;
+      padding: 0.3rem; background: var(--accent-pale);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      width: fit-content;
+      box-shadow: var(--shadow-sm);
+    }
+    .tab {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.65); }
+    .tab.active {
+      background: #ffffff;
+      border-color: var(--border-strong);
+      color: var(--accent-deep);
+      box-shadow: var(--shadow-sm);
+    }
+    .view { display: none; }
+    .view.active { display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.15rem;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+    .card .label {
+      font-size: 0.68rem; color: var(--subtle);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      font-family: var(--mono); font-weight: 500;
+    }
+    .card .value {
+      font-size: 1.75rem; font-weight: 700; margin-top: 0.3rem;
+      font-family: var(--mono); letter-spacing: -0.03em;
+    }
+    .card .sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.25rem; font-family: var(--mono); }
+    .card.baseline { border-left: 3px solid var(--baseline); }
+    .card.internal { border-left: 3px solid var(--internal); }
+    .leader-banner {
+      background: linear-gradient(135deg, #ffffff 0%, var(--hero-from) 100%);
+      border: 1px solid var(--border-strong);
+      border-left: 4px solid var(--accent-deep);
+      border-radius: var(--radius);
+      padding: 1.35rem 1.5rem;
+      margin-bottom: 1.25rem;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+      box-shadow: var(--shadow-md);
+    }
+    .leader-banner .gap {
+      font-size: 1.9rem; font-weight: 700;
+      font-family: var(--mono); color: var(--accent);
+    }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .leader-rank { text-align: right; }
+    .filters {
+      display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center;
+    }
+    select, button {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-family: var(--mono);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    select:focus, button:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(20, 108, 74, 0.15);
+    }
+    button.primary {
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent-deep) 0%, var(--accent) 100%);
+      border-color: rgba(11, 92, 63, 0.35);
+      color: #ffffff;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      box-shadow: 0 2px 8px rgba(11, 92, 63, 0.22);
+    }
+    button.primary:hover { background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    th {
+      color: var(--subtle); font-weight: 600; font-size: 0.65rem;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      font-family: var(--mono);
+    }
+    td { font-family: var(--mono); font-size: 0.78rem; }
+    tr:hover { background: var(--accent-glow); }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .panel h2 {
+      padding: 0.7rem 1rem; font-size: 0.72rem;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .panel-body { padding: 0; max-height: 480px; overflow: auto; }
+    .panel-body.padded { padding: 1rem; max-height: none; }
+    .badge {
+      display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px;
+      font-size: 0.7rem; font-weight: 600;
+    }
+    .badge-ok { background: rgba(21, 128, 61, 0.1); color: var(--green); border: 1px solid rgba(21, 128, 61, 0.28); }
+    .badge-error { background: rgba(185, 28, 28, 0.08); color: var(--red); border: 1px solid rgba(185, 28, 28, 0.25); }
+    .badge-type { background: rgba(20, 108, 74, 0.08); color: var(--accent); border: 1px solid rgba(20, 108, 74, 0.2); }
+    .badge-baseline { background: rgba(13, 92, 72, 0.08); color: var(--baseline); border: 1px solid rgba(13, 92, 72, 0.25); }
+    .badge-internal { background: rgba(47, 158, 114, 0.1); color: var(--internal); border: 1px solid rgba(47, 158, 114, 0.28); }
+    .trace-link { color: var(--accent-deep); cursor: pointer; text-decoration: none; border-bottom: 1px solid rgba(11, 92, 63, 0.35); }
+    .trace-link:hover { color: var(--internal); }
+    .trace-missing { color: var(--muted); }
+    .mono { font-family: var(--mono); font-size: 0.78rem; }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+    #trace-modal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(10, 46, 34, 0.42);
+      backdrop-filter: blur(10px);
+      z-index: 100; align-items: center; justify-content: center; padding: 1rem;
+    }
+    #trace-modal.open { display: flex; }
+    .modal-content {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      max-width: 900px; width: 100%; max-height: 85vh; overflow: auto; padding: 1.25rem;
+      box-shadow: var(--shadow-md), 0 24px 48px rgba(13, 74, 58, 0.14);
+    }
+    .trace-action {
+      margin-top: 0.35rem;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .trace-fields { margin-top: 0.5rem; font-size: 0.82rem; line-height: 1.55; }
+    .trace-fields div { margin-bottom: 0.35rem; }
+    .trace-fields .field-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; }
+    .modal-content pre {
+      background: var(--bg); padding: 0.75rem; border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: auto; font-size: 0.75rem; margin-top: 0.5rem;
+      max-height: 360px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .close-btn { float: right; background: transparent; border: 1px solid var(--border); cursor: pointer; color: var(--text); padding: 0.35rem 0.65rem; border-radius: 6px; }
+    .chart-wrap { height: 180px; position: relative; margin-top: 0.5rem; }
+    canvas { width: 100%; height: 100%; }
+    .sys-tag { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+    .error-banner {
+      display: none;
+      background: rgba(185, 28, 28, 0.07);
+      border: 1px solid rgba(185, 28, 28, 0.28);
+      color: #991b1b;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+    }
+    .error-banner.visible { display: block; }
+    .mission {
+      background: linear-gradient(160deg, #ffffff 0%, var(--hero-from) 55%, var(--accent-pale) 100%);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.4rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: var(--muted);
+      box-shadow: var(--shadow-sm);
+    }
+    .mission strong { color: var(--text); font-weight: 600; }
+    .mission em { color: var(--accent-deep); font-style: normal; font-weight: 500; }
+    .mission .llm-tag {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      background: rgba(20, 108, 74, 0.08);
+      color: var(--accent-deep);
+      border: 1px solid rgba(20, 108, 74, 0.2);
+      letter-spacing: 0.02em;
+    }
+    .universe-block { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+    .universe-block .universe-rationale { font-size: 0.84rem; color: var(--muted); margin-bottom: 0.65rem; }
+    .ticker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.45rem;
+      margin-top: 0.5rem;
+    }
+    .ticker-chip {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      transition: border-color 0.15s;
+    }
+    .ticker-chip:hover { border-color: rgba(20, 108, 74, 0.35); }
+    .ticker-chip .sym { font-weight: 600; color: var(--baseline); font-family: var(--mono); }
+    .ticker-chip .bucket { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; }
+
+    /* ── Architecture tab ── */
+    .arch-hero {
+      background: linear-gradient(135deg, #ffffff 0%, #edf7f1 45%, #d8eee3 100%);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 1.6rem 1.75rem;
+      margin-bottom: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+    }
+    .arch-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 88% 12%, rgba(47, 158, 114, 0.14), transparent 48%),
+                  radial-gradient(circle at 8% 85%, rgba(11, 92, 63, 0.1), transparent 42%);
+      pointer-events: none;
+    }
+    .arch-hero > * { position: relative; z-index: 1; }
+    .arch-hero h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, var(--text) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .arch-hero p { color: var(--muted); font-size: 0.92rem; line-height: 1.65; max-width: 52rem; }
+    .arch-pill-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 1rem; }
+    .arch-pill {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+    }
+    .arch-pill.accent { border-color: rgba(20, 108, 74, 0.35); color: var(--accent-deep); background: rgba(255, 255, 255, 0.9); }
+    .arch-pill.baseline { border-color: rgba(13, 92, 72, 0.35); color: var(--baseline); }
+    .arch-pill.internal { border-color: rgba(47, 158, 114, 0.4); color: var(--internal); }
+
+    .arch-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+    }
+    .arch-stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.9rem 1rem;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+    }
+    .arch-stat .num {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .arch-stat .lbl {
+      font-size: 0.68rem;
+      color: var(--subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--mono);
+      margin-top: 0.2rem;
+    }
+
+    .arch-section-title {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 1.5rem 0 0.75rem;
+    }
+
+    .arch-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 1.25rem;
+    }
+    .arch-layer {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+      position: relative;
+    }
+    .arch-layer + .arch-layer { margin-top: 0.45rem; }
+    .arch-layer-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--subtle);
+      margin-bottom: 0.65rem;
+    }
+    .arch-nodes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: stretch;
+    }
+    .arch-node {
+      flex: 1 1 140px;
+      min-width: 120px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .arch-node:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
+    .arch-node .name {
+      font-weight: 600;
+      font-size: 0.82rem;
+      margin-bottom: 0.2rem;
+    }
+    .arch-node .desc {
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .arch-node .tag {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--subtle);
+    }
+    .arch-node.baseline { border-left: 3px solid var(--baseline); }
+    .arch-node.internal { border-left: 3px solid var(--internal); }
+    .arch-node.both { border-left: 3px solid var(--accent); }
+    .arch-node.scheduler { border-left: 3px solid var(--amber); }
+    .arch-node.gcp { border-left: 3px solid var(--green); }
+
+    .arch-connector {
+      display: flex;
+      justify-content: center;
+      padding: 0.15rem 0;
+      color: var(--subtle);
+      font-size: 0.85rem;
+    }
+
+    .arch-workflows {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .arch-wf {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .arch-wf-head {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .arch-wf-head h4 { font-size: 0.88rem; font-weight: 600; }
+    .arch-wf-cron {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--amber);
+      white-space: nowrap;
+    }
+    .arch-wf-body { padding: 0.85rem 1rem; }
+    .arch-step {
+      display: flex;
+      gap: 0.65rem;
+      margin-bottom: 0.55rem;
+      align-items: flex-start;
+    }
+    .arch-step:last-child { margin-bottom: 0; }
+    .arch-step-num {
+      flex-shrink: 0;
+      width: 1.35rem;
+      height: 1.35rem;
+      border-radius: 50%;
+      background: var(--accent-glow);
+      border: 1px solid rgba(20, 108, 74, 0.28);
+      color: var(--accent-deep);
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .arch-step-text { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+    .arch-step-text strong { color: var(--text); font-weight: 600; }
+
+    .arch-arena {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .arch-svg-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin: 0.5rem 0 1rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .arch-arena-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+    }
+    .arch-arena-card.baseline { border-top: 3px solid var(--baseline); }
+    .arch-arena-card.internal { border-top: 3px solid var(--internal); }
+    .arch-arena-card h4 {
+      font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+    }
+    .arch-arena-card .subtitle {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      font-family: var(--mono);
+    }
+    .arch-arena-card ul {
+      list-style: none;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .arch-arena-card li {
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.4;
+    }
+    .arch-arena-card li:last-child { border-bottom: none; }
+    .arch-arena-card li strong { color: var(--text); }
+
+    .arch-audit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.45rem;
+    }
+    .arch-audit-chip {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.6rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--accent);
+    }
+    .arch-audit-chip span { color: var(--subtle); display: block; font-size: 0.62rem; margin-top: 0.15rem; }
+
+    .arch-flow-svg {
+      width: 100%;
+      min-width: 560px;
+      max-width: 100%;
+      height: auto;
+      margin: 0;
+      display: block;
+    }
+
+    .arch-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+    }
+    .arch-detail-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+    }
+    .arch-detail-card h4 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--text);
+    }
+    .arch-detail-card p,
+    .arch-detail-card li {
+      font-size: 0.76rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .arch-detail-card ul {
+      margin: 0.35rem 0 0;
+      padding-left: 1.1rem;
+    }
+    .arch-detail-card li { margin-bottom: 0.2rem; }
+    .arch-detail-card.baseline { border-top: 2px solid var(--baseline); }
+    .arch-detail-card.internal { border-top: 2px solid var(--internal); }
+    .arch-detail-card.shared { border-top: 2px solid var(--accent); }
+
+    .arch-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 1.25rem;
+    }
+    .arch-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76rem;
+      min-width: 520px;
+    }
+    .arch-table th,
+    .arch-table td {
+      text-align: left;
+      padding: 0.55rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .arch-table th {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--subtle);
+      font-weight: 600;
+      background: var(--bg);
+    }
+    .arch-table td code,
+    .arch-table .mono {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--accent-deep);
+    }
+    .arch-table tr:last-child td { border-bottom: none; }
+
+    .arch-callout {
+      background: linear-gradient(135deg, rgba(20, 108, 74, 0.06), rgba(255,255,255,0.9));
+      border: 1px solid rgba(20, 108, 74, 0.2);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .arch-callout strong { color: var(--text); }
+
+    .arch-ticker-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+    .arch-ticker {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 5px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--accent-deep);
+    }
+
+    .chat-panel { margin-bottom: 1rem; }
+    .chat-panel .panel-body.padded { padding: 0.85rem 1rem; }
+    .chat-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.65rem;
+    }
+    .chat-toolbar label { font-size: 0.75rem; color: var(--muted); }
+    .chat-toolbar select {
+      font-size: 0.78rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .chat-status {
+      font-size: 0.72rem;
+      color: var(--subtle);
+      margin-left: auto;
+    }
+    .chat-log {
+      height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      padding: 0.65rem 0.75rem;
+      margin-bottom: 0.65rem;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+    .chat-msg { margin-bottom: 0.55rem; }
+    .chat-msg.user strong { color: var(--text); }
+    .chat-msg.agent strong { color: var(--accent-deep); }
+    .chat-msg.system { color: var(--subtle); font-size: 0.74rem; }
+    .chat-msg.error { color: var(--red, #b42318); }
+    .chat-msg pre {
+      margin: 0.35rem 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.55rem;
+      max-height: 140px;
+      overflow: auto;
+    }
+    .chat-compose {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .chat-compose textarea {
+      flex: 1;
+      min-height: 44px;
+      max-height: 120px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 0.82rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .chat-compose button {
+      min-height: 44px;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .chat-compose button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chat-hints {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.55rem;
+    }
+    .chat-hint {
+      font-size: 0.68rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .chat-hint:hover { border-color: var(--accent); color: var(--accent-deep); }
+    .chat-warning {
+      font-size: 0.72rem;
+      color: #92610a;
+      background: rgba(146, 97, 10, 0.08);
+      border: 1px solid rgba(146, 97, 10, 0.25);
+      border-radius: 8px;
+      padding: 0.45rem 0.6rem;
+      margin-bottom: 0.65rem;
+      line-height: 1.4;
+    }
+
+    /* ── Mobile & tablet ── */
+    @media (max-width: 800px) {
+      .compare-grid,
+      .arch-arena { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: max(0.85rem, env(safe-area-inset-top))
+                 max(0.85rem, env(safe-area-inset-right))
+                 max(1.25rem, env(safe-area-inset-bottom))
+                 max(0.85rem, env(safe-area-inset-left));
+      }
+      h1 { font-size: 1.2rem; }
+      .header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+      }
+      .header .primary {
+        width: 100%;
+        min-height: 44px;
+        font-size: 0.85rem;
+      }
+      .meta { font-size: 0.72rem; word-break: break-word; }
+
+      .tabs {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.25rem;
+        padding: 0.3rem;
+      }
+      .tab {
+        min-height: 44px;
+        padding: 0.55rem 0.35rem;
+        font-size: 0.62rem;
+        letter-spacing: 0.04em;
+        text-align: center;
+        line-height: 1.2;
+      }
+
+      .mission,
+      .leader-banner,
+      .arch-hero {
+        padding: 1rem 1.05rem;
+      }
+      .mission { font-size: 0.85rem; line-height: 1.6; }
+      .leader-banner {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .leader-banner .gap { font-size: 1.45rem; }
+      .leader-rank { text-align: left; width: 100%; }
+
+      .cards { grid-template-columns: repeat(2, 1fr); gap: 0.55rem; }
+      .card { padding: 0.85rem 0.9rem; }
+      .card .value { font-size: 1.35rem; }
+      .card .sub { font-size: 0.72rem; }
+
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.55rem;
+      }
+      .filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        width: 100%;
+        font-size: 0.72rem;
+        color: var(--muted);
+      }
+      .filters select,
+      .filters button {
+        width: 100%;
+        min-height: 44px;
+      }
+
+      .panel-body {
+        -webkit-overflow-scrolling: touch;
+      }
+      #jobs-table { min-width: 34rem; }
+      #events-table { min-width: 42rem; }
+      th, td { padding: 0.5rem 0.55rem; }
+      th { font-size: 0.6rem; }
+      td { font-size: 0.72rem; }
+
+      .chart-wrap { height: 200px; }
+
+      #trace-modal {
+        padding: 0;
+        align-items: stretch;
+      }
+      .modal-content {
+        max-width: none;
+        width: 100%;
+        max-height: 100vh;
+        max-height: 100dvh;
+        height: 100%;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        padding: max(1rem, env(safe-area-inset-top))
+                 max(1rem, env(safe-area-inset-right))
+                 max(1rem, env(safe-area-inset-bottom))
+                 max(1rem, env(safe-area-inset-left));
+      }
+      .close-btn {
+        float: none;
+        display: block;
+        width: 100%;
+        min-height: 44px;
+        margin-bottom: 0.75rem;
+      }
+
+      .ticker-grid { grid-template-columns: 1fr; }
+      .arch-hero h2 { font-size: 1.2rem; }
+      .arch-hero p { font-size: 0.85rem; }
+      .arch-stat .num { font-size: 1.25rem; }
+      .arch-node {
+        flex: 1 1 100%;
+        min-width: 0;
+      }
+      .arch-node:hover { transform: none; }
+      .arch-wf-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .arch-wf-cron { white-space: normal; }
+      .arch-audit-grid { grid-template-columns: 1fr 1fr; }
+      .arch-detail-grid { grid-template-columns: 1fr; }
+      .arch-table { font-size: 0.72rem; }
+      .chat-compose { flex-direction: column; align-items: stretch; }
+      .chat-compose button { width: 100%; }
+      .chat-status { margin-left: 0; width: 100%; }
+      .chat-log { height: 180px; }
+      .arch-flow-svg { min-width: 520px; }
+    }
+
+    @media (max-width: 380px) {
+      .tabs { grid-template-columns: 1fr; }
+      .tab { font-size: 0.68rem; }
+      .cards { grid-template-columns: 1fr; }
+      .arch-audit-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (hover: none) {
+      .tab:hover,
+      .card:hover,
+      .arch-node:hover { background: inherit; border-color: inherit; box-shadow: inherit; }
+      .tab.active:hover { background: #ffffff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand-tag">Twin Ledger</div>
+      <h1>Live Scoreboard</h1>
+      <p class="meta">LIVE · GEMINI 2.5 FLASH · MARKET BENCHMARK</p>
+    </div>
+    <button class="primary" onclick="refresh()">Refresh</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="performance" onclick="switchView('performance')">Performance</button>
+    <button class="tab" data-view="decisions" onclick="switchView('decisions')">Decisions</button>
+    <button class="tab" data-view="architecture" onclick="switchView('architecture')">Architecture</button>
+  </div>
+
+  <!-- PERFORMANCE VIEW -->
+  <div id="view-performance" class="view active">
+    <div class="mission">
+      <strong>The market is the only benchmark that never stops moving</strong> — prices shift, competitors react, and yesterday's edge fades overnight.
+      Twin Ledger puts two autonomous traders in that arena with real prices, real orders, and a live scoreboard.
+      <br><br>
+      <strong>Twin Ledger</strong> is our live experiment — not a backtest, not a replay of history.
+      Two competing traders start with the same capital and compete head-to-head on separate Alpaca accounts — each backed by its own multi-agent crew (coordinator, data, signal, and risk specialists).
+      <strong>Baseline</strong> trades on technicals and structured LLM reasoning alone.
+      <strong>Internal</strong> adds an internal signal layer, proprietary sizing strategy, and agentic data-source discovery — testing whether that stack is a real edge.
+      This scoreboard is the experiment: who adapts faster as the market moves?
+      <div class="llm-tag">LLM: Google Gemini 2.5 Flash — trading decisions, trailing stops, discovery planning</div>
+      <div class="universe-block" id="universe-block"></div>
+    </div>
+    <div id="perf-error" class="error-banner"></div>
+    <div class="leader-banner" id="leader-banner"></div>
+    <div class="compare-grid" id="compare-cards"></div>
+
+    <div class="compare-grid">
+      <div class="panel">
+        <h2>Baseline Positions</h2>
+        <div class="panel-body"><table id="baseline-positions"><thead><tr><th>Ticker</th><th>Qty</th><th>Value</th><th>P&L%</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="panel">
+        <h2>Internal Positions</h2>
+        <div class="panel-body"><table id="internal-positions"><thead><tr><th>Ticker</th><th>Qty</th><th>Value</th><th>P&L%</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Portfolio Value History</h2>
+      <div class="panel-body padded">
+        <div class="filters">
+          <label>Range <select id="perf-hours"><option value="168">7d</option><option value="720">30d</option><option value="2160">90d</option></select></label>
+        </div>
+        <div class="chart-wrap"><canvas id="perf-chart"></canvas></div>
+        <p class="meta" style="margin-top:0.75rem" id="perf-updated"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE VIEW -->
+  <div id="view-architecture" class="view">
+    <div class="arch-hero">
+      <h2>Two Traders, Specialist Crews, Full Traceability</h2>
+      <p>
+        Twin Ledger is a live head-to-head trading experiment on Google Cloud. Two competing traders —
+        <strong style="color:var(--baseline)">Baseline</strong> and <strong style="color:var(--internal)">Internal</strong> —
+        each start with <strong>$100,000</strong> on a dedicated Alpaca paper account. Every trader is a
+        <strong>Vertex AI Agent Engine</strong> deployment: a chat-mode <em>coordinator</em> routes work to
+        task-mode specialist agents (data, signal) and deterministic execution tools (risk, orders, chase).
+        Cloud Scheduler hits each engine directly via <code>streamQuery</code>; scheduled messages bypass LLM
+        chaining and run the deterministic pipeline. Every action is logged to GCS with a <code>trace_id</code>
+        and surfaced in this dashboard — equity charts come from Alpaca portfolio history.
+      </p>
+      <div class="arch-pill-row">
+        <span class="arch-pill accent">Google ADK</span>
+        <span class="arch-pill accent">Vertex AI Agent Engine</span>
+        <span class="arch-pill accent">Gemini 2.5 Flash</span>
+        <span class="arch-pill baseline">Baseline · Technicals + LLM</span>
+        <span class="arch-pill internal">Internal · Signal + Strategy + Data</span>
+        <span class="arch-pill">Alpaca Paper × 2</span>
+        <span class="arch-pill">GCS Audit Trail</span>
+        <span class="arch-pill">12-ETF Universe</span>
+      </div>
+    </div>
+
+    <div class="arch-stats">
+      <div class="arch-stat"><div class="num">2</div><div class="lbl">Competing Traders</div></div>
+      <div class="arch-stat"><div class="num">6+</div><div class="lbl">Agents per Trader</div></div>
+      <div class="arch-stat"><div class="num">6</div><div class="lbl">Scheduler Jobs</div></div>
+      <div class="arch-stat"><div class="num">12</div><div class="lbl">ETF Universe</div></div>
+      <div class="arch-stat"><div class="num">$100k</div><div class="lbl">Starting Equity</div></div>
+    </div>
+
+    <div class="arch-callout">
+      <strong>Scheduler → deterministic path.</strong> Cloud Scheduler sends a plain-text message
+      (<em>“Run daily trading workflow.”</em>, <em>“Run intraday risk check.”</em>, or <em>“Run post-open chase.”</em>)
+      to each Agent Engine. A <code>before_agent_callback</code> intercepts these phrases and invokes the matching
+      tool directly — no multi-turn LLM orchestration. If the coordinator is used interactively and does not complete
+      a daily job, an <code>after_agent_callback</code> fallback runs the same deterministic pipeline
+      (<code>DAILY_COORDINATOR_FALLBACK=true</code>).
+    </div>
+
+    <div class="arch-section-title">System topology</div>
+
+    <div class="arch-svg-scroll">
+    <svg class="arch-flow-svg" viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg" aria-label="Twin Ledger architecture flow">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#7d9a8f"/>
+        </marker>
+        <linearGradient id="gBaseline" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#0d5c48" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="#0d5c48" stop-opacity="0.03"/>
+        </linearGradient>
+        <linearGradient id="gInternal" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#2f9e72" stop-opacity="0.16"/>
+          <stop offset="100%" stop-color="#2f9e72" stop-opacity="0.04"/>
+        </linearGradient>
+      </defs>
+      <!-- Scheduler -->
+      <rect x="320" y="8" width="260" height="44" rx="8" fill="#ffffff" stroke="#92610a" stroke-width="1.5"/>
+      <text x="450" y="26" text-anchor="middle" fill="#92610a" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">CLOUD SCHEDULER</text>
+      <text x="450" y="42" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="10">6 cron jobs · America/New_York</text>
+      <!-- Arrows down -->
+      <line x1="380" y1="52" x2="280" y2="88" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="520" y1="52" x2="620" y2="88" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <!-- Agent Engines -->
+      <rect x="80" y="88" width="280" height="72" rx="8" fill="url(#gBaseline)" stroke="#0d5c48" stroke-width="1.5"/>
+      <text x="220" y="112" text-anchor="middle" fill="#0d5c48" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">VERTEX AGENT ENGINE</text>
+      <text x="220" y="130" text-anchor="middle" fill="#0a2e22" font-family="Inter, sans-serif" font-size="12" font-weight="600">Twin Ledger Baseline</text>
+      <text x="220" y="148" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="9">Coordinator + Data + Signal + Risk → Tools</text>
+      <rect x="540" y="88" width="280" height="72" rx="8" fill="url(#gInternal)" stroke="#2f9e72" stroke-width="1.5"/>
+      <text x="680" y="112" text-anchor="middle" fill="#2f9e72" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">VERTEX AGENT ENGINE</text>
+      <text x="680" y="130" text-anchor="middle" fill="#0a2e22" font-family="Inter, sans-serif" font-size="12" font-weight="600">Twin Ledger Internal</text>
+      <text x="680" y="148" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="9">Same crew + internal signal · strategy · data sources</text>
+      <!-- Tools layer -->
+      <line x1="220" y1="160" x2="220" y2="188" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="680" y1="160" x2="680" y2="188" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <rect x="40" y="188" width="260" height="50" rx="6" fill="#f8fcfa" stroke="rgba(13,74,58,0.18)"/>
+      <text x="170" y="210" text-anchor="middle" fill="#0b5c3f" font-family="JetBrains Mono, monospace" font-size="9">execute · risk · chase</text>
+      <text x="170" y="226" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="9">ADK FunctionTools</text>
+      <rect x="600" y="188" width="260" height="50" rx="6" fill="#f8fcfa" stroke="rgba(13,74,58,0.18)"/>
+      <text x="730" y="210" text-anchor="middle" fill="#0b5c3f" font-family="JetBrains Mono, monospace" font-size="9">execute · risk · chase</text>
+      <text x="730" y="226" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="9">ADK FunctionTools</text>
+      <!-- Alpaca -->
+      <line x1="170" y1="238" x2="350" y2="268" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="730" y1="238" x2="550" y2="268" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <rect x="280" y="268" width="340" height="44" rx="8" fill="#ffffff" stroke="#15803d" stroke-width="1.5"/>
+      <text x="450" y="286" text-anchor="middle" fill="#0b5c3f" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">ALPACA PAPER TRADING</text>
+      <text x="450" y="302" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="10">Account A (Baseline) · Account B (Internal) · Real limit &amp; market orders</text>
+    </svg>
+    </div>
+
+    <div class="arch-stack">
+      <div class="arch-layer">
+        <div class="arch-layer-label">Layer 1 — Triggers</div>
+        <div class="arch-nodes">
+          <div class="arch-node scheduler">
+            <div class="name">baseline-overnight-direct</div>
+            <div class="desc">Daily trading workflow</div>
+            <div class="tag">4:10 PM ET · Mon–Fri</div>
+          </div>
+          <div class="arch-node scheduler">
+            <div class="name">internal-overnight-direct</div>
+            <div class="desc">Daily trading workflow</div>
+            <div class="tag">4:10 PM ET · Mon–Fri</div>
+          </div>
+          <div class="arch-node scheduler">
+            <div class="name">*-risk-direct</div>
+            <div class="desc">Intraday risk monitor</div>
+            <div class="tag">Every 15m · 9–3:45 PM ET</div>
+          </div>
+          <div class="arch-node scheduler">
+            <div class="name">*-chase-direct</div>
+            <div class="desc">Adaptive order chase</div>
+            <div class="tag">9:45 · 12:45 · 2:45 PM ET</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-connector">▼ streamQuery → Vertex AI Reasoning Engine</div>
+      <div class="arch-layer">
+        <div class="arch-layer-label">Layer 2 — Two competing traders, each with a specialist crew</div>
+        <div class="arch-arena" style="margin-bottom:0">
+          <div class="arch-arena-card baseline">
+            <h4>Baseline · competing trader</h4>
+            <div class="subtitle">Coordinator + specialist sub-agents + execution tools</div>
+            <ul>
+              <li><strong>twin_ledger_baseline</strong> — chat coordinator; scheduler callbacks + 4 FunctionTools</li>
+              <li><strong>baseline_data</strong> — account, positions, OHLCV, RSI/MACD/Bollinger, news, leaderboard</li>
+              <li><strong>baseline_signal</strong> — Gemini JSON decisions (BUY/SELL/HOLD/CLOSE + rationale)</li>
+              <li><strong>Risk agent</strong> — max 8 positions, 10% weight cap, confidence gate (≥0.50)</li>
+              <li><strong>Execution agent</strong> — DAY limit orders at MOC ±0.5%, delta placement vs pending</li>
+              <li><strong>Monitor agent</strong> — portfolio metrics + audit snapshot after daily runs</li>
+            </ul>
+          </div>
+          <div class="arch-arena-card internal">
+            <h4>Internal · competing trader</h4>
+            <div class="subtitle">Same crew pattern + internal signal, strategy &amp; data sources</div>
+            <ul>
+              <li><strong>twin_ledger_internal</strong> — chat coordinator; identical tool surface as Baseline</li>
+              <li><strong>internal_data</strong> — Baseline data + internal signal feed + proprietary data sources</li>
+              <li><strong>internal_signal</strong> — competitive rationale using internal signal context</li>
+              <li><strong>Risk agent</strong> — same limits + 15-min signal gate on stop exits</li>
+              <li><strong>Strategy allocator</strong> — signal-based sizing from internal snapshot (confidence gate ≥0.55)</li>
+              <li><strong>Discovery loop</strong> — agentic data-source catalog probes (optional enrichment)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="arch-connector">▼ ADK FunctionTools</div>
+      <div class="arch-layer">
+        <div class="arch-layer-label">Layer 3 — Execution &amp; risk tools</div>
+        <div class="arch-nodes">
+          <div class="arch-node both">
+            <div class="name">run_daily_trading_workflow</div>
+            <div class="desc">Deterministic pipeline: data → signal (direct Gemini) → execute → monitor</div>
+          </div>
+          <div class="arch-node both">
+            <div class="name">execute_trading_decisions</div>
+            <div class="desc">Risk validate → allocate → DAY limit orders (MOC ±0.5%)</div>
+          </div>
+          <div class="arch-node both">
+            <div class="name">run_intraday_risk_check</div>
+            <div class="desc">Trailing stops, base stops, EOD exits, prediction gate</div>
+          </div>
+          <div class="arch-node both">
+            <div class="name">run_post_open_chase</div>
+            <div class="desc">Volatility-gated chase: cancel limit → market fill</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-connector">▼ Every action → audit_events.jsonl → GCS</div>
+      <div class="arch-layer">
+        <div class="arch-layer-label">Layer 4 — Observability (this dashboard)</div>
+        <div class="arch-nodes">
+          <div class="arch-node gcp">
+            <div class="name">GCS Audit Bucket</div>
+            <div class="desc">Immutable JSONL event log with trace IDs</div>
+          </div>
+          <div class="arch-node gcp">
+            <div class="name">Risk State (GCS)</div>
+            <div class="desc">Trailing stops, LLM params, EOD guard per system</div>
+          </div>
+          <div class="arch-node gcp">
+            <div class="name">Cloud Run Dashboard</div>
+            <div class="desc">Alpaca equity history · audit timeline · trace modal</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Cloud Scheduler jobs (direct → Agent Engine)</div>
+    <div class="arch-table-wrap">
+      <table class="arch-table">
+        <thead>
+          <tr><th>Job</th><th>Cron (ET)</th><th>Target</th><th>Message</th><th>Tool invoked</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>baseline-overnight-direct</code></td>
+            <td>4:10 PM Mon–Fri</td>
+            <td>Baseline Engine</td>
+            <td>Run daily trading workflow.</td>
+            <td><code>run_daily_trading_workflow</code></td>
+          </tr>
+          <tr>
+            <td><code>internal-overnight-direct</code></td>
+            <td>4:10 PM Mon–Fri</td>
+            <td>Internal Engine</td>
+            <td>Run daily trading workflow.</td>
+            <td><code>run_daily_trading_workflow</code></td>
+          </tr>
+          <tr>
+            <td><code>baseline-risk-direct</code></td>
+            <td>Every 15m, 9:00–3:45 PM</td>
+            <td>Baseline Engine</td>
+            <td>Run intraday risk check.</td>
+            <td><code>run_intraday_risk_check</code></td>
+          </tr>
+          <tr>
+            <td><code>internal-risk-direct</code></td>
+            <td>Every 15m, 9:00–3:45 PM</td>
+            <td>Internal Engine</td>
+            <td>Run intraday risk check.</td>
+            <td><code>run_intraday_risk_check</code></td>
+          </tr>
+          <tr>
+            <td><code>baseline-chase-direct</code></td>
+            <td>9:45 · 12:45 · 2:45 PM</td>
+            <td>Baseline Engine</td>
+            <td>Run post-open chase.</td>
+            <td><code>run_post_open_chase</code></td>
+          </tr>
+          <tr>
+            <td><code>internal-chase-direct</code></td>
+            <td>9:45 · 12:45 · 2:45 PM</td>
+            <td>Internal Engine</td>
+            <td>Run post-open chase.</td>
+            <td><code>run_post_open_chase</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="arch-section-title">Deterministic overnight pipeline</div>
+    <div class="arch-detail-grid">
+      <div class="arch-detail-card shared">
+        <h4>1 · Hydrate audit</h4>
+        <p>Pull <code>audit_events.jsonl</code> from GCS before writing so local/remote logs stay merged.</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>2 · Technical data</h4>
+        <p><code>get_technical_indicators</code> — 90-day Alpaca OHLCV + RSI, MACD, Bollinger for all 12 universe ETFs.</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>3 · Competition context</h4>
+        <p>Live portfolio values, ranks, and open positions for both traders — each signal agent sees the leaderboard.</p>
+      </div>
+      <div class="arch-detail-card internal">
+        <h4>4a · Internal enrichment</h4>
+        <ul>
+          <li>Internal signal feed (direction, confidence per ticker)</li>
+          <li>Approved proprietary data sources (agentic discovery)</li>
+          <li>Signal + technical JSON passed through to strategy allocator</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card baseline">
+        <h4>4b · Baseline signal</h4>
+        <p>Gemini direct call (<code>prefer_direct=True</code>) — technicals + news + competitor snapshot → structured decisions.</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>5 · Execute</h4>
+        <p><code>execute_trading_decisions</code> — risk validate → size positions → place DAY limits. Technical JSON reused for prices (no refetch).</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>6 · Monitor &amp; audit</h4>
+        <p>Portfolio snapshot logged; trace ends with <code>job_completed</code> including orders placed and validation results.</p>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Data sources &amp; external APIs</div>
+    <div class="arch-detail-grid">
+      <div class="arch-detail-card shared">
+        <h4>Alpaca Paper Trading</h4>
+        <ul>
+          <li>Separate API keys per trader (Baseline / Internal)</li>
+          <li>Account, positions, orders, market bars</li>
+          <li>Portfolio history API → equity chart on Performance tab</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card internal">
+        <h4>Internal signal API</h4>
+        <ul>
+          <li>Daily ETF signals for decisions + strategy sizing</li>
+          <li>15-min signal endpoint for Internal exit gate</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card internal">
+        <h4>Internal data sources</h4>
+        <ul>
+          <li>Agentic catalog discovery + LLM probe planner</li>
+          <li>Approved sources cached in GCS / local data dir</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>Vertex AI / Gemini</h4>
+        <ul>
+          <li><code>gemini-2.5-flash</code> for coordinator chat + signal agents</li>
+          <li>LLM trailing-stop planner during intraday risk</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>GCS persistence</h4>
+        <ul>
+          <li><code>audit_events.jsonl</code> — immutable decision log</li>
+          <li><code>risk_state_{system}.json</code> — trailing stops, EOD guard</li>
+          <li>Discovery registry + approved datasources</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>PostgreSQL (optional)</h4>
+        <p>Configured via env for extended analytics; core competition loop runs on Alpaca + GCS.</p>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Trading universe (12 liquid ETFs)</div>
+    <div class="panel" style="margin-bottom:1.25rem">
+      <div class="panel-body padded">
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">
+          Neither trader can win on a single-theme bet — the universe spans US equity sizes, sectors,
+          international, rates, credit, and commodities ($1B+ AUM each).
+        </p>
+        <div class="arch-ticker-grid">
+          <span class="arch-ticker" title="US equity core">SPY</span>
+          <span class="arch-ticker" title="Growth/tech">QQQ</span>
+          <span class="arch-ticker" title="Small-cap">IWM</span>
+          <span class="arch-ticker" title="Broad US">VTI</span>
+          <span class="arch-ticker" title="Financials">XLF</span>
+          <span class="arch-ticker" title="Energy">XLE</span>
+          <span class="arch-ticker" title="Intl developed">EFA</span>
+          <span class="arch-ticker" title="Long treasuries">TLT</span>
+          <span class="arch-ticker" title="High yield credit">HYG</span>
+          <span class="arch-ticker" title="Gold">GLD</span>
+          <span class="arch-ticker" title="Silver">SLV</span>
+          <span class="arch-ticker" title="Oil">USO</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Three autonomous workflows</div>
+    <div class="arch-workflows">
+      <div class="arch-wf">
+        <div class="arch-wf-head">
+          <h4>Overnight Orders</h4>
+          <span class="arch-wf-cron">daily · 4:10 PM ET</span>
+        </div>
+        <div class="arch-wf-body">
+          <div class="arch-step"><span class="arch-step-num">0</span><span class="arch-step-text"><strong>Scheduler intercept</strong> — <code>before_agent_callback</code> routes message to <code>run_daily_trading_workflow</code></span></div>
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Data</strong> — 90d technicals for 12 ETFs; Internal adds signal feed + proprietary data sources</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Signal</strong> — Gemini direct JSON: action, ticker, size_pct, confidence, rationale per symbol</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Risk</strong> — max 8 positions; reject BUYs failing weight / exposure checks</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Allocator</strong> — Baseline: equal weight from size_pct (cap 10%) · Internal: signal-based strategy from internal snapshot</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Execution</strong> — DAY limit at last close ±0.5%; delta vs pending orders; sells before buys (30s gap)</span></div>
+          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Audit</strong> — <code>job_started</code> → <code>ledger_decision</code> → <code>order_placed</code> → <code>portfolio_snapshot</code> → <code>job_completed</code></span></div>
+        </div>
+      </div>
+      <div class="arch-wf">
+        <div class="arch-wf-head">
+          <h4>Intraday Risk</h4>
+          <span class="arch-wf-cron">risk · every 15m</span>
+        </div>
+        <div class="arch-wf-body">
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Positions check</strong> — log returns for every open position</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>LLM trailing planner</strong> — per-ticker activation % &amp; profit lock with rationale</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Stop evaluation</strong> — trailing trigger → base stop (ATR on Internal)</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Signal gate</strong> — Internal defers exit if 15-min internal signal disagrees</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>EOD exit</strong> — losers below threshold in final ~6 min before close</span></div>
+          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Market sell</strong> — risk_stop_exit / risk_eod_exit logged with full payload</span></div>
+        </div>
+      </div>
+      <div class="arch-wf">
+        <div class="arch-wf-head">
+          <h4>Post-Open Chase</h4>
+          <span class="arch-wf-cron">chase · 3× daily</span>
+        </div>
+        <div class="arch-wf-body">
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Scan</strong> overnight DAY/OPG limits since prior close</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Fill check</strong> — skip if &gt;70% filled or already chased</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Volatility gate</strong> — 30-min std dev &amp; range must be calm</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Cancel + market</strong> — chase remaining qty with market order</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Audit</strong> — order_placed / order_skipped with chase rationale</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Risk &amp; exit mechanics (intraday)</div>
+    <div class="arch-detail-grid">
+      <div class="arch-detail-card baseline">
+        <h4>Baseline risk profile</h4>
+        <ul>
+          <li><strong>Base stop:</strong> fixed −1% return from entry</li>
+          <li><strong>Trailing:</strong> pure LLM planner (activation 0.5–4%, lock 45–80%)</li>
+          <li><strong>Prediction gate:</strong> none — stops execute immediately</li>
+          <li><strong>EOD exit:</strong> losers below −0.95% in final ~6 min before close</li>
+          <li><strong>State:</strong> persisted to GCS <code>risk_state_baseline.json</code></li>
+        </ul>
+      </div>
+      <div class="arch-detail-card internal">
+        <h4>Internal risk profile</h4>
+        <ul>
+          <li><strong>Base stop:</strong> ATR × 1.5 dynamic (fallback −1%)</li>
+          <li><strong>Trailing:</strong> hybrid — 1% activation / 70% lock floor + LLM tightening</li>
+          <li><strong>Prediction gate:</strong> 15-min internal signal must agree before stop sell</li>
+          <li><strong>EOD exit:</strong> same −0.95% / ~6 min window as Baseline</li>
+          <li><strong>Held exits:</strong> logged as <code>risk_held</code> when model disagrees</li>
+        </ul>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>Post-open chase rules</h4>
+        <ul>
+          <li>Scan overnight DAY/OPG limits placed since prior close</li>
+          <li>Skip if &gt;70% filled or already chased</li>
+          <li>30-min volatility gate (std dev + range) must be calm</li>
+          <li>Cancel remainder → market order; audit skip reason if gated</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="arch-section-title">What each competing trader does differently</div>
+    <div class="arch-arena">
+      <div class="arch-arena-card baseline">
+        <h4>Baseline · System A</h4>
+        <div class="subtitle">Technicals + pure LLM reasoning · shared multi-agent crew</div>
+        <ul>
+          <li><strong>Agents:</strong> Coordinator orchestrates data → signal → risk → execution</li>
+          <li><strong>Signal:</strong> RSI, MACD, Bollinger, news — public data only</li>
+          <li><strong>Sizing:</strong> LLM size_pct → equal-weight allocation (max 10%)</li>
+          <li><strong>Overnight:</strong> DAY limit orders, chased if unfilled</li>
+          <li><strong>Trailing stops:</strong> Pure LLM-planned activation &amp; profit lock</li>
+          <li><strong>Base stop:</strong> Fixed −1% return threshold</li>
+          <li><strong>Prediction gate:</strong> None — exits execute immediately</li>
+          <li><strong>Edge hypothesis:</strong> Structured LLM reasoning beats gut feel</li>
+        </ul>
+      </div>
+      <div class="arch-arena-card internal">
+        <h4>Internal · System B</h4>
+        <div class="subtitle">Internal signal + strategy + data sources · same crew pattern</div>
+        <ul>
+          <li><strong>Agents:</strong> Same coordinator/data/signal/risk pipeline with richer data tools</li>
+          <li><strong>Signal:</strong> Internal signal layer + proprietary data sources + technicals</li>
+          <li><strong>Sizing:</strong> Internal strategy from signal snapshot (LLM size as context)</li>
+          <li><strong>Overnight:</strong> Same execution path, signal snapshot passed to allocator</li>
+          <li><strong>Trailing stops:</strong> Scripted 1%/70% floor + LLM refinement (hybrid)</li>
+          <li><strong>Base stop:</strong> ATR × 1.5 dynamic stop (fallback −1%)</li>
+          <li><strong>Prediction gate:</strong> 15-min internal signal must agree before stop exit</li>
+          <li><strong>Edge hypothesis:</strong> Proprietary signal + data stack is a real alpha source</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Audit events you can trace</div>
+    <div class="panel" style="margin-bottom:1.25rem">
+      <div class="panel-body padded">
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.75rem">
+          Every job gets a <span class="mono" style="color:var(--accent)">trace_id</span>. Click any trace in the Decisions tab to see the full reasoning chain — the same immutable log stored in GCS.
+        </p>
+        <div class="arch-audit-grid">
+          <div class="arch-audit-chip">job_started / job_completed<span>Workflow envelope</span></div>
+          <div class="arch-audit-chip">ledger_decision<span>LLM rationale per ticker</span></div>
+          <div class="arch-audit-chip">signal_context_loaded<span>Internal signal snapshot used for strategy sizing</span></div>
+          <div class="arch-audit-chip">order_placed<span>Limit &amp; market fills</span></div>
+          <div class="arch-audit-chip">order_skipped<span>Filter reason logged</span></div>
+          <div class="arch-audit-chip">risk_positions_checked<span>Live returns per position</span></div>
+          <div class="arch-audit-chip">trailing_stop_planned<span>LLM activation &amp; lock %</span></div>
+          <div class="arch-audit-chip">trailing_stop_init<span>Stop price set</span></div>
+          <div class="arch-audit-chip">risk_stop_exit<span>Intraday stop sell</span></div>
+          <div class="arch-audit-chip">risk_eod_exit<span>End-of-day loser exit</span></div>
+          <div class="arch-audit-chip">risk_held<span>Internal signal deferred exit</span></div>
+          <div class="arch-audit-chip">portfolio_snapshot<span>Post-daily equity (audit); chart uses Alpaca API</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-section-title">GCP deployment map</div>
+    <div class="arch-detail-grid">
+      <div class="arch-detail-card shared">
+        <h4>Vertex AI Agent Engine</h4>
+        <p>Two Reasoning Engine deployments — one per trader. Root agent = ADK <code>LlmAgent</code> with sub-agents and FunctionTools. Deployed via <code>adk deploy agent_engine</code>.</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>Cloud Scheduler</h4>
+        <p>Six HTTP jobs POST to each engine’s <code>:streamQuery</code> endpoint with OAuth (scheduler SA). No Cloud Run hop for production triggers.</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>Cloud Run Dashboard</h4>
+        <p>Serves this UI + REST APIs (<code>/api/performance</code>, <code>/api/summary</code>, <code>/api/events</code>, <code>/api/trace</code>). Reads GCS audit + live Alpaca.</p>
+      </div>
+      <div class="arch-detail-card shared">
+        <h4>GCS buckets</h4>
+        <p><code>mktcrunch-trading-agents-audit</code> (events) · data bucket (risk state, discovery registry, technical caches).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DECISIONS VIEW -->
+  <div id="view-decisions" class="view">
+    <div class="panel chat-panel" id="chat-panel">
+      <h2>Trader Chat</h2>
+      <div class="panel-body padded">
+        <div class="chat-warning" id="chat-warning">
+          Loading chat policy…
+        </div>
+        <div class="chat-toolbar">
+          <label>Trader
+            <select id="chat-system">
+              <option value="baseline">Baseline</option>
+              <option value="internal">Internal</option>
+            </select>
+          </label>
+          <span class="chat-status" id="chat-status">Checking chat…</span>
+        </div>
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+        <div class="chat-compose">
+          <textarea id="chat-input" rows="2" placeholder="Ask about positions, recent decisions, or strategy…"></textarea>
+          <button type="button" id="chat-send">Send</button>
+        </div>
+        <div class="chat-hints">
+          <span class="chat-hint" data-prompt="Summarize our open positions and overall P&amp;L.">Positions summary</span>
+          <span class="chat-hint" data-prompt="What were the most recent trading decisions and why?">Recent decisions</span>
+          <span class="chat-hint" data-prompt="How are we doing versus the competitor on the leaderboard?">Leaderboard</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards" id="summary-cards"></div>
+
+    <div class="filters">
+      <label>System <select id="f-system"><option value="">All</option><option>baseline</option><option>internal</option><option>discovery</option><option>both</option></select></label>
+      <label>Type <select id="f-type"><option value="">All</option></select></label>
+      <label>Hours <select id="f-hours"><option value="24">24h</option><option value="72">72h</option><option value="168">7d</option></select></label>
+    </div>
+
+    <div class="panel">
+      <h2>Recent Jobs</h2>
+      <div class="panel-body"><table id="jobs-table"><thead><tr><th>Trace</th><th>Job</th><th>System</th><th>Started</th><th>Status</th><th>Events</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Decision & Action Timeline</h2>
+      <div class="panel-body"><table id="events-table"><thead><tr><th>Time</th><th>Trace</th><th>System</th><th>Type</th><th>Agent</th><th>Action</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="trace-modal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeTrace()">Close</button>
+      <h3 id="trace-title">Trace</h3>
+      <div id="trace-body"></div>
+    </div>
+  </div>
+
+  <script>
+    let activeView = "performance";
+    let chatSessionId = null;
+    let chatBusy = false;
+
+    const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "—";
+    const eventTypeLabel = (type) => (type === "mc_context_loaded" ? "signal_context_loaded" : type);
+    const fmtUsd = (n) => n == null ? "—" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const fmtPct = (n) => n == null ? "—" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
+    const pctClass = (n) => Number(n) >= 0 ? "pos" : "neg";
+
+    async function fetchJSON(url) {
+      const r = await fetch(url);
+      const data = await r.json();
+      if (!r.ok) {
+        const err = new Error(data.error || `HTTP ${r.status}`);
+        err.status = r.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    function showPerfError(msg) {
+      const el = document.getElementById("perf-error");
+      el.textContent = msg;
+      el.classList.add("visible");
+    }
+
+    function clearPerfError() {
+      const el = document.getElementById("perf-error");
+      el.textContent = "";
+      el.classList.remove("visible");
+    }
+
+    function badge(status) {
+      const cls = status === "ok" ? "badge-ok" : "badge-error";
+      return `<span class="badge ${cls}">${status || "ok"}</span>`;
+    }
+
+    function traceCell(traceId) {
+      if (!traceId) return `<span class="trace-missing mono">—</span>`;
+      return `<span class="trace-link mono" onclick="showTrace('${traceId}')">${traceId.slice(0, 8)}</span>`;
+    }
+
+    function switchView(name) {
+      activeView = name;
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === name));
+      document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === `view-${name}`));
+      refresh();
+    }
+
+    function renderUniverse(universe) {
+      const el = document.getElementById("universe-block");
+      if (!universe || !universe.tickers?.length) {
+        el.innerHTML = "";
+        return;
+      }
+      el.innerHTML = `
+        <div><strong>Trading universe</strong> — ${universe.count} ETFs both agents may trade</div>
+        <div class="universe-rationale">${universe.rationale}</div>
+        <div class="ticker-grid">
+          ${universe.tickers.map(t => `
+            <div class="ticker-chip">
+              <span class="sym">${t.ticker}</span> ${t.name}
+              <div class="bucket">${t.bucket}</div>
+              <div>${t.why}</div>
+            </div>
+          `).join("")}
+        </div>`;
+    }
+
+    function renderPerformance(data) {
+      if (!data || !data.live) {
+        showPerfError("Performance data unavailable. Restart the server: python main.py --serve");
+        return;
+      }
+      clearPerfError();
+      renderUniverse(data.universe);
+
+      const live = data.live || {};
+      const lb = live.leaderboard || {};
+      const baseline = live.baseline || {};
+      const internal = live.internal || {};
+      const leaderName = lb.leader === "internal" ? "Internal" : "Baseline";
+
+      document.getElementById("leader-banner").innerHTML = `
+        <div>
+          <div class="meta">Twin Ledger Leaderboard</div>
+          <div style="font-size:1.1rem;margin-top:0.25rem"><strong>${leaderName}</strong> is ahead by <span class="gap">${fmtUsd(lb.gap_usd)}</span></div>
+          <div class="meta" style="margin-top:0.35rem">Starting equity ${fmtUsd(live.starting_equity)} · Updated ${fmtTime(live.updated_at)}</div>
+        </div>
+        <div class="leader-rank">
+          <div class="meta">Rank</div>
+          <div style="font-size:1.1rem">Baseline #${lb.baseline_rank} · Internal #${lb.internal_rank}</div>
+        </div>
+      `;
+
+      document.getElementById("compare-cards").innerHTML = `
+        <div class="card baseline">
+          <div class="label"><span class="sys-tag" style="color:var(--baseline)">Baseline</span> Portfolio</div>
+          <div class="value">${fmtUsd(baseline.portfolio_value)}</div>
+          <div class="sub ${pctClass(baseline.pnl_pct)}">P&L ${fmtPct(baseline.pnl_pct)} (${fmtUsd(baseline.pnl)})</div>
+          <div class="sub">Cash ${fmtUsd(baseline.cash)} · ${baseline.position_count || 0} positions</div>
+        </div>
+        <div class="card internal">
+          <div class="label"><span class="sys-tag" style="color:var(--internal)">Internal</span> Portfolio</div>
+          <div class="value">${fmtUsd(internal.portfolio_value)}</div>
+          <div class="sub ${pctClass(internal.pnl_pct)}">P&L ${fmtPct(internal.pnl_pct)} (${fmtUsd(internal.pnl)})</div>
+          <div class="sub">Cash ${fmtUsd(internal.cash)} · ${internal.position_count || 0} positions</div>
+        </div>
+      `;
+
+      const posRow = (p) => `
+        <tr>
+          <td>${p.ticker}</td>
+          <td>${p.qty}</td>
+          <td>${fmtUsd(p.market_value)}</td>
+          <td class="${pctClass(p.unrealized_return_pct)}">${fmtPct(p.unrealized_return_pct)}</td>
+        </tr>`;
+      const emptyRow = `<tr><td colspan="4" class="meta">No open positions</td></tr>`;
+
+      document.querySelector("#baseline-positions tbody").innerHTML =
+        (baseline.positions || []).length ? (baseline.positions || []).map(posRow).join("") : emptyRow;
+      document.querySelector("#internal-positions tbody").innerHTML =
+        (internal.positions || []).length ? (internal.positions || []).map(posRow).join("") : emptyRow;
+
+      drawChart(data.history || {}, data.since_hours || 168);
+      const pts = data.history_points || {};
+      const bPts = pts.baseline ?? (data.history?.baseline || []).length;
+      const iPts = pts.internal ?? (data.history?.internal || []).length;
+      document.getElementById("perf-updated").textContent =
+        `Equity history from Alpaca: ${bPts} baseline, ${iPts} internal points`;
+    }
+
+    function drawChart(history, sinceHours) {
+      const canvas = document.getElementById("perf-chart");
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = rect.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const series = [
+        { key: "baseline", color: "#0d5c48", points: history.baseline || [] },
+        { key: "internal", color: "#2f9e72", points: history.internal || [] },
+      ];
+      const all = series.flatMap(s => s.points.map(p => p.portfolio_value).filter(v => v != null));
+      if (!all.length) {
+        ctx.fillStyle = "#7d9a8f";
+        ctx.font = "13px Inter, sans-serif";
+        ctx.fillText("No equity history from Alpaca yet for this range", 12, H / 2);
+        return;
+      }
+
+      const now = Date.now();
+      const rangeMs = (sinceHours || 168) * 3600 * 1000;
+      const xMin = now - rangeMs;
+      const xMax = now;
+      const parseTs = (ts) => {
+        const t = Date.parse(ts || "");
+        return Number.isFinite(t) ? t : now;
+      };
+
+      const rawMin = Math.min(...all);
+      const rawMax = Math.max(...all);
+      const spread = Math.max(rawMax - rawMin, rawMax * 0.004, 400);
+      const mid = (rawMin + rawMax) / 2;
+      const minV = mid - spread / 2;
+      const maxV = mid + spread / 2;
+      const pad = { l: 48, r: 12, t: 12, b: 36 };
+      const plotW = W - pad.l - pad.r;
+      const plotH = H - pad.t - pad.b;
+
+      const yScale = (v) => pad.t + plotH - ((v - minV) / (maxV - minV || 1)) * plotH;
+      const xScale = (ts) => {
+        const t = Math.min(Math.max(parseTs(ts), xMin), xMax);
+        return pad.l + ((t - xMin) / (xMax - xMin || 1)) * plotW;
+      };
+
+      ctx.strokeStyle = "rgba(13, 74, 58, 0.1)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.t + (plotH * i) / 4;
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+        const val = maxV - ((maxV - minV) * i) / 4;
+        ctx.fillStyle = "#7d9a8f";
+        ctx.font = "10px JetBrains Mono, monospace";
+        ctx.fillText(`$${(val/1000).toFixed(1)}k`, 4, y + 3);
+      }
+
+      const fmtAxisDate = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      ctx.fillStyle = "#7d9a8f";
+      ctx.font = "10px Inter, sans-serif";
+      ctx.fillText(fmtAxisDate(xMin), pad.l, H - 10);
+      ctx.fillText(fmtAxisDate(xMax), W - pad.r - 36, H - 10);
+
+      series.forEach(s => {
+        const pts = s.points
+          .filter(p => p.portfolio_value != null)
+          .sort((a, b) => parseTs(a.timestamp) - parseTs(b.timestamp));
+        if (!pts.length) return;
+        ctx.strokeStyle = s.color;
+        ctx.fillStyle = s.color;
+        ctx.lineWidth = 2;
+        if (pts.length === 1) {
+          const x = xScale(pts[0].timestamp);
+          const y = yScale(pts[0].portfolio_value);
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          return;
+        }
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = xScale(p.timestamp);
+          const y = yScale(p.portfolio_value);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        if (pts.length <= 24) {
+          pts.forEach((p) => {
+            const x = xScale(p.timestamp);
+            const y = yScale(p.portfolio_value);
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+      });
+
+      ctx.font = "11px JetBrains Mono, monospace";
+      ctx.fillStyle = "#0d5c48"; ctx.fillText("● Baseline", pad.l, H - 22);
+      ctx.fillStyle = "#2f9e72"; ctx.fillText("● Internal", pad.l + 90, H - 22);
+    }
+
+    async function refreshPerformance() {
+      const hours = document.getElementById("perf-hours").value;
+      let data = null;
+      try {
+        data = await fetchJSON(`/api/performance?hours=${hours}`);
+      } catch (e) {
+        // Fallback: older servers expose performance via /api/summary
+        try {
+          const summary = await fetchJSON(`/api/summary?hours=${hours}`);
+          if (summary.performance?.live) {
+            data = summary.performance;
+          }
+        } catch (_) { /* ignore */ }
+        if (!data?.live) {
+          const hint = e.status === 404
+            ? "Performance API not found — restart the server (python main.py --serve) to load the latest server code."
+            : `Failed to load performance: ${e.message}`;
+          showPerfError(hint);
+          return;
+        }
+      }
+      renderPerformance(data);
+    }
+
+    function appendChatMessage(role, text, isError) {
+      const log = document.getElementById("chat-log");
+      const div = document.createElement("div");
+      div.className = `chat-msg ${role}${isError ? " error" : ""}`;
+      const label = role === "user" ? "You" : role === "agent" ? "Coordinator" : "System";
+      if (role === "system") {
+        div.textContent = text;
+      } else {
+        div.innerHTML = `<strong>${label}:</strong>`;
+        const body = document.createElement("pre");
+        body.textContent = text;
+        div.appendChild(body);
+      }
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function loadChatStatus() {
+      const el = document.getElementById("chat-status");
+      const panel = document.getElementById("chat-panel");
+      try {
+        const st = await fetchJSON("/api/chat/status");
+        if (!st.enabled) {
+          panel.style.display = "none";
+          return;
+        }
+        panel.style.display = "";
+        const mode = st.read_only ? "read-only" : "execution allowed";
+        el.textContent = `Backend: ${st.backend} · ${mode} · session ${chatSessionId ? chatSessionId.slice(0, 8) : "new"}`;
+        if (st.warning) {
+          document.getElementById("chat-warning").innerHTML =
+            `<strong>${st.read_only ? "Read-only" : "Caution"}:</strong> ${st.warning}`;
+        }
+      } catch (e) {
+        el.textContent = "Chat unavailable — restart server with latest code";
+        document.getElementById("chat-send").disabled = true;
+      }
+    }
+
+    async function sendChatMessage(text) {
+      const msg = (text || "").trim();
+      if (!msg || chatBusy) return;
+      const system = document.getElementById("chat-system").value;
+      chatBusy = true;
+      document.getElementById("chat-send").disabled = true;
+      appendChatMessage("user", msg);
+      document.getElementById("chat-input").value = "";
+
+      try {
+        const r = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system,
+            message: msg,
+            session_id: chatSessionId,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) {
+          appendChatMessage("system", data.error || `HTTP ${r.status}`, true);
+          if (data.blocked) return;
+        } else {
+          chatSessionId = data.session_id || chatSessionId;
+          appendChatMessage("agent", data.reply || "(empty response)");
+          if (data.fallback_hint) {
+            appendChatMessage("system", data.fallback_hint);
+          }
+          document.getElementById("chat-status").textContent =
+            `Backend: ${data.backend}${data.fallback_from ? ` (fallback from ${data.fallback_from})` : ""} · session ${(chatSessionId || "").slice(0, 8)}`;
+          await refreshDecisions();
+        }
+      } catch (e) {
+        appendChatMessage("system", e.message || "Chat request failed", true);
+      } finally {
+        chatBusy = false;
+        document.getElementById("chat-send").disabled = false;
+      }
+    }
+
+    async function refreshDecisions() {
+      const hours = document.getElementById("f-hours").value;
+      const system = document.getElementById("f-system").value;
+      const eventType = document.getElementById("f-type").value;
+
+      const summary = await fetchJSON(`/api/summary?hours=${hours}`);
+      const events = await fetchJSON(`/api/events?hours=${hours}&limit=200&system=${system}&event_type=${eventType}`);
+
+      const cards = document.getElementById("summary-cards");
+      cards.innerHTML = `
+        <div class="card"><div class="label">Events (${hours}h)</div><div class="value">${summary.total_events}</div></div>
+        <div class="card"><div class="label">Orders</div><div class="value">${summary.orders_placed}</div></div>
+        <div class="card"><div class="label">Ledger Decisions</div><div class="value">${summary.ledger_decisions ?? summary.arena_decisions ?? 0}</div></div>
+        <div class="card"><div class="label">Risk Exits</div><div class="value">${summary.risk_exits}</div></div>
+      `;
+
+      const typeSelect = document.getElementById("f-type");
+      const types = Object.keys(summary.by_event_type || {}).sort();
+      const cur = typeSelect.value;
+      typeSelect.innerHTML = '<option value="">All</option>' + types.map(t => `<option value="${t}">${eventTypeLabel(t)}</option>`).join("");
+      typeSelect.value = cur;
+
+      document.querySelector("#jobs-table tbody").innerHTML = (summary.recent_jobs || []).map(j => `
+        <tr>
+          <td>${traceCell(j.trace_id)}</td>
+          <td>${j.job_type}</td>
+          <td>${j.system}</td>
+          <td>${fmtTime(j.started_at)}</td>
+          <td>${badge(j.status)}</td>
+          <td>${j.event_count}</td>
+        </tr>
+      `).join("");
+
+      const decisionTypes = new Set([
+        "ledger_decision", "arena_decision", "order_placed", "order_skipped", "order_cancelled_duplicate",
+        "risk_stop_exit", "risk_eod_exit", "portfolio_snapshot", "job_started", "job_completed",
+      ]);
+
+      document.querySelector("#events-table tbody").innerHTML = (events.events || []).map(e => {
+        const sysBadge = e.system === "baseline" ? "badge-baseline"
+          : e.system === "internal" ? "badge-internal" : "badge-type";
+        return `
+        <tr>
+          <td class="mono">${fmtTime(e.timestamp)}</td>
+          <td>${traceCell(e.trace_id)}</td>
+          <td><span class="badge ${sysBadge}">${e.system}</span></td>
+          <td><span class="badge badge-type">${eventTypeLabel(e.event_type)}</span></td>
+          <td>${e.agent || "—"}</td>
+          <td>${(e.action||"").slice(0, 100)}</td>
+          <td>${badge(e.status)}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function refresh() {
+      if (activeView === "performance") await refreshPerformance();
+      else if (activeView === "decisions") {
+        await loadChatStatus();
+        await refreshDecisions();
+      }
+      /* architecture tab is static — no fetch */
+    }
+
+    function escHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function traceDetailFields(eventType, payload) {
+      const fields = [];
+      const add = (label, value) => {
+        if (value != null && value !== "") fields.push(
+          `<div><div class="field-label">${label}</div>${escHtml(value)}</div>`
+        );
+      };
+
+      if (eventType === "ledger_decision" || eventType === "arena_decision") {
+        add("Ticker", `${payload.action || ""} ${payload.ticker || ""}`.trim());
+        if (payload.size_pct != null) add("Size", `${(payload.size_pct * 100).toFixed(1)}%`);
+        if (payload.confidence != null) add("Confidence", payload.confidence);
+        add("Rationale", payload.rationale);
+        add("Invalidation", payload.invalidation);
+        add("Competitive note", payload.competitive_note);
+      } else if (eventType === "order_placed") {
+        add("Order", `${payload.side} ${payload.qty} ${payload.ticker} @ $${payload.limit_price} (${payload.time_in_force})`);
+        if (payload.order_id) add("Order ID", payload.order_id);
+      } else if (eventType === "discovery_probe") {
+        add("Dataset", `${payload.dataset}/${payload.schema}`);
+        add("Status", payload.status);
+        if (payload.feature_strategy) add("Feature strategy", payload.feature_strategy);
+      } else if (eventType === "trailing_stop_planned") {
+        add("Ticker", payload.ticker);
+        if (payload.activation_threshold != null) add("Activation Threshold", `${(payload.activation_threshold * 100).toFixed(2)}%`);
+        if (payload.profit_lock_fraction != null) add("Profit Lock Fraction", `${(payload.profit_lock_fraction * 100).toFixed(2)}%`);
+        if (payload.current_return != null) add("Current Return", `${(payload.current_return * 100).toFixed(2)}%`);
+        add("Policy", payload.policy);
+        add("LLM Rationale", payload.rationale);
+      } else if (eventType === "risk_positions_checked") {
+        if (payload.returns) {
+          const lines = Object.entries(payload.returns).map(([t, info]) => {
+            return `${t}: ${info.return_pct >= 0 ? "+" : ""}${info.return_pct.toFixed(2)}% (Entry: $${info.entry_price.toFixed(2)}, Current: $${info.current_price.toFixed(2)})`;
+          }).join(" | ");
+          add("Positions Checked", lines);
+        }
+      } else if (eventType === "mc_context_loaded") {
+        add("Signal source", "internal signal API");
+        if (payload.fetched_fallback?.length) {
+          add("Fallback fetch", payload.fetched_fallback.join(", "));
+        }
+        if (payload.predictions) {
+          const lines = Object.entries(payload.predictions).map(([t, info]) => {
+            return `${t}: ${info.target_delta_numeric ?? "?"}% signal (${info.confidence ?? "?"})`;
+          }).join(" | ");
+          add("Internal signal used", lines);
+        }
+      }
+
+      return fields.length
+        ? `<div class="trace-fields">${fields.join("")}</div>`
+        : "";
+    }
+
+    async function showTrace(traceId) {
+      if (!traceId) return;
+      const data = await fetchJSON(`/api/trace/${traceId}`);
+      document.getElementById("trace-title").textContent = `Trace ${traceId} (${data.count} events)`;
+      document.getElementById("trace-body").innerHTML = (data.events || []).map(e => {
+        const payload = e.payload || {};
+        const hasPayload = Object.keys(payload).length > 0;
+        const fields = traceDetailFields(e.event_type, payload);
+        return `
+        <div style="margin-bottom:0.75rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem">
+          <div><strong>${escHtml(eventTypeLabel(e.event_type))}</strong> · ${escHtml(e.agent || "")} · ${badge(e.status)}</div>
+          <div class="meta">${fmtTime(e.timestamp)}${e.job_type ? ` · job: ${escHtml(e.job_type)}` : ""}</div>
+          <div class="trace-action">${escHtml(e.action)}</div>
+          ${fields}
+          ${hasPayload ? `<pre>${escHtml(JSON.stringify(payload, null, 2))}</pre>` : ""}
+        </div>`;
+      }).join("");
+      document.getElementById("trace-modal").classList.add("open");
+    }
+
+    function closeTrace() {
+      document.getElementById("trace-modal").classList.remove("open");
+    }
+
+    document.getElementById("chat-send").addEventListener("click", () => {
+      sendChatMessage(document.getElementById("chat-input").value);
+    });
+    document.getElementById("chat-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage(e.target.value);
+      }
+    });
+    document.querySelectorAll(".chat-hint").forEach(el => {
+      el.addEventListener("click", () => {
+        const prompt = el.getAttribute("data-prompt");
+        if (prompt) sendChatMessage(prompt);
+      });
+    });
+
+    ["f-system","f-type","f-hours"].forEach(id => {
+      document.getElementById(id).addEventListener("change", refreshDecisions);
+    });
+    document.getElementById("perf-hours").addEventListener("change", refreshPerformance);
+
+    let chartResizeTimer;
+    window.addEventListener("resize", () => {
+      clearTimeout(chartResizeTimer);
+      chartResizeTimer = setTimeout(() => {
+        if (activeView === "performance") refreshPerformance();
+      }, 150);
+    });
+
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Agent Engine runtime — Twin Ledger ADK agents
+# [a2a]: ADK deploy enables --a2a; [otel-gcp]: --otel_to_cloud telemetry
+google-adk[a2a,otel-gcp]>=2.2.0
+google-cloud-aiplatform[agent_engines]>=1.88.0
+google-genai>=0.3.0
+python-dotenv>=1.0.0
+requests>=2.28.0
+pandas>=1.5.0
+numpy>=1.20.0
+alpaca-py>=0.20.0
+psycopg2-binary>=2.9.0
+databento>=0.10.0
+yfinance>=1.4.1
+curl_cffi>=0.15.0
+peewee>=4.0.6
+multitasking>=0.0.13
+mcp>=1.0.0
