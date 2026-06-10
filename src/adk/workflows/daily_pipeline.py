@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 from src import config
 from src.adk.tools.alpaca_tools import execute_trading_decisions, get_technical_indicators
+from src.agents.signal_context import fetch_signal_news
 from src.adk.tools.databento_tools import get_databento_features
 from src.adk.tools.marketcrunch_tools import get_marketcrunch_predictions
 from src.agents.competition_context import build_competition_context
@@ -90,6 +91,9 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
     mc_predictions_json: str | None = None
     technical_data_json = json.dumps(tech_result, default=str)
 
+    logger.info("[daily_pipeline] Fetching recent news for signal step")
+    news_data = fetch_signal_news(list(config.TICKER_UNIVERSE)).get("news") or {}
+
     if system == "internal":
         mc_result = get_marketcrunch_predictions()
         mc_predictions_json = json.dumps(mc_result, default=str)
@@ -102,6 +106,7 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
             competition,
             databento_sources=databento.get("sources"),
             prefer_direct=True,
+            news_data=news_data,
         )
     else:
         signal_agent = BaselineSignalAgent()
@@ -109,6 +114,7 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
             technical_data,
             competition,
             prefer_direct=True,
+            news_data=news_data,
         )
 
     if not decisions:

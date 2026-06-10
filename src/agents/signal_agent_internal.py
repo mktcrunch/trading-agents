@@ -4,12 +4,13 @@ Same structured competition prompt as baseline, enriched with MC predictions and
 """
 import json
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src import config
 from src.apis.gemini_client import get_genai_client
 from src.apis.grounding import google_search_grounding_config
 from src.agents.ledger_utils import GEMINI_FLASH_MODEL, mc_confidence_score, parse_trading_decisions
+from src.agents.signal_context import fetch_signal_news, format_news_block
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
 from src.learning.context import build_signal_learning_block
@@ -72,6 +73,7 @@ class InternalSignalAgent(BaseAgent):
         kelly_context: Dict[str, Dict],
         databento_sources: Optional[Dict[str, Dict]] = None,
         learning_block: str = "",
+        news_data: Optional[Dict[str, Any]] = None,
     ) -> str:
         market_lines = []
         for ticker in self.ticker_universe:
@@ -151,6 +153,9 @@ DataBento discovered features (approved by discovery agent):
 Market data, MC predictions & indicators:
 {chr(10).join(market_lines)}
 
+Recent news (Alpaca / fallback):
+{format_news_block(news_data or {})}
+
 Return ONLY a JSON array of decisions. Include entries where action is not HOLD.
 Each object must have:
 - action: BUY | SELL | HOLD | CLOSE
@@ -181,6 +186,7 @@ Example:
         competition: Optional[Dict] = None,
         databento_sources: Optional[Dict[str, Dict]] = None,
         prefer_direct: bool = False,
+        news_data: Optional[Dict[str, Any]] = None,
     ) -> List[TradingDecision]:
         competition = competition or build_competition_context("internal")
         learning_block = build_signal_learning_block("internal") if config.LEARNING_ENABLED else ""
@@ -203,6 +209,20 @@ Example:
                     valid_tickers=self.ticker_universe,
                 )
             else:
+                if news_data is None:
+                    news_data = fetch_signal_news(self.ticker_universe).get("news") or {}
+                grounding_on = config.SIGNAL_GOOGLE_SEARCH_GROUNDING
+                article_count = sum(
+                    len(v) for v in news_data.values() if isinstance(v, list)
+                )
+                self.log_action(
+                    f"Signal context: {article_count} news articles"
+                    + (" | Google Search grounding ON" if grounding_on else ""),
+                    data={
+                        "news_article_count": article_count,
+                        "google_search_grounding": grounding_on,
+                    },
+                )
                 kelly_context = self._kelly_context(mc_predictions)
                 prompt = self._build_ledger_prompt(
                     competition,
@@ -211,10 +231,11 @@ Example:
                     kelly_context,
                     databento_sources,
                     learning_block=learning_block,
+                    news_data=news_data,
                 )
                 gen_config = (
                     google_search_grounding_config()
-                    if config.SIGNAL_GOOGLE_SEARCH_GROUNDING
+                    if grounding_on
                     else None
                 )
                 response = self.client.models.generate_content(

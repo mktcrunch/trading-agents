@@ -29,6 +29,7 @@ async def run_signal_agent(
             user_payload.get("technical_data") or {},
             user_payload.get("competition"),
             prefer_direct=True,
+            news_data=user_payload.get("news_data"),
         )
 
     if system == "internal":
@@ -41,6 +42,7 @@ async def run_signal_agent(
             user_payload.get("competition"),
             databento_sources=user_payload.get("databento_sources"),
             prefer_direct=True,
+            news_data=user_payload.get("news_data"),
         )
 
     raise ValueError(f"Unknown system: {system}")

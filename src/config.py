@@ -134,7 +134,7 @@ else:
 # ============================================================================
 # DATABENTO DATA DISCOVERY
 # ============================================================================
-DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY", "db-9Wivtyr8PmQGT7FuJsdPKDqCQnPpm")
+DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY")
 
 # ============================================================================
 # TRADING UNIVERSE & CONFIGURATION

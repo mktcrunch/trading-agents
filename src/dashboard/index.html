@@ -2073,9 +2073,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
+    const VALID_VIEWS = new Set(["performance", "decisions", "architecture"]);
     let activeView = "performance";
     let chatSessionId = null;
     let chatBusy = false;
+
+    function viewFromHash() {
+      const name = (location.hash || "").replace(/^#/, "").toLowerCase();
+      return VALID_VIEWS.has(name) ? name : "performance";
+    }
 
     const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "—";
     const FIRST_TRADE_LABEL = "June 9, 2026";
@@ -2118,10 +2124,17 @@
       return `<span class="trace-link mono" onclick="showTrace('${traceId}')">${traceId.slice(0, 8)}</span>`;
     }
 
-    function switchView(name) {
+    function switchView(name, { pushHash = true } = {}) {
+      if (!VALID_VIEWS.has(name)) name = "performance";
       activeView = name;
       document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === name));
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === `view-${name}`));
+      if (pushHash) {
+        const next = name === "performance" ? "" : `#${name}`;
+        if (location.hash !== next) {
+          history.replaceState(null, "", `${location.pathname}${location.search}${next}`);
+        }
+      }
       refresh();
     }
 
@@ -2779,7 +2792,11 @@
       }, 150);
     });
 
-    refresh();
+    window.addEventListener("hashchange", () => {
+      switchView(viewFromHash(), { pushHash: false });
+    });
+
+    switchView(viewFromHash(), { pushHash: false });
     setInterval(refresh, 30000);
   </script>
 
