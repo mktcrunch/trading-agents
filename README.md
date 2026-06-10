@@ -19,7 +19,7 @@ Licensed under the [Apache License 2.0](LICENSE).
 | | Baseline | Internal |
 |---|----------|----------|
 | **Account** | Alpaca paper #1 | Alpaca paper #2 |
-| **Signals** | Gemini 3.5 Flash ledger decisions, Alpaca OHLCV only | Same + MC Internal predictions + discovered features |
+| **Signals** | Gemini 3.5 Flash ledger decisions, Alpaca OHLCV only | Same + **MarketCrunch ensemble forecasts** + discovered features |
 | **Sizing** | `size_pct` from LLM (max 10%/position) | Ledger decisions + Kelly on BUYs |
 | **Discovery** | — | Agentic DataBento catalog scan, LLM feature formulas |
 | **Overnight orders** | OPG limit ±0.5% from close | Same |
@@ -70,7 +70,7 @@ Each trader deploys to **Vertex AI Agent Engine** with `google-adk[a2a]` in requ
 |--------|---------|
 | **Google Search** (`GoogleSearch` tool) | Baseline Signal — macro/ETF news (`BASELINE_GOOGLE_SEARCH_GROUNDING=true`) |
 | **Alpaca news API** | Data agents |
-| **MC predictions** | Internal Signal + sizing (private RAG) |
+| **MarketCrunch ensemble** (50M+ params, 1B+ datapoints) | Internal Signal + sizing + intraday risk gate (private RAG) |
 | **DataBento discovery features** | Internal Signal (`approved_datasources.json`) |
 | **Learning memory** | Signal + Risk prompts (`learning/{role}_{system}.json`) |
 | **GCS audit log** | Dashboard chat tools (retrieval, no vector DB) |
@@ -96,9 +96,13 @@ Env: `USE_ADK=true` (default), `USE_ADK_WORKFLOW=true`, `USE_ADK_MCP=false`, `GO
 
 Same as baseline, plus:
 
-- MarketCrunch `/analyze` per ticker  
+- MarketCrunch `/analyze` per ticker — proprietary ensemble forecasts (direction, expected move, confidence)  
 - DataBento feature enrichment from discovery output  
-- Kelly allocator sizes BUY orders from MC confidence  
+- Confidence-based sizing on BUY orders from the prediction snapshot  
+
+### MarketCrunch prediction stack (Internal only)
+
+MarketCrunch’s production ensemble is trained at scale — **50M+ parameters** across **1B+ datapoints** — and served via the MarketCrunch API. Twin Ledger does not retrain models; Internal pulls nightly forecasts and injects them into data, signal, sizing, and risk agents. Baseline never calls this layer — that isolation is the experiment control.
 
 ### Agentic discovery
 

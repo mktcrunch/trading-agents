@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0b5c3f" />
   <meta name="color-scheme" content="light" />
-  <title>Twin Ledger</title>
+  <title>Twin Ledger · MarketCrunch AI</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%231a8f63'/%3E%3Cstop offset='100%25' stop-color='%230b5c3f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='36' height='36' rx='9' fill='url(%23g)'/%3E%3Crect x='8' y='20' width='5' height='10' rx='1.5' fill='white' opacity='.9'/%3E%3Crect x='15.5' y='14' width='5' height='16' rx='1.5' fill='white' opacity='.95'/%3E%3Crect x='23' y='8' width='5' height='22' rx='1.5' fill='white'/%3E%3Ccircle cx='28' cy='8' r='3' fill='%237ee0b8'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -64,16 +65,70 @@
       border-radius: var(--radius);
       box-shadow: var(--shadow-sm);
     }
-    .brand-tag {
-      display: inline-block;
-      font-family: var(--mono);
-      font-size: 0.65rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 0.35rem;
+    .header-brand { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+    .brand-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+      max-width: 100%;
     }
+    .brand-link:hover .brand-wordmark { color: var(--accent-deep); }
+    .brand-logo {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      filter: drop-shadow(0 2px 6px rgba(11, 92, 63, 0.18));
+    }
+    .brand-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+    .brand-wordmark {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      color: var(--text);
+      transition: color 0.15s;
+      margin: 0;
+    }
+    .brand-ai {
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--internal) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .brand-product {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .header-meta { margin: 0; }
+    .site-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem 0.65rem;
+      margin-top: 2rem;
+      padding: 1rem 1.25rem;
+      font-size: 0.75rem;
+      color: var(--subtle);
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.55);
+      border-radius: var(--radius);
+    }
+    .site-footer a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .site-footer a:hover { color: var(--accent-deep); text-decoration: underline; }
+    .footer-sep { opacity: 0.45; user-select: none; }
+    .footer-muted { color: var(--subtle); }
     .meta { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); }
     .tabs {
       display: flex; gap: 0.35rem; margin-bottom: 1.25rem;
@@ -284,6 +339,27 @@
       border: 1px solid rgba(20, 108, 74, 0.2);
       letter-spacing: 0.02em;
     }
+    .mc-model-panel {
+      margin-top: 1rem;
+      padding: 1rem 1.1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(47, 158, 114, 0.28);
+      background: linear-gradient(160deg, rgba(255,255,255,0.95) 0%, rgba(220, 238, 229, 0.55) 100%);
+    }
+    .mc-model-panel h4 {
+      font-size: 0.78rem;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--internal);
+      margin-bottom: 0.55rem;
+    }
+    .mc-model-panel p, .mc-model-panel li {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .mc-model-panel ul { margin: 0.45rem 0 0; padding-left: 1.1rem; }
     .universe-block { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
     .universe-block .universe-rationale { font-size: 0.84rem; color: var(--muted); margin-bottom: 0.65rem; }
     .ticker-grid {
@@ -1031,6 +1107,14 @@
         align-items: stretch;
         gap: 0.75rem;
       }
+      .brand-logo { width: 36px; height: 36px; }
+      .brand-wordmark { font-size: 1.05rem; }
+      .site-footer {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.35rem;
+      }
+      .footer-sep { display: none; }
       .header .primary {
         width: 100%;
         min-height: 44px;
@@ -1169,10 +1253,27 @@
 </head>
 <body>
   <div class="header">
-    <div>
-      <div class="brand-tag">Twin Ledger</div>
-      <h1>Live Scoreboard</h1>
-      <p class="meta">LIVE · GEMINI 3.5 FLASH · MARKET BENCHMARK</p>
+    <div class="header-brand">
+      <a href="https://marketcrunch.ai" class="brand-link" target="_blank" rel="noopener noreferrer" aria-label="MarketCrunch AI — Twin Ledger">
+        <svg class="brand-logo" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="mcLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#1a8f63"/>
+              <stop offset="100%" stop-color="#0b5c3f"/>
+            </linearGradient>
+          </defs>
+          <rect width="36" height="36" rx="9" fill="url(#mcLogoGrad)"/>
+          <rect x="8" y="20" width="5" height="10" rx="1.5" fill="#fff" opacity="0.9"/>
+          <rect x="15.5" y="14" width="5" height="16" rx="1.5" fill="#fff" opacity="0.95"/>
+          <rect x="23" y="8" width="5" height="22" rx="1.5" fill="#fff"/>
+          <circle cx="28" cy="8" r="3" fill="#7ee0b8"/>
+        </svg>
+        <div class="brand-text">
+          <h1 class="brand-wordmark">MarketCrunch <span class="brand-ai">AI</span></h1>
+          <span class="brand-product">Twin Ledger · Live Scoreboard</span>
+        </div>
+      </a>
+      <p class="meta header-meta">LIVE · GEMINI 3.5 FLASH · MARKET BENCHMARK</p>
     </div>
     <button class="primary" onclick="refresh()">Refresh</button>
   </div>
@@ -1192,8 +1293,14 @@
       <strong>Twin Ledger</strong> is our live experiment — not a backtest, not a replay of history.
       Two competing traders start with the same capital and compete head-to-head on separate Alpaca accounts — each backed by its own multi-agent crew (coordinator, data, signal, and risk specialists).
       <strong>Baseline</strong> trades on technicals and structured LLM reasoning alone.
-      <strong>Internal</strong> adds the <strong>MC Internal</strong> stack — proprietary prediction signals, confidence-based position sizing, and agentic vendor-data discovery — testing whether that IP is a real edge.
+      <strong>Internal</strong> adds the <strong>MC Internal</strong> stack — MarketCrunch’s proprietary prediction service, confidence-based sizing, and agentic vendor-data discovery — layered on top of the same agent crew. Gemini still makes the final trade call, but with private forecast context Baseline never sees.
       This scoreboard is the experiment: who adapts faster as the market moves?
+      <div class="mc-model-panel">
+        <h4>Two architectures, one scoreboard</h4>
+        <p><strong>Baseline</strong> — public market data and Google Search grounding → Gemini ledger decisions → risk → execution.</p>
+        <p style="margin-top:0.45rem"><strong>Internal</strong> — same pipeline, plus MarketCrunch’s proprietary ensemble forecasts, discovered vendor features, and prediction-aware sizing and risk. The only deliberate difference is the signal stack.</p>
+        <p style="margin-top:0.45rem">MarketCrunch models are trained at scale — <strong>50M+ parameters</strong> across <strong>1B+ datapoints</strong> — and served into Internal’s agent crew at decision time. Baseline never receives that layer.</p>
+      </div>
       <div class="llm-tag">LLM: Google Gemini 3.5 Flash — trading decisions, trailing stops, discovery planning</div>
       <div class="universe-block" id="universe-block"></div>
     </div>
@@ -1259,7 +1366,20 @@
       <div class="arch-stat"><div class="num">6</div><div class="lbl">Scheduler Jobs</div></div>
       <div class="arch-stat"><div class="num">7</div><div class="lbl">Learning Roles</div></div>
       <div class="arch-stat"><div class="num">12</div><div class="lbl">ETF Universe</div></div>
+      <div class="arch-stat"><div class="num">50M+</div><div class="lbl">MC Model Params</div></div>
+      <div class="arch-stat"><div class="num">1B+</div><div class="lbl">Training Datapoints</div></div>
       <div class="arch-stat"><div class="num">$100k</div><div class="lbl">Starting Equity</div></div>
+    </div>
+
+    <div class="arch-section-title">MC Internal prediction stack <span class="mc-ip-badge">MC Internal IP</span></div>
+    <div class="arch-callout" style="margin-bottom:1.25rem">
+      <strong>Internal consumes MarketCrunch’s production ensemble</strong> — trained at scale over <strong>50M+ parameters</strong> and <strong>1B+ datapoints</strong>.
+      Twin Ledger does not retrain models; it pulls nightly forecasts and injects them into Internal’s data, signal, sizing, and risk agents. Baseline is the control arm and never calls this API.
+      <ul style="margin:0.65rem 0 0;padding-left:1.15rem;font-size:0.82rem;color:var(--muted);line-height:1.55">
+        <li><strong>What flows in</strong> — per-ETF direction, expected move, and confidence from MarketCrunch <code>/analyze</code></li>
+        <li><strong>How agents use it</strong> — enriched Gemini signal prompts, confidence-based sizing, and an intraday prediction gate on exits</li>
+        <li><strong>What stays the same</strong> — identical ADK crew, scheduler, execution path, and audit trail as Baseline</li>
+      </ul>
     </div>
 
     <div class="arch-callout">
@@ -1525,9 +1645,10 @@
       <div class="arch-detail-card internal">
         <h4>5a · Internal enrichment <span class="mc-ip-badge">MC Internal</span></h4>
         <ul>
-          <li>Proprietary prediction feed (direction, confidence per ticker)</li>
-          <li>Gate-approved vendor features from discovery pipeline</li>
-          <li>Prediction + technical JSON passed to confidence-based sizing</li>
+          <li>MarketCrunch forecasts per ETF — direction, expected move, confidence</li>
+          <li>Technicals + prediction context merged into the Internal signal prompt</li>
+          <li>Gate-approved vendor features from the discovery pipeline</li>
+          <li>Confidence-aware position sizing on top of Gemini ledger decisions</li>
         </ul>
       </div>
       <div class="arch-detail-card baseline">
@@ -1555,10 +1676,12 @@
         </ul>
       </div>
       <div class="arch-detail-card internal">
-        <h4>MC Internal · prediction API <span class="mc-ip-badge">MC Internal</span></h4>
+        <h4>MarketCrunch prediction API <span class="mc-ip-badge">MC Internal</span></h4>
         <ul>
-          <li>Daily ETF predictions for decisions + position sizing</li>
-          <li>Short-horizon endpoint for intraday exit gate</li>
+          <li>Production ensemble — 50M+ parameters trained on 1B+ datapoints</li>
+          <li>Daily forecasts per ETF for overnight decisions and sizing</li>
+          <li>Short-horizon endpoint for intraday exit gating</li>
+          <li>Internal only — Baseline never calls MarketCrunch</li>
         </ul>
       </div>
       <div class="arch-detail-card internal">
@@ -1719,8 +1842,8 @@
         <ul>
           <li><strong>Agents:</strong> Same 6-role crew + separate Discovery agent (<span class="mc-ip-badge">MC Internal IP</span> only)</li>
           <li><strong>MC Internal IP:</strong> Data, Signal, Risk; Execution uses confidence sizing from snapshot</li>
-          <li><strong>Signal:</strong> <span class="mc-ip-badge">MC Internal</span> prediction context + vendor features + technicals</li>
-          <li><strong>Sizing:</strong> <span class="mc-ip-badge">MC Internal</span> confidence-based allocation from prediction snapshot</li>
+          <li><strong>Signal:</strong> MarketCrunch forecasts + vendor features + technicals in one Gemini prompt</li>
+          <li><strong>Sizing:</strong> confidence-based allocation from the prediction snapshot (max 10% per position)</li>
           <li><strong>Overnight:</strong> Same execution path; prediction snapshot passed to sizing layer</li>
           <li><strong>Trailing stops:</strong> Scripted 1%/70% floor + LLM refinement (hybrid)</li>
           <li><strong>Base stop:</strong> ATR × 1.5 dynamic stop (fallback −1%)</li>
@@ -2621,5 +2744,13 @@
     refresh();
     setInterval(refresh, 30000);
   </script>
+
+  <footer class="site-footer">
+    <a href="https://marketcrunch.ai" target="_blank" rel="noopener noreferrer">MarketCrunch AI</a>
+    <span class="footer-sep">·</span>
+    <span>Twin Ledger Trading Agents</span>
+    <span class="footer-sep">·</span>
+    <span class="footer-muted">Google Gemini &amp; ADK on GCP</span>
+  </footer>
 </body>
 </html>
