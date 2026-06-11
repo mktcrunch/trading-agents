@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0b5c3f" />
   <meta name="color-scheme" content="light" />
-  <title>Twin Ledger · MarketCrunch AI</title>
+  <title>Twin Ledger · Live Scoreboard</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%231a8f63'/%3E%3Cstop offset='100%25' stop-color='%230b5c3f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='36' height='36' rx='9' fill='url(%23g)'/%3E%3Crect x='8' y='20' width='5' height='10' rx='1.5' fill='white' opacity='.9'/%3E%3Crect x='15.5' y='14' width='5' height='16' rx='1.5' fill='white' opacity='.95'/%3E%3Crect x='23' y='8' width='5' height='22' rx='1.5' fill='white'/%3E%3Ccircle cx='28' cy='8' r='3' fill='%237ee0b8'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -75,11 +75,9 @@
       display: inline-flex;
       align-items: center;
       gap: 0.75rem;
-      text-decoration: none;
       color: inherit;
       max-width: 100%;
     }
-    .brand-link:hover .brand-wordmark { color: var(--accent-deep); }
     .brand-logo {
       flex-shrink: 0;
       width: 40px;
@@ -88,28 +86,31 @@
     }
     .brand-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
     .brand-wordmark {
-      font-size: 1.15rem;
+      font-size: 1.45rem;
       font-weight: 700;
       letter-spacing: -0.03em;
-      line-height: 1.15;
-      color: var(--text);
-      transition: color 0.15s;
+      line-height: 1.1;
       margin: 0;
-    }
-    .brand-ai {
-      font-weight: 700;
-      background: linear-gradient(135deg, var(--accent) 0%, var(--internal) 100%);
+      background: linear-gradient(135deg, var(--accent-deep) 0%, var(--internal) 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
     }
-    .brand-product {
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+    .brand-byline {
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
       color: var(--muted);
+      line-height: 1.35;
+    }
+    .brand-byline a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .brand-byline a:hover {
+      color: var(--accent);
+      text-decoration: underline;
     }
     .header-meta { margin: 0; }
     .site-footer {
@@ -133,6 +134,7 @@
     }
     .site-footer a:hover { color: var(--accent-deep); text-decoration: underline; }
     .footer-sep { opacity: 0.45; user-select: none; }
+    .footer-brand { font-weight: 700; color: var(--text); }
     .footer-muted { color: var(--subtle); }
     .meta { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); }
     .tabs {
@@ -584,6 +586,281 @@
       padding: 0.15rem 0;
       color: var(--subtle);
       font-size: 0.85rem;
+    }
+
+    .mc-pred-pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.35rem;
+      margin: 0 0 0.65rem;
+      align-items: stretch;
+    }
+    .mc-pred-stage {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.55rem;
+      position: relative;
+    }
+    .mc-pred-stage::after {
+      content: "→";
+      position: absolute;
+      right: -0.55rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--subtle);
+      font-size: 0.9rem;
+      z-index: 1;
+    }
+    .mc-pred-stage:last-child::after { display: none; }
+    .mc-pred-stage .stage-label {
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--subtle);
+      margin-bottom: 0.15rem;
+    }
+    .mc-pred-stage .stage-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 0.15rem;
+      line-height: 1.25;
+    }
+    .mc-pred-stage .stage-desc {
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .mc-pred-stage.research { border-top: 3px solid #7c3aed; }
+    .mc-pred-stage.gate { border-top: 3px solid var(--amber); }
+    .mc-pred-stage.serve { border-top: 3px solid #2563eb; }
+    .mc-pred-stage.consume { border-top: 3px solid var(--internal); }
+    .mc-pred-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.75rem 0.7rem;
+      margin-bottom: 1rem;
+    }
+    .mc-pred-lead {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0 0 0.55rem;
+    }
+    .mc-pred-lead strong { color: var(--text); }
+    .mc-pred-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.45rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.55rem;
+    }
+    .mc-pred-col h4 {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--internal);
+      margin: 0 0 0.35rem;
+      font-family: var(--mono);
+    }
+    .mc-pred-col.infra h4 { color: var(--muted); }
+    .mc-pred-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.22rem;
+    }
+    .mc-pred-row {
+      display: grid;
+      grid-template-columns: 5.5rem 1fr;
+      gap: 0.35rem;
+      font-size: 0.68rem;
+      line-height: 1.35;
+      align-items: start;
+    }
+    .mc-pred-row .k {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .mc-pred-row .v {
+      color: var(--muted);
+    }
+    .mc-pred-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin-top: 0.15rem;
+    }
+    .mc-pred-tag {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      background: var(--accent-pale);
+      color: var(--accent-deep);
+      border: 1px solid rgba(20, 108, 74, 0.12);
+    }
+    .mc-spec-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.35rem;
+      margin-top: 0.35rem;
+    }
+    .mc-spec-item {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.67rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .mc-spec-item strong {
+      display: block;
+      color: var(--text);
+      font-size: 0.7rem;
+      margin-bottom: 0.1rem;
+    }
+    @media (max-width: 900px) {
+      .mc-pred-pipeline { grid-template-columns: 1fr 1fr; }
+      .mc-pred-stage:nth-child(2)::after { display: none; }
+      .mc-pred-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .mc-pred-pipeline { grid-template-columns: 1fr; }
+      .mc-pred-stage::after { display: none; }
+    }
+
+    /* Reusable compact architecture blocks (shared with mc-pred-*) */
+    .arch-cmp-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.75rem 0.7rem;
+      margin-bottom: 1rem;
+    }
+    .arch-cmp-lead {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0 0 0.55rem;
+    }
+    .arch-cmp-lead strong { color: var(--text); }
+    .arch-cmp-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.55rem;
+    }
+    .arch-cmp-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .arch-cmp-col h4 {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-deep);
+      margin: 0 0 0.35rem;
+      font-family: var(--mono);
+    }
+    .arch-cmp-col.baseline h4 { color: var(--baseline); }
+    .arch-cmp-col.internal h4 { color: var(--internal); }
+    .arch-cmp-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.22rem;
+    }
+    .arch-cmp-row {
+      display: grid;
+      grid-template-columns: 4.75rem 1fr;
+      gap: 0.35rem;
+      font-size: 0.68rem;
+      line-height: 1.35;
+      align-items: start;
+    }
+    .arch-cmp-row.wide-k { grid-template-columns: 6.25rem 1fr; }
+    .arch-cmp-row .k { font-weight: 600; color: var(--text); }
+    .arch-cmp-row .v { color: var(--muted); }
+    .arch-cmp-row .v code {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--accent-deep);
+    }
+    .arch-flow-steps {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.2rem 0.15rem;
+      margin: 0 0 0.55rem;
+    }
+    .arch-flow-step {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      padding: 0.18rem 0.4rem;
+      border-radius: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .arch-flow-step.internal {
+      border-color: rgba(47, 158, 114, 0.35);
+      background: rgba(47, 158, 114, 0.08);
+    }
+    .arch-flow-step.baseline {
+      border-color: rgba(13, 92, 72, 0.35);
+      background: rgba(13, 92, 72, 0.06);
+    }
+    .arch-flow-arrow {
+      font-size: 0.6rem;
+      color: var(--subtle);
+      line-height: 1;
+    }
+    .arch-api-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem;
+    }
+    .arch-api-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.42rem 0.5rem;
+      font-size: 0.67rem;
+      line-height: 1.35;
+    }
+    .arch-api-card.baseline { border-top: 2px solid var(--baseline); }
+    .arch-api-card.internal { border-top: 2px solid var(--internal); }
+    .arch-api-card.shared { border-top: 2px solid var(--accent); }
+    .arch-api-card h4 {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 0.25rem;
+    }
+    .arch-api-card p,
+    .arch-api-card li {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.67rem;
+      line-height: 1.35;
+    }
+    .arch-api-card ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .arch-api-card li::before {
+      content: "· ";
+      color: var(--subtle);
+    }
+    @media (max-width: 900px) {
+      .arch-cmp-grid,
+      .arch-cmp-grid.cols-3,
+      .arch-api-grid { grid-template-columns: 1fr; }
     }
 
     .arch-workflows {
@@ -1165,7 +1442,7 @@
         gap: 0.75rem;
       }
       .brand-logo { width: 36px; height: 36px; }
-      .brand-wordmark { font-size: 1.05rem; }
+      .brand-wordmark { font-size: 1.25rem; }
       .site-footer {
         flex-direction: column;
         text-align: center;
@@ -1312,7 +1589,7 @@
   <div class="dashboard-shell">
   <div class="header">
     <div class="header-brand">
-      <a href="https://marketcrunch.ai" class="brand-link" target="_blank" rel="noopener noreferrer" aria-label="MarketCrunch AI, Twin Ledger">
+      <div class="brand-link" aria-label="Twin Ledger live scoreboard">
         <svg class="brand-logo" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <defs>
             <linearGradient id="mcLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1327,10 +1604,10 @@
           <circle cx="28" cy="8" r="3" fill="#7ee0b8"/>
         </svg>
         <div class="brand-text">
-          <h1 class="brand-wordmark">MarketCrunch <span class="brand-ai">AI</span></h1>
-          <span class="brand-product">Twin Ledger · Live Scoreboard</span>
+          <h1 class="brand-wordmark">Twin Ledger</h1>
+          <span class="brand-byline">Live Scoreboard · by <a href="https://marketcrunch.ai" target="_blank" rel="noopener noreferrer">MarketCrunch AI</a></span>
         </div>
-      </a>
+      </div>
       <p class="meta header-meta">LIVE · FIRST TRADE JUNE 9, 2026 · GEMINI 3.5 FLASH · MARKET BENCHMARK</p>
     </div>
     <button class="primary" onclick="refresh()">Refresh</button>
@@ -1440,31 +1717,126 @@
     </div>
     </div>
 
-    <div class="arch-section-title">MC Internal prediction stack <span class="mc-ip-badge">MC Internal IP</span></div>
-    <div class="arch-callout" style="margin-bottom:1.25rem">
-      <strong>Internal consumes MarketCrunch’s production ensemble</strong>: trained at scale over <strong>50M+ parameters</strong> and <strong>1B+ datapoints</strong>.
-      Twin Ledger does not retrain models; it pulls nightly forecasts and injects them into Internal’s data, signal, sizing, and risk agents. Baseline is the control arm and never calls this API.
-      <ul style="margin:0.65rem 0 0;padding-left:1.15rem;font-size:0.82rem;color:var(--muted);line-height:1.55">
-        <li><strong>What flows in</strong>: per-ETF direction, expected move, and confidence from MarketCrunch <code>/analyze</code></li>
-        <li><strong>How agents use it</strong>: enriched Gemini signal prompts, confidence-based sizing, and an intraday prediction gate on exits</li>
-        <li><strong>What stays the same</strong>: identical ADK crew, scheduler, execution path, and audit trail as Baseline</li>
-      </ul>
+    <div class="arch-section-title">MarketCrunch AI prediction layer <span class="mc-ip-badge">MC Internal IP</span></div>
+
+    <div class="mc-pred-panel">
+      <p class="mc-pred-lead">
+        <strong>Train → test → promote → serve.</strong> GPU backtests on Compute Engine; promoted models infer on Cloud Run (L4).
+        <strong>Twin Ledger Internal</strong> consumes forecasts at decision time — never retrains. Baseline never calls this layer.
+      </p>
+
+      <div class="mc-pred-pipeline" aria-label="MarketCrunch prediction flow">
+        <div class="mc-pred-stage research">
+          <div class="stage-label">1 · Research</div>
+          <div class="stage-title">GPU backtesting</div>
+          <div class="stage-desc">Walk-forward · wide ticker universe · multiple horizons · no look-ahead</div>
+        </div>
+        <div class="mc-pred-stage gate">
+          <div class="stage-label">2 · Promotion</div>
+          <div class="stage-title">Quality gate</div>
+          <div class="stage-desc">Beat production on accuracy, error &amp; cross-ticker consistency</div>
+        </div>
+        <div class="mc-pred-stage serve">
+          <div class="stage-label">3 · Production</div>
+          <div class="stage-title">Real-time inference</div>
+          <div class="stage-desc">Multi-source features · regime · ensemble · calibration</div>
+        </div>
+        <div class="mc-pred-stage consume">
+          <div class="stage-label">4 · Twin Ledger</div>
+          <div class="stage-title">Internal agents</div>
+          <div class="stage-desc">Nightly ETF forecasts + short-horizon exit gate → signal · sizing · risk</div>
+        </div>
+      </div>
+
+      <div class="mc-pred-grid">
+        <div class="mc-pred-col">
+          <h4>Research</h4>
+          <div class="mc-pred-rows">
+            <div class="mc-pred-row"><span class="k">Meta-learning</span><span class="v">Combine base predictors for direction &amp; magnitude</span></div>
+            <div class="mc-pred-row"><span class="k">Multi-stage</span><span class="v">Direction first, then conditional size</span></div>
+            <div class="mc-pred-row"><span class="k">Specialists</span><span class="v">Direction + magnitude experts, soft-voted</span></div>
+            <div class="mc-pred-row"><span class="k">Regime</span><span class="v">HMM on macro z-scores; per-regime thresholds</span></div>
+            <div class="mc-pred-row"><span class="k">Scope</span><span class="v">Multi-horizon · equities &amp; ETFs beyond Twin Ledger 12</span></div>
+          </div>
+          <div class="mc-pred-tags">
+            <span class="mc-pred-tag">Keras MLP</span><span class="mc-pred-tag">TFT</span><span class="mc-pred-tag">XGBoost</span>
+            <span class="mc-pred-tag">LightGBM</span><span class="mc-pred-tag">CatBoost</span><span class="mc-pred-tag">Ridge</span>
+          </div>
+        </div>
+        <div class="mc-pred-col">
+          <h4>Production</h4>
+          <div class="mc-pred-rows">
+            <div class="mc-pred-row"><span class="k">Data fusion</span><span class="v">OHLCV · macro/regime · news/sentiment · proprietary DB enrichments</span></div>
+            <div class="mc-pred-row"><span class="k">Features</span><span class="v">50+ technicals + directional/volume/cross-signals · mutual-info selection</span></div>
+            <div class="mc-pred-row"><span class="k">Calibration</span><span class="v">Isotonic regression · conformal confidence bands</span></div>
+            <div class="mc-pred-row"><span class="k">Outputs</span><span class="v">Target · move · confidence · direction prob · factors</span></div>
+            <div class="mc-pred-row"><span class="k">Scale</span><span class="v"><strong>50M+</strong> params · <strong>1B+</strong> datapoints · GCS artifacts</span></div>
+          </div>
+        </div>
+        <div class="mc-pred-col infra">
+          <h4>Infrastructure</h4>
+          <div class="mc-spec-grid">
+            <div class="mc-spec-item">
+              <strong>Compute Engine</strong>
+              NVIDIA A100 40GB · a2-highgpu-1g · walk-forward retraining &amp; ensemble tournaments
+            </div>
+            <div class="mc-spec-item">
+              <strong>Cloud Run</strong>
+              NVIDIA L4 · us-central1 · low-latency promoted-stack inference only
+            </div>
+            <div class="mc-spec-item">
+              <strong>Promotion</strong>
+              Accuracy ↑ · error ↓ · consistent across tickers — not single-name wins
+            </div>
+            <div class="mc-spec-item">
+              <strong>Boundary</strong>
+              Internal pulls forecasts; Baseline isolated · same crew &amp; audit otherwise
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="arch-callout">
-      <strong>Scheduler → deterministic path.</strong> Cloud Scheduler sends a plain-text message
-      (<em>“Run daily trading workflow.”</em>, <em>“Run intraday risk check.”</em>, or <em>“Run post-open chase.”</em>)
-      to each Agent Engine. A <code>before_agent_callback</code> intercepts these phrases and invokes the matching
-      tool directly, with no multi-turn LLM orchestration. If the coordinator is used interactively and does not complete
-      a daily job, an <code>after_agent_callback</code> fallback runs the same deterministic pipeline
-      (<code>DAILY_COORDINATOR_FALLBACK=true</code>).
-      <ul style="margin:0.65rem 0 0;padding-left:1.15rem;font-size:0.82rem;color:var(--muted);line-height:1.55">
-        <li><strong>Reliability</strong>: unattended cron must complete every time; LLM orchestration can stop after data fetch or explanation without placing orders.</li>
-        <li><strong>Latency &amp; cost</strong>: risk runs every 15 minutes; routing should not add extra Gemini turns.</li>
-        <li><strong>Auditability</strong>: fixed pipeline (<code>data → signal → risk → execute → monitor</code>) with one trace per job; judges can replay the same steps.</li>
-        <li><strong>Where Gemini stays</strong>: signal decisions, discovery planning, dashboard chat (read-only), <strong>intraday trailing-stop planner</strong> (inside deterministic risk path); only <em>scheduler routing</em> is non-LLM.</li>
-        <li><strong>Learning refresh</strong>: before each overnight signal pass, audit outcomes are scored per crew role and persisted to GCS (<code>learning/{role}_{system}.json</code>).</li>
-      </ul>
+    <div class="arch-section-title">Deterministic scheduler path</div>
+
+    <div class="arch-cmp-panel">
+      <p class="arch-cmp-lead">
+        <strong>Scheduler → tool, not LLM loop.</strong> Cloud Scheduler sends a plain-text phrase to each Agent Engine;
+        <code>before_agent_callback</code> matches it and invokes the tool directly. Interactive fallback:
+        <code>after_agent_callback</code> (<code>DAILY_COORDINATOR_FALLBACK=true</code>).
+      </p>
+      <div class="arch-flow-steps" aria-label="Scheduler trigger phrases">
+        <span class="arch-flow-step">Run daily trading workflow.</span>
+        <span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">run_daily_trading_workflow</span>
+        <span class="arch-flow-arrow">·</span>
+        <span class="arch-flow-step">Run intraday risk check.</span>
+        <span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">run_intraday_risk_check</span>
+        <span class="arch-flow-arrow">·</span>
+        <span class="arch-flow-step">Run post-open chase.</span>
+        <span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">run_post_open_chase</span>
+      </div>
+      <div class="arch-cmp-grid">
+        <div class="arch-cmp-col">
+          <h4>Why deterministic</h4>
+          <div class="arch-cmp-rows">
+            <div class="arch-cmp-row"><span class="k">Reliability</span><span class="v">Cron must finish every run — no stall after data fetch</span></div>
+            <div class="arch-cmp-row"><span class="k">Latency</span><span class="v">Risk every 15m — no extra Gemini turns on routing</span></div>
+            <div class="arch-cmp-row"><span class="k">Audit</span><span class="v">Fixed chain <code>data → signal → risk → execute → monitor</code> · one trace per job</span></div>
+          </div>
+        </div>
+        <div class="arch-cmp-col internal">
+          <h4>Where Gemini stays</h4>
+          <div class="arch-cmp-rows">
+            <div class="arch-cmp-row"><span class="k">Signal</span><span class="v">Overnight JSON decisions + rationale</span></div>
+            <div class="arch-cmp-row"><span class="k">Discovery</span><span class="v">Internal vendor probe planner only</span></div>
+            <div class="arch-cmp-row"><span class="k">Risk</span><span class="v">Intraday trailing-stop planner inside deterministic path</span></div>
+            <div class="arch-cmp-row"><span class="k">Learning</span><span class="v">Pre-overnight scorecard → GCS <code>learning/{role}_{system}.json</code></span></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="arch-section-title">System topology</div>
@@ -1690,96 +2062,102 @@
     </div>
 
     <div class="arch-section-title">Deterministic overnight pipeline</div>
-    <div class="arch-detail-grid">
-      <div class="arch-detail-card shared">
-        <h4>1 · Hydrate audit</h4>
-        <p>Pull <code>audit_events.jsonl</code> from GCS before writing so local/remote logs stay merged.</p>
+
+    <div class="arch-cmp-panel">
+      <p class="arch-cmp-lead">
+        Same fixed sequence every 4:10 PM ET run — Baseline and Internal share steps 1–4 &amp; 6–7; Internal adds discovery + MC enrichment at signal time.
+      </p>
+      <div class="arch-flow-steps" aria-label="Overnight pipeline steps">
+        <span class="arch-flow-step">1 · Hydrate</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">2 · Learning</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step internal">3a · Discovery</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">3b · Data</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">4 · Context</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step baseline">5b · Baseline signal</span><span class="arch-flow-arrow">/</span>
+        <span class="arch-flow-step internal">5a · Internal signal</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">6 · Execute</span><span class="arch-flow-arrow">→</span>
+        <span class="arch-flow-step">7 · Monitor</span>
       </div>
-      <div class="arch-detail-card shared">
-        <h4>2 · Refresh learning</h4>
-        <p><code>refresh_system_learning</code>: score audit outcomes for all crew roles (coordinator, data, signal, risk, execution, monitor; + discovery on Internal). Signal/Risk lessons inject into the next Gemini prompt.</p>
-      </div>
-      <div class="arch-detail-card internal">
-        <h4>3a · Discovery (if stale)</h4>
-        <p>Internal-only <span class="mc-ip-badge">MC Internal IP</span> catalog probes before data fetch when approved sources are &gt;24h old.</p>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>3b · Technical data</h4>
-        <p><code>get_technical_indicators</code>: 90-day Alpaca OHLCV + RSI, MACD, Bollinger for all 12 universe ETFs.</p>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>4 · Competition context</h4>
-        <p>Live portfolio values, ranks, and open positions for both traders; each signal agent sees the leaderboard.</p>
-      </div>
-      <div class="arch-detail-card internal">
-        <h4>5a · Internal enrichment <span class="mc-ip-badge">MC Internal</span></h4>
-        <ul>
-          <li>Same public stack as Baseline: technicals, Alpaca news, Google Search grounding</li>
-          <li>Incremental: MarketCrunch forecasts per ETF: direction, expected move, confidence</li>
-          <li>Gate-approved vendor features from the discovery pipeline</li>
-          <li>Confidence-aware position sizing on top of Gemini ledger decisions</li>
-        </ul>
-      </div>
-      <div class="arch-detail-card baseline">
-        <h4>5b · Baseline signal</h4>
-        <p>Gemini direct call (<code>prefer_direct=True</code>), technicals + news + Google Search grounding + competitor snapshot + learning block → structured decisions.</p>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>6 · Execute</h4>
-        <p><code>execute_trading_decisions</code>: risk validate → size positions → place DAY limits. Technical JSON reused for prices (no refetch).</p>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>7 · Monitor &amp; audit</h4>
-        <p>Portfolio snapshot logged; trace ends with <code>job_completed</code> including orders placed and validation results.</p>
+      <div class="arch-cmp-grid cols-3">
+        <div class="arch-cmp-col">
+          <h4>Prepare</h4>
+          <div class="arch-cmp-rows">
+            <div class="arch-cmp-row wide-k"><span class="k">1 · Hydrate</span><span class="v">Merge <code>audit_events.jsonl</code> from GCS before write</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">2 · Learning</span><span class="v">Score 7-day audit per crew role; inject into next Gemini prompt</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">3b · Data</span><span class="v">90-day Alpaca OHLCV + RSI/MACD/Bollinger · 12 ETFs</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">4 · Context</span><span class="v">Live leaderboard · both portfolios · open positions</span></div>
+          </div>
+        </div>
+        <div class="arch-cmp-col internal">
+          <h4>Internal only</h4>
+          <div class="arch-cmp-rows">
+            <div class="arch-cmp-row wide-k"><span class="k">3a · Discovery</span><span class="v"><span class="mc-ip-badge">MC Internal</span> catalog probes if sources &gt;24h stale</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">5a · Enrich</span><span class="v">MC forecasts · gate-approved vendor features · confidence sizing ≥0.55</span></div>
+          </div>
+        </div>
+        <div class="arch-cmp-col">
+          <h4>Finish</h4>
+          <div class="arch-cmp-rows">
+            <div class="arch-cmp-row wide-k"><span class="k">5b · Baseline</span><span class="v">Gemini direct · technicals + news + Search grounding + learning</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">6 · Execute</span><span class="v">Risk validate → size → DAY limits (MOC ±0.5%) · no refetch</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">7 · Monitor</span><span class="v">Portfolio snapshot · <code>job_completed</code> with orders + validation</span></div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="arch-section-title">Data sources &amp; external APIs</div>
-    <div class="arch-detail-grid">
-      <div class="arch-detail-card shared">
-        <h4>Alpaca Paper Trading</h4>
-        <ul>
-          <li>Separate API keys per trader (Baseline / Internal)</li>
-          <li>Account, positions, orders, market bars</li>
-          <li>Portfolio history API → equity chart on Performance tab</li>
-        </ul>
-      </div>
-      <div class="arch-detail-card internal">
-        <h4>MarketCrunch prediction API <span class="mc-ip-badge">MC Internal</span></h4>
-        <ul>
-          <li>Production ensemble: 50M+ parameters trained on 1B+ datapoints</li>
-          <li>Daily forecasts per ETF for overnight decisions and sizing</li>
-          <li>Short-horizon endpoint for intraday exit gating</li>
-          <li>Internal only; Baseline never calls MarketCrunch</li>
-        </ul>
-      </div>
-      <div class="arch-detail-card internal">
-        <h4>MC Internal · data discovery <span class="mc-ip-badge">MC Internal</span></h4>
-        <ul>
-          <li>Agentic vendor catalog discovery + LLM probe planner</li>
-          <li>Statistical gate approval; cached in GCS</li>
-        </ul>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>Vertex AI / Gemini</h4>
-        <ul>
-          <li><code>gemini-3.5-flash</code> via Vertex <code>global</code> endpoint (<code>GEMINI_VERTEX_LOCATION=global</code>)</li>
-          <li>Agent Engine, Cloud Run, and GCS stay in <code>us-central1</code> (<code>GCP_REGION</code>)</li>
-          <li>Signal agents, dashboard chat, discovery planner, intraday trailing-stop planner</li>
-        </ul>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>GCS persistence</h4>
-        <ul>
-          <li><code>audit_events.jsonl</code>: immutable decision log</li>
-          <li><code>risk_state_{system}.json</code>: trailing stops, EOD guard</li>
-          <li><code>learning/{role}_{system}.json</code>: per-agent learning memory</li>
-          <li>Discovery registry + approved datasources</li>
-        </ul>
-      </div>
-      <div class="arch-detail-card shared">
-        <h4>PostgreSQL (optional)</h4>
-        <p>Configured via env for extended analytics; core competition loop runs on Alpaca + GCS.</p>
+
+    <div class="arch-cmp-panel">
+      <p class="arch-cmp-lead">
+        Baseline uses public market data + Gemini. Internal adds <span class="mc-ip-badge">MC Internal IP</span> forecasts, discovery, and sizing — never shared with Baseline keys or endpoints.
+      </p>
+      <div class="arch-api-grid">
+        <div class="arch-api-card shared">
+          <h4>Alpaca Paper</h4>
+          <ul>
+            <li>Separate keys per trader</li>
+            <li>Account · positions · orders · bars</li>
+            <li>Portfolio history → equity chart</li>
+          </ul>
+        </div>
+        <div class="arch-api-card internal">
+          <h4>MarketCrunch API <span class="mc-ip-badge">MC Internal</span></h4>
+          <ul>
+            <li>Cloud Run L4 · promoted ensemble</li>
+            <li>Nightly ETF forecasts + sizing</li>
+            <li>Short-horizon exit gate (intraday)</li>
+            <li>Baseline never calls</li>
+          </ul>
+        </div>
+        <div class="arch-api-card internal">
+          <h4>MC Discovery <span class="mc-ip-badge">MC Internal</span></h4>
+          <ul>
+            <li>Vendor catalog + LLM probe planner</li>
+            <li>Statistical gate · cached in GCS</li>
+          </ul>
+        </div>
+        <div class="arch-api-card shared">
+          <h4>Vertex AI / Gemini</h4>
+          <ul>
+            <li><code>gemini-3.5-flash</code> · Vertex <code>global</code></li>
+            <li>Engine + Run + GCS in <code>us-central1</code></li>
+            <li>Signal · chat · discovery · trailing planner</li>
+          </ul>
+        </div>
+        <div class="arch-api-card shared">
+          <h4>GCS persistence</h4>
+          <ul>
+            <li><code>audit_events.jsonl</code> · immutable log</li>
+            <li><code>risk_state_{system}.json</code> · stops/EOD</li>
+            <li><code>learning/{role}_{system}.json</code></li>
+            <li>Discovery registry + approved sources</li>
+          </ul>
+        </div>
+        <div class="arch-api-card shared">
+          <h4>PostgreSQL (optional)</h4>
+          <p>Extended analytics via env config; core loop runs on Alpaca + GCS.</p>
+        </div>
       </div>
     </div>
 
@@ -2095,9 +2473,9 @@
   </div>
 
   <footer class="site-footer">
-    <a href="https://marketcrunch.ai" target="_blank" rel="noopener noreferrer">MarketCrunch AI</a>
+    <span class="footer-brand">Twin Ledger</span>
     <span class="footer-sep">·</span>
-    <span>Twin Ledger Trading Agents</span>
+    <a href="https://marketcrunch.ai" target="_blank" rel="noopener noreferrer">MarketCrunch AI</a>
     <span class="footer-sep">·</span>
     <span class="footer-muted">Google Gemini &amp; ADK on GCP</span>
   </footer>

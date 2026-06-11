@@ -147,6 +147,25 @@ After deploy, open:
 https://YOUR-SERVICE-URL/dashboard
 ```
 
+### Memorable URL (custom domain)
+
+The default Cloud Run URL (`trading-agents-XXXX-uc.a.run.app`) cannot be shortened — the hash is assigned by GCP.
+
+Map a subdomain you own (recommended: **`twin-ledger.marketcrunch.ai`**):
+
+```bash
+export GCP_PROJECT=your-project-id
+export GCP_REGION=us-central1
+export CUSTOM_DOMAIN=twin-ledger.marketcrunch.ai
+./deploy/setup_custom_domain.sh
+```
+
+Then add the DNS records from `gcloud beta run domain-mappings describe` at your registrar. Google provisions HTTPS automatically.
+
+Dashboard: `https://twin-ledger.marketcrunch.ai/dashboard`
+
+One-time: verify root domain ownership at [Cloud Run → Domain mappings](https://console.cloud.google.com/run/domains).
+
 Every action is recorded to `data/audit_events.jsonl` with a `trace_id` linking full job sessions:
 
 | Event type | Source |
