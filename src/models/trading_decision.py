@@ -5,7 +5,8 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional
 
 
-VALID_ACTIONS = {"BUY", "SELL", "HOLD", "CLOSE"}
+VALID_ACTIONS = {"BUY", "SELL", "HOLD", "CLOSE", "SHORT", "COVER"}
+ENTRY_ACTIONS = frozenset({"BUY", "SHORT"})
 
 
 @dataclass

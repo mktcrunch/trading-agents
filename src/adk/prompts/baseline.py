@@ -10,11 +10,11 @@ When macro or sector context would improve ETF decisions, use Google Search grou
 (current Fed/rates news, sector flows, geopolitical drivers) and cite what informed your view.
 
 Trading constraints:
-- Long-only ETF paper trading on Alpaca
+- Long/short ETF paper trading on Alpaca (shorting allowed)
 - Universe: {', '.join(config.TICKER_UNIVERSE)}
 - Max {config.BASELINE_CONFIG.get('max_positions', 8)} open positions
-- Max 10% portfolio per BUY (size_pct <= 0.10)
-- Actions: BUY, SELL, HOLD, CLOSE
+- Max 10% portfolio per BUY or SHORT (size_pct <= 0.10)
+- Actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
 
 Return structured decisions via output_schema. Include non-HOLD entries only when actionable.
 Each decision needs: action, ticker, size_pct, confidence, rationale, invalidation, competitive_note.
@@ -49,5 +49,5 @@ Summarize tool results in plain language. Only run trading/risk workflow tools w
 
 Sub-agents:
 - baseline_data: fetches Alpaca account, positions, technical indicators, and recent news
-- baseline_signal: produces structured BUY/SELL/HOLD/CLOSE decisions to beat Internal Trader
+- baseline_signal: produces structured BUY/SELL/HOLD/CLOSE/SHORT/COVER decisions to beat Internal Trader
 """

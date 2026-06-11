@@ -199,7 +199,7 @@ async def execute_trading_decisions(
     from src.audit import start_trace, end_trace
     from src.gcs.store import get_gcs_store
     from src.models.trading_decision import TradingDecision
-    from src.agents.risk_agent import RiskAgent
+    from src.agents.risk_agent import ACTIONABLE_TICKERS, RiskAgent, entry_sides_from_decisions
     from src.strategies.allocator import PositionAllocator
     from src.agents.execution_agent import ExecutionAgent
     from src.strategies.order_manager import OrderManager
@@ -242,19 +242,21 @@ async def execute_trading_decisions(
         portfolio_value = float(account_info.get("portfolio_value", 0))
 
         current_positions = client.get_positions()
+        open_orders_raw = client.get_orders(status="open")
 
         # Fetch latest prices for allocation
         latest_prices = get_latest_prices(system=system)
 
         risk_agent = RiskAgent(system=system)
-        buy_decisions = [d for d in decisions if d.action == "BUY"]
+        entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
+        entry_sides = entry_sides_from_decisions(entry_decisions)
 
         if system == "internal":
             from src.agents.signal_agent_internal import InternalSignalAgent
             from src.agents.data_agent_internal import InternalDataAgent
 
             actionable_tickers = sorted(
-                {d.ticker for d in decisions if d.action in ("BUY", "SELL", "CLOSE")}
+                {d.ticker for d in decisions if d.action in ACTIONABLE_TICKERS}
             )
 
             # Prefer MC + technicals passed from coordinator (same snapshot signal agent used)
@@ -305,15 +307,24 @@ async def execute_trading_decisions(
                 t: s for t, s in signals.items()
                 if any(d.action == "BUY" and d.ticker == t for d in decisions)
             }
+            short_decisions = [d for d in decisions if d.action == "SHORT"]
             proposed_weights = PositionAllocator.internal_target_weights(buy_signals)
+            proposed_weights.update(
+                PositionAllocator.decision_target_weights(short_decisions)
+            )
             validation = await risk_agent.validate_positions(
                 proposed_weights,
                 portfolio_value,
                 current_positions,
+                entry_sides=entry_sides,
+                open_orders_raw=open_orders_raw,
             )
-            valid_buys = {t for t, ok in validation.items() if ok}
-            filtered = [d for d in decisions if d.action != "BUY" or d.ticker in valid_buys]
-            filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_buys}
+            valid_entries = {t for t, ok in validation.items() if ok}
+            filtered = [
+                d for d in decisions
+                if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
+            ]
+            filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_entries}
 
             position_changes = PositionAllocator.allocate_internal_from_decisions(
                 filtered,
@@ -325,29 +336,47 @@ async def execute_trading_decisions(
         else:
             # Baseline uses equal weights
             technical_data = _parse_technical_data_json(technical_data_json)
+            actionable_tickers = sorted(
+                {d.ticker for d in decisions if d.action in ACTIONABLE_TICKERS}
+            )
             if technical_data:
                 latest_prices = {
                     t: float(technical_data[t].get("close", 0) or 0)
                     for t in technical_data
                     if technical_data[t].get("close")
                 }
-                actionable_tickers = sorted(
-                    {d.ticker for d in decisions if d.action in ("BUY", "SELL", "CLOSE")}
-                )
+            if actionable_tickers:
+                if not technical_data:
+                    tech_result = get_technical_indicators(
+                        system=system,
+                        tickers=",".join(actionable_tickers),
+                        lookback_days=90,
+                    )
+                    technical_data = tech_result.get("technical_data", {})
+                    latest_prices = {
+                        t: float(technical_data[t].get("close", 0) or 0)
+                        for t in technical_data
+                        if technical_data[t].get("close")
+                    }
                 for ticker in actionable_tickers:
                     if ticker not in latest_prices:
                         latest_prices.update(
                             get_latest_prices(system=system, tickers=ticker)
                         )
 
-            proposed_weights = PositionAllocator.decision_target_weights(buy_decisions)
+            proposed_weights = PositionAllocator.decision_target_weights(entry_decisions)
             validation = await risk_agent.validate_positions(
                 proposed_weights,
                 portfolio_value,
                 current_positions,
+                entry_sides=entry_sides,
+                open_orders_raw=open_orders_raw,
             )
-            valid_buys = {t for t, ok in validation.items() if ok}
-            filtered = [d for d in decisions if d.action != "BUY" or d.ticker in valid_buys]
+            valid_entries = {t for t, ok in validation.items() if ok}
+            filtered = [
+                d for d in decisions
+                if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
+            ]
 
             position_changes = PositionAllocator.allocate_from_decisions(
                 filtered,

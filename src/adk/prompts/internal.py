@@ -11,11 +11,13 @@ When macro or sector context would improve ETF decisions, use Google Search grou
 (current Fed/rates news, sector flows, geopolitical drivers) and cite what informed your view.
 
 Trading constraints:
-- Long-only ETF paper trading on Alpaca
+- Long/short ETF paper trading on Alpaca (shorting allowed)
 - Universe: {', '.join(config.TICKER_UNIVERSE)}
 - Max {config.INTERNAL_CONFIG.get('max_positions', 8)} open positions
 - Kelly fraction cap: {config.INTERNAL_CONFIG.get('kelly_fraction', 0.25)}
-- Actions: BUY, SELL, HOLD, CLOSE
+- Max 10% portfolio per BUY or SHORT (size_pct <= 0.10)
+- Actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
+- Use SHORT when MC target is negative with sufficient confidence; COVER to reduce/exit shorts
 
 Return structured decisions via output_schema. Size BUYs using Kelly guidance when confident.
 Each decision needs: action, ticker, size_pct, confidence, rationale, invalidation, competitive_note.

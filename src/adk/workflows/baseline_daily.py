@@ -12,7 +12,7 @@ from src.agents.competition_context import build_competition_context
 from src.agents.data_agent_baseline import BaselineDataAgent
 from src.agents.execution_agent import ExecutionAgent
 from src.agents.monitor_agent import MonitorAgent
-from src.agents.risk_agent import RiskAgent
+from src.agents.risk_agent import RiskAgent, entry_sides_from_decisions
 from src.agents.signal_agent_baseline import BaselineSignalAgent
 from src.models.trading_decision import TradingDecision
 from src.strategies.allocator import PositionAllocator
@@ -69,15 +69,19 @@ async def baseline_risk_and_execute(ctx):
     current_positions = ctx.state.get("current_positions") or {}
 
     risk_agent = RiskAgent(system="baseline")
-    buy_decisions = [d for d in decisions if d.action == "BUY"]
-    proposed_weights = PositionAllocator.decision_target_weights(buy_decisions)
+    entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
+    proposed_weights = PositionAllocator.decision_target_weights(entry_decisions)
     validation = await risk_agent.validate_positions(
         proposed_weights,
         float(account_info.get("portfolio_value", 0)),
         current_positions,
+        entry_sides=entry_sides_from_decisions(entry_decisions),
     )
-    valid_buys = {t for t, ok in validation.items() if ok}
-    filtered = [d for d in decisions if d.action != "BUY" or d.ticker in valid_buys]
+    valid_entries = {t for t, ok in validation.items() if ok}
+    filtered = [
+        d for d in decisions
+        if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
+    ]
 
     latest_prices = {
         t: technical_data[t].get("close", 0)

@@ -100,10 +100,10 @@ class PositionAllocator:
 
     @staticmethod
     def decision_target_weights(decisions: List["TradingDecision"]) -> Dict[str, float]:
-        """Portfolio weights implied by Twin Ledger BUY decisions."""
+        """Portfolio weights implied by Twin Ledger BUY/SHORT entry decisions."""
         weights = {}
         for decision in decisions:
-            if decision.action == "BUY" and decision.size_pct > 0:
+            if decision.action in ("BUY", "SHORT") and decision.size_pct > 0:
                 weights[decision.ticker] = min(decision.size_pct, 0.10)
         return weights
 
@@ -134,6 +134,16 @@ class PositionAllocator:
                 if qty > 0:
                     position_changes[decision.ticker] = qty
 
+            elif decision.action == "SHORT":
+                position = current_positions.get(decision.ticker)
+                if position and position.qty > 0:
+                    continue
+                weight = min(max(decision.size_pct, 0), 0.10)
+                dollars = portfolio_value * weight
+                qty = int(dollars / price)
+                if qty > 0:
+                    position_changes[decision.ticker] = -qty
+
             elif decision.action in ("SELL", "CLOSE"):
                 position = current_positions.get(decision.ticker)
                 if not position or position.qty <= 0:
@@ -145,6 +155,16 @@ class PositionAllocator:
                     sell_qty = max(1, int(position.qty * sell_pct))
                     sell_qty = min(sell_qty, int(position.qty))
                 position_changes[decision.ticker] = -sell_qty
+
+            elif decision.action == "COVER":
+                position = current_positions.get(decision.ticker)
+                if not position or position.qty >= 0:
+                    continue
+                short_qty = abs(int(position.qty))
+                cover_pct = min(max(decision.size_pct, 0.01), 1.0)
+                cover_qty = max(1, int(short_qty * cover_pct))
+                cover_qty = min(cover_qty, short_qty)
+                position_changes[decision.ticker] = cover_qty
 
         logger.info(f"Twin Ledger allocation: {len(position_changes)} order(s) from decisions")
         return position_changes
@@ -162,11 +182,13 @@ class PositionAllocator:
         """
         position_changes: Dict[str, int] = {}
 
-        sell_decisions = [d for d in decisions if d.action in ("SELL", "CLOSE")]
-        if sell_decisions:
+        exit_decisions = [
+            d for d in decisions if d.action in ("SELL", "CLOSE", "SHORT", "COVER")
+        ]
+        if exit_decisions:
             position_changes.update(
                 PositionAllocator.allocate_from_decisions(
-                    sell_decisions, portfolio_value, current_positions, prices
+                    exit_decisions, portfolio_value, current_positions, prices
                 )
             )
 
@@ -183,7 +205,7 @@ class PositionAllocator:
 
         logger.info(
             f"Internal Twin Ledger allocation: {len(position_changes)} order(s) "
-            f"({len(kelly_signals)} Kelly BUY, {len(sell_decisions)} sell/close)"
+            f"({len(kelly_signals)} Kelly BUY, {len(exit_decisions)} exit/short/cover)"
         )
         return position_changes
 

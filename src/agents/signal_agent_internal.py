@@ -133,16 +133,18 @@ Use this information to decide whether to:
 - avoid liquidation or catastrophic drawdown.
 
 Trading constraints:
-- Long-only ETF paper trading on Alpaca
+- Long/short ETF paper trading on Alpaca (shorting allowed)
 - Universe: {', '.join(self.ticker_universe)}
 - Max {self.max_positions} open positions
-- Max 10% of portfolio per new BUY (size_pct <= 0.10)
-- Valid actions: BUY, SELL, HOLD, CLOSE (no SHORT/COVER)
-- For BUY: size_pct = fraction of total portfolio (0.01–0.10); align with Kelly_suggested_weight when MC confidence is High/Medium
-- For SELL: size_pct = fraction of existing position to sell (0.01–1.0)
-- For CLOSE: exit the full existing position (size_pct ignored)
+- Max 10% of portfolio per new BUY or SHORT (size_pct <= 0.10)
+- Valid actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
+- For BUY: size_pct = fraction of total portfolio long (0.01–0.10); align with Kelly_suggested_weight when MC confidence is High/Medium and target is positive
+- For SHORT: size_pct = fraction of total portfolio short (0.01–0.10); use when MC target is negative with High/Medium confidence or macro confirms downside
+- For SELL: size_pct = fraction of existing long position to sell (0.01–1.0)
+- For CLOSE: exit the full existing long position (size_pct ignored)
+- For COVER: size_pct = fraction of existing short position to buy back (0.01–1.0)
 - For HOLD: no trade
-- Minimum confidence for BUY: {self.confidence_threshold}
+- Minimum confidence for BUY and SHORT: {self.confidence_threshold}
 {f'''
 {learning_block}
 
@@ -169,7 +171,7 @@ Return ONLY a JSON object with this shape:
 }}
 
 Put trade objects in "decisions" only when action is not HOLD. Each trade object must have:
-- action: BUY | SELL | CLOSE
+- action: BUY | SELL | CLOSE | SHORT | COVER
 - ticker: symbol from universe
 - size_pct: number (for BUY, consider Kelly_suggested_weight; capped at 0.10)
 - confidence: 0.0–1.0
@@ -288,9 +290,9 @@ Example (no trades):
         signals: Dict[str, Signal] = {}
 
         for decision in decisions:
-            if decision.action not in ("BUY", "SELL", "CLOSE"):
+            if decision.action not in ("BUY", "SELL", "CLOSE", "SHORT", "COVER"):
                 continue
-            if decision.action == "BUY" and decision.confidence < self.confidence_threshold:
+            if decision.action in ("BUY", "SHORT") and decision.confidence < self.confidence_threshold:
                 self.log_action(
                     f"Skipping BUY {decision.ticker}: "
                     f"confidence {decision.confidence:.2f} < {self.confidence_threshold:.2f}"

@@ -25,3 +25,21 @@ def test_parse_legacy_array():
 
 def test_portfolio_ticker_constant():
     assert PORTFOLIO_TICKER == "PORTFOLIO"
+
+
+def test_parse_short_action():
+    text = """{
+      "decisions": [{
+        "action": "SHORT",
+        "ticker": "QQQ",
+        "size_pct": 0.05,
+        "confidence": 0.8,
+        "rationale": "bearish MC",
+        "invalidation": "target turns positive",
+        "competitive_note": "deploy downside edge"
+      }],
+      "no_action_rationale": ""
+    }"""
+    result = parse_signal_ledger_response(text, ["QQQ"])
+    assert len(result.decisions) == 1
+    assert result.decisions[0].action == "SHORT"

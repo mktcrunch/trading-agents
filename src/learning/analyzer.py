@@ -59,8 +59,10 @@ def _forward_return_pct(
     if entry <= 0:
         return None
     raw = (exit_ - entry) / entry
-    if action in ("SELL", "CLOSE"):
+    if action in ("SELL", "CLOSE", "SHORT"):
         return -raw
+    if action == "COVER":
+        return raw
     return raw
 
 

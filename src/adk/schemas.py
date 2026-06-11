@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class TradingDecisionSchema(BaseModel):
-    action: Literal["BUY", "SELL", "HOLD", "CLOSE"]
+    action: Literal["BUY", "SELL", "HOLD", "CLOSE", "SHORT", "COVER"]
     ticker: str
     size_pct: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0, le=1)

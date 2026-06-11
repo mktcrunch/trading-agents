@@ -8,7 +8,7 @@ from src.agents.data_agent_internal import InternalDataAgent
 from src.agents.signal_agent_internal import InternalSignalAgent
 from src.agents.competition_context import build_competition_context
 from src.agents.execution_agent import ExecutionAgent
-from src.agents.risk_agent import RiskAgent
+from src.agents.risk_agent import RiskAgent, entry_sides_from_decisions
 from src.agents.monitor_agent import MonitorAgent
 from src.strategies.signal_generator import SignalGenerator
 from src.strategies.allocator import PositionAllocator
@@ -122,29 +122,36 @@ class InternalSystem:
                 f"conf={d.confidence:.2f} | {mc_note} | {d.rationale[:80]}"
             )
 
-        # Step 5: Risk validation (Kelly weights for BUYs)
+        # Step 5: Risk validation (Kelly weights for BUYs, size_pct for SHORTs)
         self.logger.info("\n[Step 5] Risk validation...")
         current_positions = await self.data_agent.get_current_positions()
         buy_signals = {
             t: s for t, s in signals.items()
             if any(d.action == "BUY" and d.ticker == t for d in decisions)
         }
+        short_decisions = [d for d in decisions if d.action == "SHORT"]
         proposed_weights = PositionAllocator.internal_target_weights(buy_signals)
+        proposed_weights.update(
+            PositionAllocator.decision_target_weights(short_decisions)
+        )
+        entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
         validation_results = await self.risk_agent.validate_positions(
             proposed_weights,
             float(account_info.get("portfolio_value", 0)),
             current_positions,
+            entry_sides=entry_sides_from_decisions(entry_decisions),
+            open_orders_raw=self.execution_agent.alpaca_client.get_orders(status="open"),
         )
 
-        valid_buys = {t for t, ok in validation_results.items() if ok}
+        valid_entries = {t for t, ok in validation_results.items() if ok}
         filtered_decisions = [
             d for d in decisions
-            if d.action != "BUY" or d.ticker in valid_buys
+            if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
         ]
-        filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_buys}
+        filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_entries}
         self.logger.info(
-            f"Valid BUY decisions after risk check: "
-            f"{len([d for d in filtered_decisions if d.action == 'BUY'])}"
+            f"Valid entry decisions after risk check: "
+            f"{len([d for d in filtered_decisions if d.action in ('BUY', 'SHORT')])}"
         )
 
         # Step 6: Kelly allocation + sell/close sizing

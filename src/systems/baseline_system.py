@@ -8,7 +8,7 @@ from src.agents.data_agent_baseline import BaselineDataAgent
 from src.agents.signal_agent_baseline import BaselineSignalAgent
 from src.agents.competition_context import build_competition_context
 from src.agents.execution_agent import ExecutionAgent
-from src.agents.risk_agent import RiskAgent
+from src.agents.risk_agent import RiskAgent, entry_sides_from_decisions
 from src.agents.monitor_agent import MonitorAgent
 from src.strategies.signal_generator import SignalGenerator
 from src.strategies.allocator import PositionAllocator
@@ -105,25 +105,27 @@ class BaselineSystem:
                 f"conf={d.confidence:.2f} | {d.rationale[:100]}"
             )
 
-        # Step 4: Risk validation (BUY weights only)
+        # Step 4: Risk validation (BUY/SHORT entry weights)
         self.logger.info("\n[Step 4] Risk validation...")
         current_positions = await self.data_agent.get_current_positions()
-        buy_decisions = [d for d in decisions if d.action == "BUY"]
-        proposed_weights = PositionAllocator.decision_target_weights(buy_decisions)
+        entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
+        proposed_weights = PositionAllocator.decision_target_weights(entry_decisions)
         validation_results = await self.risk_agent.validate_positions(
             proposed_weights,
             float(account_info.get("portfolio_value", 0)),
             current_positions,
+            entry_sides=entry_sides_from_decisions(entry_decisions),
+            open_orders_raw=self.execution_agent.alpaca_client.get_orders(status="open"),
         )
 
-        valid_buys = {t for t, ok in validation_results.items() if ok}
+        valid_entries = {t for t, ok in validation_results.items() if ok}
         filtered_decisions = [
             d for d in decisions
-            if d.action != "BUY" or d.ticker in valid_buys
+            if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
         ]
         self.logger.info(
-            f"Valid BUY decisions after risk check: "
-            f"{len([d for d in filtered_decisions if d.action == 'BUY'])}"
+            f"Valid entry decisions after risk check: "
+            f"{len([d for d in filtered_decisions if d.action in ('BUY', 'SHORT')])}"
         )
 
         # Step 5: Convert decisions to orders
