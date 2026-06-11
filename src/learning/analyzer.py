@@ -87,9 +87,15 @@ def analyze_signal_outcomes(
         lambda: {"wins": 0, "losses": 0, "total_return_pct": 0.0, "count": 0}
     )
 
+    no_action_events = [
+        ev for ev in events
+        if (ev.get("payload") or {}).get("no_action")
+        or (ev.get("payload") or {}).get("ticker") == "PORTFOLIO"
+    ]
     actionable = [
         ev for ev in events
         if (ev.get("payload") or {}).get("action", "HOLD").upper() != "HOLD"
+        and not (ev.get("payload") or {}).get("no_action")
     ]
 
     for ev in actionable[-max_decisions * 3 :]:
@@ -139,6 +145,16 @@ def analyze_signal_outcomes(
 
     scored = scored[-max_decisions:]
     pending = pending[-max_decisions:]
+    recent_no_action = [
+        {
+            "timestamp": ev.get("timestamp"),
+            "ticker": "PORTFOLIO",
+            "action": "HOLD",
+            "rationale": (ev.get("payload") or {}).get("rationale", ""),
+            "no_action": True,
+        }
+        for ev in no_action_events[-5:]
+    ]
 
     for ticker, agg in ticker_agg.items():
         if agg["count"]:
@@ -152,12 +168,15 @@ def analyze_signal_outcomes(
 
     return {
         "lookback_days": lookback_days,
-        "decisions_logged": len(actionable),
+        "decisions_logged": len(actionable) + len(no_action_events),
         "scored_decisions": scored,
         "pending_decisions": pending,
+        "no_action_sessions": recent_no_action,
+        "recent_events": scored + recent_no_action,
         "ticker_stats": dict(ticker_agg),
         "scorecard": {
-            "decisions_logged": len(actionable),
+            "decisions_logged": len(actionable) + len(no_action_events),
+            "no_action_logged": len(no_action_events),
             "decisions_pending": len(pending),
             "decisions_scored": total,
             "wins": wins,

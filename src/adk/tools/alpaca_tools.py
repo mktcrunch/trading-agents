@@ -497,7 +497,6 @@ def get_recent_news(tickers: str | None = None, max_articles_per_ticker: int = 3
         max_articles_per_ticker: Maximum number of news stories to return per ticker.
     """
     from datetime import datetime
-    import yfinance as yf
     from alpaca.data.historical.news import NewsClient
     from alpaca.data.requests import NewsRequest
 
@@ -544,8 +543,15 @@ def get_recent_news(tickers: str | None = None, max_articles_per_ticker: int = 3
         pass
 
     # 2. Fallback to yfinance for any symbols that still have no news
+    try:
+        import yfinance as yf
+    except ModuleNotFoundError:
+        yf = None
+
     for symbol in symbols:
         if not news_by_ticker[symbol]:
+            if yf is None:
+                continue
             try:
                 ticker_obj = yf.Ticker(symbol)
                 raw_news = ticker_obj.news or []

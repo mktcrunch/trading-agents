@@ -18,6 +18,7 @@ from src.agents.signal_agent_baseline import BaselineSignalAgent
 from src.agents.signal_agent_internal import InternalSignalAgent
 from src.gcs.store import get_gcs_store
 from src.logger import setup_logger
+from src.agents.ledger_utils import SignalLedgerResult
 from src.models.trading_decision import TradingDecision
 
 logger = setup_logger(__name__)
@@ -63,7 +64,10 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"GCS audit hydrate failed: {e}")
 
+    from src.audit import end_trace, start_trace
+
     dry = config.is_dry_run()
+    start_trace("daily", system=system)
     logger.info(
         f"[daily_pipeline] Starting deterministic workflow for {system}"
         + (" (DRY RUN — no orders)" if dry else "")
@@ -85,6 +89,7 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
     tech_result = get_technical_indicators(system=system, lookback_days=90)
     technical_data = tech_result.get("technical_data") or {}
     if not technical_data:
+        end_trace("daily", system=system, success=False, summary={"error": "No technical data available"})
         return {"success": False, "error": "No technical data available", "system": system}
 
     competition = build_competition_context(system)
@@ -100,7 +105,7 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
         mc_predictions = mc_result.get("predictions") or {}
         databento = get_databento_features()
         signal_agent = InternalSignalAgent()
-        decisions = await signal_agent.make_trading_decisions(
+        ledger = await signal_agent.make_trading_decisions(
             technical_data,
             mc_predictions,
             competition,
@@ -110,23 +115,37 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
         )
     else:
         signal_agent = BaselineSignalAgent()
-        decisions = await signal_agent.make_trading_decisions(
+        ledger = await signal_agent.make_trading_decisions(
             technical_data,
             competition,
             prefer_direct=True,
             news_data=news_data,
         )
 
-    if not decisions:
+    decisions = ledger.decisions if isinstance(ledger, SignalLedgerResult) else ledger
+    actionable = [d for d in decisions if d.action != "HOLD"]
+
+    if not actionable:
         out: Dict[str, Any] = {
             "success": True,
             "pipeline": "deterministic",
             "system": system,
             "orders_placed": 0,
-            "message": "No decisions returned from signal step",
+            "message": "No actionable decisions from signal step",
+            "no_action_rationale": getattr(ledger, "no_action_rationale", "") or "",
         }
         if discovery_meta:
             out["discovery"] = discovery_meta
+        end_trace(
+            "daily",
+            system=system,
+            success=True,
+            summary={
+                "orders_placed": 0,
+                "actionable_count": 0,
+                "no_action_rationale": out["no_action_rationale"],
+            },
+        )
         return out
 
     decisions_json = json.dumps(

@@ -2,7 +2,7 @@
 from typing import Any, Dict, List
 
 from src.adk.model import configure_genai_env
-from src.models.trading_decision import TradingDecision
+from src.agents.ledger_utils import SignalLedgerResult
 from src.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -13,7 +13,7 @@ async def run_signal_agent(
     user_payload: Dict[str, Any],
     session_id: str,
     valid_tickers: List[str],
-) -> List[TradingDecision]:
+) -> SignalLedgerResult:
     """Run signal step and return parsed TradingDecision list.
 
     Uses direct Gemini (prefer_direct=True) — ADK Runner requires chat-mode root

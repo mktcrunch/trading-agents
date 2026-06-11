@@ -38,10 +38,16 @@ def _heuristic_signal(analysis: Dict[str, Any]) -> Dict[str, Any]:
     do_more: List[str] = []
     wr = score.get("win_rate_pct")
 
+    no_action = score.get("no_action_logged", 0)
     if logged == 0:
         bad.append(
             f"No ledger decisions in the last {analysis.get('lookback_days', 7)} days — "
             "check overnight scheduler."
+        )
+    elif no_action and score.get("decisions_scored", 0) == 0:
+        do_more.append(
+            f"{no_action} overnight session(s) logged explicit no-action rationale — "
+            "review whether cash posture matched regime."
         )
     elif score.get("decisions_scored", 0) == 0 and pending > 0:
         do_more.append(

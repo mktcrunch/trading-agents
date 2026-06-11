@@ -43,14 +43,16 @@ def build_signal_learning_block(system: str) -> str:
 
     score = state.get("scorecard") or {}
     logged = score.get("decisions_logged", 0)
+    no_action = score.get("no_action_logged", 0)
     pending = score.get("decisions_pending", 0)
+    no_action_sessions = state.get("no_action_sessions") or []
     bad = state.get("bad_patterns") or []
     do_more = state.get("do_more") or []
 
     block = f"""LEARNING FROM RECENT OUTCOMES (last {state.get('lookback_days', 7)} days — do NOT repeat mistakes):
 
 Summary: {state.get('lessons_learned') or 'Building history from audit trail.'}
-Decisions logged: {logged} · scored: {score.get('decisions_scored', 0)} · pending next-day: {pending}
+Decisions logged: {logged} · scored: {score.get('decisions_scored', 0)} · no-action nights: {no_action} · pending next-day: {pending}
 Win rate (scored only): {score.get('win_rate_pct', 'n/a')}% ({score.get('wins', 0)}W / {score.get('losses', 0)}L)
 
 Ticker performance:
@@ -58,6 +60,15 @@ Ticker performance:
 
 Recent scored decisions:
 {_format_decision_lines(state.get('recent_decisions') or [])}"""
+
+    if no_action_sessions:
+        lines = []
+        for s in no_action_sessions[-3:]:
+            lines.append(
+                f"- [{(s.get('timestamp') or '')[:10]}] PORTFOLIO HOLD — "
+                f"{(s.get('rationale') or '')[:120]}"
+            )
+        block += "\n\nRecent no-action rationales:\n" + "\n".join(lines)
 
     if bad:
         block += "\n\nAvoid repeating:\n" + "\n".join(f"- {p}" for p in bad[:5])

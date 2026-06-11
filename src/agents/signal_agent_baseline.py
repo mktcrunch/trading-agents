@@ -10,7 +10,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from src import config
 from src.apis.gemini_client import get_genai_client
 from src.apis.grounding import google_search_grounding_config
-from src.agents.ledger_utils import GEMINI_FLASH_MODEL, parse_trading_decisions
+from src.agents.ledger_utils import (
+    GEMINI_FLASH_MODEL,
+    SignalLedgerResult,
+    emit_signal_ledger_audit,
+    parse_signal_ledger_response,
+)
 from src.agents.signal_context import fetch_signal_news, format_news_block
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
@@ -100,9 +105,14 @@ Market data & indicators:
 Recent news (Alpaca / fallback):
 {format_news_block(news_data or {})}
 
-Return ONLY a JSON array of decisions. Include entries where action is not HOLD.
-Each object must have:
-- action: BUY | SELL | HOLD | CLOSE
+Return ONLY a JSON object with this shape:
+{{
+  "decisions": [ ...trade objects... ],
+  "no_action_rationale": "2-4 sentences — REQUIRED when decisions is empty"
+}}
+
+Put trade objects in "decisions" only when action is not HOLD. Each trade object must have:
+- action: BUY | SELL | CLOSE
 - ticker: symbol from universe
 - size_pct: number
 - confidence: 0.0–1.0
@@ -110,18 +120,30 @@ Each object must have:
 - invalidation: what would make you reverse this decision
 - competitive_note: how this relates to your rank and competitor behavior
 
-Example:
-[
-  {{
-    "action": "BUY",
-    "ticker": "QQQ",
-    "size_pct": 0.08,
-    "confidence": 0.72,
-    "rationale": "Momentum improving while competitor is likely overweight low-confidence names.",
-    "invalidation": "RSI > 70 and MACD histogram turns negative.",
-    "competitive_note": "Behind on leaderboard; need controlled risk-on exposure."
-  }}
-]"""
+When you recommend no trades (decisions = []), you MUST fill no_action_rationale with a clear explanation:
+leaderboard posture, technical/macro read, risk discipline, learning lessons applied, and what would change your mind.
+
+Example (trades):
+{{
+  "decisions": [
+    {{
+      "action": "BUY",
+      "ticker": "QQQ",
+      "size_pct": 0.08,
+      "confidence": 0.72,
+      "rationale": "Momentum improving while competitor is likely overweight low-confidence names.",
+      "invalidation": "RSI > 70 and MACD histogram turns negative.",
+      "competitive_note": "Behind on leaderboard; need controlled risk-on exposure."
+    }}
+  ],
+  "no_action_rationale": ""
+}}
+
+Example (no trades):
+{{
+  "decisions": [],
+  "no_action_rationale": "Ahead on the leaderboard with flat exposure; macro/news skew risk-off and no ticker clears confidence threshold. Staying in cash preserves rank until a high-conviction asymmetric setup appears."
+}}"""
 
     async def make_trading_decisions(
         self,
@@ -129,7 +151,7 @@ Example:
         competition: Optional[Dict] = None,
         prefer_direct: bool = False,
         news_data: Optional[Dict[str, Any]] = None,
-    ) -> List[TradingDecision]:
+    ) -> SignalLedgerResult:
         """Twin Ledger decision step: ADK LlmAgent or direct Gemini call."""
         competition = competition or build_competition_context("baseline")
         learning_block = build_signal_learning_block("baseline") if config.LEARNING_ENABLED else ""
@@ -137,7 +159,7 @@ Example:
         try:
             if config.USE_ADK and not prefer_direct:
                 from src.adk.runner import run_signal_agent
-                decisions = await run_signal_agent(
+                ledger = await run_signal_agent(
                     system="baseline",
                     user_payload={
                         "competition": competition,
@@ -147,6 +169,7 @@ Example:
                     session_id="baseline_signal",
                     valid_tickers=self.ticker_universe,
                 )
+                return ledger
             else:
                 if news_data is None:
                     news_data = fetch_signal_news(self.ticker_universe).get("news") or {}
@@ -178,31 +201,16 @@ Example:
                     contents=prompt,
                     config=gen_config,
                 )
-                decisions = parse_trading_decisions(response.text, self.ticker_universe)
-
-            actionable = [d for d in decisions if d.action != "HOLD"]
-            self.log_action(
-                f"Ledger decisions: {len(actionable)} actionable / {len(decisions)} total | "
-                f"Rank {competition['leaderboard']['your_rank']}/2 "
-                f"({competition['leaderboard']['status']} by "
-                f"${competition['leaderboard']['value_gap_usd']:,.2f})",
-                data={
-                    "leaderboard": competition.get("leaderboard"),
-                    "decisions": [d.to_dict() for d in actionable],
-                },
-            )
-            for d in actionable:
-                self.log_action(
-                    f"  {d.action} {d.ticker} size={d.size_pct:.1%} "
-                    f"conf={d.confidence:.2f} — {d.rationale[:80]}",
-                    data={**d.to_dict(), "leaderboard": competition.get("leaderboard")},
-                    event_type="ledger_decision",
+                ledger = parse_signal_ledger_response(
+                    response.text, self.ticker_universe
                 )
-            return decisions
+
+            emit_signal_ledger_audit(self, ledger, competition)
+            return ledger
 
         except Exception as e:
             self.log_error(f"Ledger decision failed: {e}")
-            return []
+            return SignalLedgerResult(decisions=[], no_action_rationale="")
 
     def decisions_to_signals(
         self,
@@ -245,9 +253,9 @@ Example:
         competition: Optional[Dict] = None,
     ) -> Tuple[List[TradingDecision], Dict[str, Signal]]:
         """Full Twin Ledger step: decisions + signals."""
-        decisions = await self.make_trading_decisions(technical_data, competition)
-        signals = self.decisions_to_signals(decisions, technical_data)
-        return decisions, signals
+        ledger = await self.make_trading_decisions(technical_data, competition)
+        signals = self.decisions_to_signals(ledger.decisions, technical_data)
+        return ledger.decisions, signals
 
     async def execute(self) -> bool:
         self.log_action("Baseline Twin Ledger agent ready")
