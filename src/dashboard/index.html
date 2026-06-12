@@ -1753,6 +1753,23 @@
     .action-pill.act-short { background: rgba(185, 28, 28, 0.08); color: var(--red); border-color: rgba(185, 28, 28, 0.22); }
     .action-pill.act-sell { background: rgba(146, 97, 10, 0.1); color: var(--amber); border-color: rgba(146, 97, 10, 0.25); }
     .action-pill.act-hold { background: rgba(125, 154, 143, 0.12); color: var(--muted); border-color: var(--border); }
+    .action-pill.act-exit { background: rgba(185, 28, 28, 0.1); color: var(--red); border-color: rgba(185, 28, 28, 0.25); }
+    .action-pill.act-eod { background: rgba(146, 97, 10, 0.1); color: var(--amber); border-color: rgba(146, 97, 10, 0.25); }
+    .action-pill.act-held { background: rgba(37, 99, 235, 0.08); color: #1d4ed8; border-color: rgba(37, 99, 235, 0.22); }
+    .action-pill.act-trail { background: rgba(20, 108, 74, 0.1); color: var(--accent-deep); border-color: rgba(20, 108, 74, 0.22); }
+    .activity-kind {
+      font-size: 0.58rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--subtle);
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      background: rgba(125, 154, 143, 0.1);
+      border: 1px solid var(--border);
+    }
+    .activity-kind.risk { color: var(--accent-deep); background: rgba(20, 108, 74, 0.08); border-color: rgba(20, 108, 74, 0.15); }
     .decision-ticker {
       font-family: var(--mono);
       font-size: 0.78rem;
@@ -3070,63 +3087,166 @@
       const cls = {
         BUY: "act-buy", SHORT: "act-short", SELL: "act-sell", CLOSE: "act-sell",
         COVER: "act-buy", HOLD: "act-hold",
+        EXIT: "act-exit", EOD: "act-eod", HELD: "act-held", TRAIL: "act-trail",
       }[a] || "act-hold";
       return `<span class="action-pill ${cls}">${a}</span>`;
     }
 
-    function pickRecentDecisions(events, limit = 4) {
-      const seen = new Set();
-      const out = [];
-      for (const e of events || []) {
-        const p = e.payload || {};
+    function normalizeActivityEvent(e) {
+      const et = e.event_type;
+      const p = e.payload || {};
+
+      if (et === "ledger_decision" || et === "arena_decision") {
         const action = String(p.action || "HOLD").toUpperCase();
         const ticker = String(p.ticker || "PORTFOLIO").toUpperCase();
         const rationale = String(p.rationale || p.no_action_rationale || e.action || "").trim();
-        if (!rationale) continue;
-        const key = `${action}|${ticker}|${rationale.slice(0, 100)}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({ ...e, payload: p, _rationale: rationale });
-        if (out.length >= limit) break;
+        if (!rationale) return null;
+        const isPortfolio = ticker === "PORTFOLIO" || p.portfolio_level || p.no_action;
+        const size = p.size_pct != null && !isPortfolio ? `${(p.size_pct * 100).toFixed(1)}%` : "";
+        const conf = p.confidence != null && !isPortfolio ? `${(p.confidence * 100).toFixed(0)}% conf` : "";
+        const rank = p.competitive_note || (p.leaderboard ? `Rank ${p.leaderboard.your_rank}/2` : "");
+        return {
+          ...e,
+          _kind: "signal",
+          _action: action,
+          _ticker: isPortfolio ? "Portfolio" : ticker,
+          _rationale: rationale,
+          _meta: [size, conf, isPortfolio ? rank : ""].filter(Boolean).join(" · "),
+        };
       }
-      return out;
+
+      if (et === "risk_stop_exit") {
+        const ret = p.return_pct != null ? `${Number(p.return_pct) >= 0 ? "+" : ""}${Number(p.return_pct).toFixed(2)}%` : "";
+        return {
+          ...e,
+          _kind: "risk",
+          _action: "EXIT",
+          _ticker: String(p.ticker || "").toUpperCase(),
+          _rationale: String(p.reason || e.action || "Stop or trailing exit").trim(),
+          _meta: ret ? `${ret} at exit` : "",
+        };
+      }
+
+      if (et === "risk_eod_exit") {
+        const ret = p.return_pct != null ? `${Number(p.return_pct) >= 0 ? "+" : ""}${Number(p.return_pct).toFixed(2)}%` : "";
+        return {
+          ...e,
+          _kind: "risk",
+          _action: "EOD",
+          _ticker: String(p.ticker || "").toUpperCase(),
+          _rationale: String(p.reason || e.action || "End of day exit").trim(),
+          _meta: ret ? `${ret} at exit` : "",
+        };
+      }
+
+      if (et === "risk_held") {
+        const pred = p.predicted_close != null
+          ? `15m target $${Number(p.predicted_close).toFixed(2)}`
+          : "";
+        const reason = String(p.reason || "").trim();
+        return {
+          ...e,
+          _kind: "risk",
+          _action: "HELD",
+          _ticker: String(p.ticker || "").toUpperCase(),
+          _rationale: reason
+            ? `Exit deferred: ${reason}`
+            : "Exit deferred while prediction gate disagrees with the stop",
+          _meta: pred,
+        };
+      }
+
+      if (et === "trailing_stop_planned") {
+        const rationale = String(p.rationale || e.action || "").trim();
+        if (!rationale) return null;
+        const act = p.activation_threshold != null ? `${(p.activation_threshold * 100).toFixed(1)}% act` : "";
+        const lock = p.profit_lock_fraction != null ? `${(p.profit_lock_fraction * 100).toFixed(0)}% lock` : "";
+        const ret = p.current_return != null ? `${(p.current_return * 100).toFixed(2)}% now` : "";
+        return {
+          ...e,
+          _kind: "risk",
+          _action: "TRAIL",
+          _ticker: String(p.ticker || "").toUpperCase(),
+          _rationale: rationale,
+          _meta: [ret, act, lock].filter(Boolean).join(" · "),
+        };
+      }
+
+      return null;
     }
 
-    async function fetchRecentDecisions(system, limit = 4) {
+    function pickRecentActivity(events, limit = 5) {
+      const seen = new Set();
+      const sorted = [...(events || [])].sort((a, b) =>
+        (b.timestamp || "").localeCompare(a.timestamp || "")
+      );
+      const out = [];
+      let trailCount = 0;
+      for (const e of sorted) {
+        if (e.event_type === "trailing_stop_planned") {
+          if (trailCount >= 1) continue;
+          trailCount += 1;
+        }
+        const key = `${e.event_type}|${e._action}|${e._ticker}|${e._rationale.slice(0, 80)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(e);
+        if (out.length >= limit) break;
+      }
+      if (!out.some(e => e._kind === "risk")) {
+        for (const e of sorted) {
+          if (e._kind !== "risk") continue;
+          const key = `${e.event_type}|${e._action}|${e._ticker}|${e._rationale.slice(0, 80)}`;
+          if (out.some(x => `${x.event_type}|${x._action}|${x._ticker}|${x._rationale.slice(0, 80)}` === key)) continue;
+          if (out.length >= limit) out.pop();
+          out.push(e);
+          break;
+        }
+      }
+      return out.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || "")).slice(0, limit);
+    }
+
+    async function fetchRecentActivity(system, limit = 5) {
+      const types = [
+        "ledger_decision",
+        "risk_stop_exit",
+        "risk_eod_exit",
+        "risk_held",
+        "trailing_stop_planned",
+      ];
       try {
-        const data = await fetchJSON(
-          `/api/events?hours=168&limit=100&system=${encodeURIComponent(system)}&event_type=ledger_decision`
-        );
-        return pickRecentDecisions(data.events, limit);
+        const batches = await Promise.all(types.map(t =>
+          fetchJSON(
+            `/api/events?hours=168&limit=80&system=${encodeURIComponent(system)}&event_type=${t}`
+          ).then(d => d.events || []).catch(() => [])
+        ));
+        const normalized = batches.flat().map(normalizeActivityEvent).filter(Boolean);
+        return pickRecentActivity(normalized, limit);
       } catch (_) {
         return [];
       }
     }
 
-    function renderDecisionFeed(decisions) {
-      if (!decisions.length) {
-        return `<div class="decision-empty"><span class="holdings-empty-title">No recent decisions</span><span class="holdings-empty-sub">Overnight ledger events from the last 7 days will appear here.</span></div>`;
+    function renderActivityFeed(items) {
+      if (!items.length) {
+        return `<div class="decision-empty"><span class="holdings-empty-title">No recent activity</span><span class="holdings-empty-sub">Overnight signals and intraday risk actions from the last 7 days appear here.</span></div>`;
       }
-      return `<div class="decision-feed">${decisions.map(e => {
-        const p = e.payload || {};
-        const action = String(p.action || "HOLD").toUpperCase();
-        const ticker = String(p.ticker || "").toUpperCase();
-        const isPortfolio = ticker === "PORTFOLIO" || p.portfolio_level || p.no_action;
-        const label = isPortfolio ? "Portfolio" : ticker;
-        const size = p.size_pct != null && !isPortfolio ? `${(p.size_pct * 100).toFixed(1)}%` : "";
-        const conf = p.confidence != null && !isPortfolio ? `${(p.confidence * 100).toFixed(0)}% conf` : "";
-        const rank = p.competitive_note || (p.leaderboard ? `Rank ${p.leaderboard.your_rank}/2` : "");
-        const meta = [size, conf, isPortfolio ? rank : ""].filter(Boolean).join(" · ");
-        const traceAttr = e.trace_id ? ` class="decision-card clickable" onclick="showTrace('${e.trace_id}')"` : ` class="decision-card"`;
+      return `<div class="decision-feed">${items.map(e => {
+        const traceAttr = e.trace_id
+          ? ` class="decision-card clickable" onclick="showTrace('${e.trace_id}')"`
+          : ` class="decision-card"`;
+        const kindCls = e._kind === "risk" ? "activity-kind risk" : "activity-kind";
+        const kindLabel = e._kind === "risk" ? "Risk" : "Signal";
         return `
           <div${traceAttr} title="${escHtml(e._rationale)}">
             <div class="decision-head">
-              ${actionPill(action)}
-              <span class="decision-ticker">${escHtml(label)}</span>
+              ${actionPill(e._action)}
+              <span class="decision-ticker">${escHtml(e._ticker)}</span>
+              <span class="${kindCls}">${kindLabel}</span>
               <span class="decision-time">${fmtTimeRel(e.timestamp)}</span>
             </div>
             <p class="decision-rationale">${escHtml(e._rationale)}</p>
-            ${meta ? `<div class="decision-meta">${escHtml(meta)}</div>` : ""}
+            ${e._meta ? `<div class="decision-meta">${escHtml(e._meta)}</div>` : ""}
           </div>`;
       }).join("")}</div>`;
     }
@@ -3136,7 +3256,7 @@
         return `
           <div class="holdings-empty">
             <span class="holdings-empty-title">All cash, no open positions</span>
-            <span class="holdings-empty-sub">See recent decisions above for what each trader last did.</span>
+            <span class="holdings-empty-sub">Recent activity above covers overnight signals and intraday risk.</span>
           </div>`;
       }
       const rows = positions.map(p => `
@@ -3153,7 +3273,7 @@
         </table>`;
     }
 
-    function renderTraderPanel(system, portfolio, decisions, leader) {
+    function renderTraderPanel(system, portfolio, activity, leader) {
       const isBaseline = system === "baseline";
       const name = isBaseline ? "Baseline" : "Internal";
       const tagline = isBaseline
@@ -3175,8 +3295,8 @@
             <div class="trader-meta">${escHtml(tagline)} · Cash ${fmtUsd(portfolio.cash)} · ${portfolio.position_count || 0} positions</div>
           </div>
           <div class="trader-section">
-            <h3>Recent decisions</h3>
-            ${renderDecisionFeed(decisions)}
+            <h3>Recent activity</h3>
+            ${renderActivityFeed(activity)}
           </div>
           <div class="trader-section">
             <h3>Open positions</h3>
@@ -3185,7 +3305,7 @@
         </article>`;
     }
 
-    function renderPerformance(data, recentDecisions = {}) {
+    function renderPerformance(data, recentActivity = {}) {
       if (!data || !data.live) {
         showPerfError("Performance data unavailable. Restart the server: python main.py --serve");
         return;
@@ -3210,8 +3330,8 @@
         <div class="rank-values">#${lb.baseline_rank} Baseline · #${lb.internal_rank} Internal</div>`;
 
       document.getElementById("perf-dual").innerHTML =
-        renderTraderPanel("baseline", baseline, recentDecisions.baseline || [], leaderKey) +
-        renderTraderPanel("internal", internal, recentDecisions.internal || [], leaderKey);
+        renderTraderPanel("baseline", baseline, recentActivity.baseline || [], leaderKey) +
+        renderTraderPanel("internal", internal, recentActivity.internal || [], leaderKey);
 
       drawChart(data.history || {}, data.since_hours || 168);
       const pts = data.history_points || {};
@@ -3329,13 +3449,13 @@
       const hours = document.getElementById("perf-hours").value;
       let data = null;
       try {
-        const [perf, baselineDecisions, internalDecisions] = await Promise.all([
+        const [perf, baselineActivity, internalActivity] = await Promise.all([
           fetchJSON(`/api/performance?hours=${hours}`),
-          fetchRecentDecisions("baseline", 4),
-          fetchRecentDecisions("internal", 4),
+          fetchRecentActivity("baseline", 5),
+          fetchRecentActivity("internal", 5),
         ]);
         data = perf;
-        renderPerformance(data, { baseline: baselineDecisions, internal: internalDecisions });
+        renderPerformance(data, { baseline: baselineActivity, internal: internalActivity });
         markPerfRefreshed();
         return;
       } catch (e) {
@@ -3354,11 +3474,11 @@
           return;
         }
       }
-      const [baselineDecisions, internalDecisions] = await Promise.all([
-        fetchRecentDecisions("baseline", 4),
-        fetchRecentDecisions("internal", 4),
+      const [baselineActivity, internalActivity] = await Promise.all([
+        fetchRecentActivity("baseline", 5),
+        fetchRecentActivity("internal", 5),
       ]);
-      renderPerformance(data, { baseline: baselineDecisions, internal: internalDecisions });
+      renderPerformance(data, { baseline: baselineActivity, internal: internalActivity });
       markPerfRefreshed();
     }
 
