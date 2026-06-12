@@ -8,7 +8,7 @@ from src.adk.prompts.baseline import BASELINE_SIGNAL_INSTRUCTION
 from src.adk.prompts.internal import INTERNAL_SIGNAL_INSTRUCTION
 from src.adk.schemas import TradingDecisionsResponse
 from src.adk.mcp.toolset import optional_mcp_tools
-from src.adk.tools import baseline_data_tools, internal_data_tools
+from src.adk.tools import baseline_signal_tools, internal_signal_tools
 
 
 def _with_google_search_tools(tools: list) -> list:
@@ -19,7 +19,7 @@ def _with_google_search_tools(tools: list) -> list:
 
 
 def _baseline_signal_tools() -> list:
-    return _with_google_search_tools(baseline_data_tools() + optional_mcp_tools())
+    return _with_google_search_tools(baseline_signal_tools() + optional_mcp_tools())
 
 
 def build_baseline_signal_agent() -> LlmAgent:
@@ -40,7 +40,7 @@ def build_internal_signal_agent() -> LlmAgent:
         name="internal_signal",
         model=adk_model(),
         instruction=INTERNAL_SIGNAL_INSTRUCTION,
-        tools=_with_google_search_tools(internal_data_tools() + optional_mcp_tools()),
+        tools=_with_google_search_tools(internal_signal_tools() + optional_mcp_tools()),
         output_schema=TradingDecisionsResponse,
         mode="task",
     )

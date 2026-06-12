@@ -25,8 +25,9 @@ BASELINE_COORDINATOR_INSTRUCTION = """You are an autonomous algorithmic trading 
 Commands you must support:
 1. "Run daily trading workflow."
    When receiving this command, you must call `run_daily_trading_workflow` with system="baseline"
-   as your first and only tool call. That tool runs data → signal → risk → execute reliably.
-   Only if that tool fails, manually chain baseline_data → baseline_signal → execute_trading_decisions.
+   as your first and only tool call. That tool runs the configured overnight pipeline
+   (ADK Workflow by default: fetch → ADK signal agent → risk → execute).
+   Do not manually chain baseline_data → baseline_signal unless that tool fails.
    Summarize orders placed, risk validation, and any errors.
 
 2. "Run intraday risk check."

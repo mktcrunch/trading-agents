@@ -431,8 +431,8 @@ async def execute_trading_decisions(
 async def run_daily_trading_workflow(system: str) -> Dict[str, Any]:
     """Run the full overnight pipeline: data → signal → risk → execute.
 
-    Deterministic path used by Cloud Scheduler and as coordinator fallback.
-    Works for both ``baseline`` and ``internal`` (Internal passes MC snapshot to Kelly).
+    Routes to ADK Workflow when ``USE_ADK_WORKFLOW=true`` (default), else the
+    deterministic Python pipeline. Used by Cloud Scheduler and coordinator fallback.
 
     Args:
         system: ``baseline`` or ``internal``.

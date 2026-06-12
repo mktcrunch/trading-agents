@@ -28,10 +28,9 @@ INTERNAL_COORDINATOR_INSTRUCTION = """You are an autonomous algorithmic trading 
 Commands you must support:
 1. "Run daily trading workflow."
    When receiving this command, you must call `run_daily_trading_workflow` with system="internal"
-   as your first and only tool call. That tool fetches MC + technicals, generates signals,
-   and executes with the same MC snapshot for Kelly sizing.
-   Only if that tool fails, manually chain internal_data → internal_signal → execute_trading_decisions
-   (pass mc_predictions_json and technical_data_json unchanged from the data step).
+   as your first and only tool call. That tool runs the configured overnight pipeline
+   (ADK Workflow by default: fetch MC + technicals → ADK signal agent → risk → execute).
+   Do not manually chain internal_data → internal_signal unless that tool fails.
    Summarize orders placed, risk validation, and any errors.
 
 2. "Run intraday risk check."

@@ -55,10 +55,24 @@ async def _ensure_discovery_fresh() -> Dict[str, Any]:
 
 
 async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
-    """Run full overnight workflow without relying on coordinator LLM chaining."""
+    """Run overnight workflow — ADK Workflow when USE_ADK_WORKFLOW else deterministic pipeline."""
     if system not in ("baseline", "internal"):
         return {"success": False, "error": f"Invalid system: {system}"}
 
+    if config.USE_ADK_WORKFLOW:
+        if system == "baseline":
+            from src.adk.workflows.baseline_daily import run_baseline_daily_adk
+
+            return await run_baseline_daily_adk()
+        from src.adk.workflows.internal_daily import run_internal_daily_adk
+
+        return await run_internal_daily_adk()
+
+    return await _run_deterministic_daily_pipeline(system)
+
+
+async def _run_deterministic_daily_pipeline(system: str) -> Dict[str, Any]:
+    """Deterministic Python pipeline (legacy fallback when USE_ADK_WORKFLOW=false)."""
     try:
         get_gcs_store().hydrate_audit_log()
     except Exception as e:
