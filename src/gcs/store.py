@@ -16,6 +16,43 @@ logger = setup_logger(__name__)
 AUDIT_BLOB = "audit/audit_events.jsonl"
 
 
+def load_jsonl_events(path: Path) -> List[Dict[str, Any]]:
+    """Load audit events from a JSONL file."""
+    if not path.exists():
+        return []
+    events: List[Dict[str, Any]] = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return events
+
+
+def merge_audit_events(*event_lists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Merge audit event lists by event id (later lists win on duplicate ids).
+    Sorted ascending by timestamp for stable JSONL storage.
+    """
+    merged: Dict[str, Dict[str, Any]] = {}
+    for events in event_lists:
+        for ev in events:
+            key = str(ev.get("id") or json.dumps(ev, sort_keys=True, default=str))
+            merged[key] = ev
+    return sorted(merged.values(), key=lambda e: e.get("timestamp", ""))
+
+
+def write_jsonl_events(path: Path, events: List[Dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        for ev in events:
+            f.write(json.dumps(ev, default=str) + "\n")
+
+
 class GCSStore:
     def __init__(
         self,
@@ -109,10 +146,54 @@ class GCSStore:
         if local_ts is None or gcs_ts > local_ts:
             self.download_file(self.audit_bucket, AUDIT_BLOB, local)
 
+    def _download_remote_audit_events(self) -> List[Dict[str, Any]]:
+        """Fetch current audit JSONL from GCS without clobbering local file."""
+        if not self.audit_bucket:
+            return []
+        try:
+            blob = self._bucket(self.audit_bucket).blob(AUDIT_BLOB)
+            if not blob.exists():
+                return []
+            text = blob.download_as_text()
+        except Exception as e:
+            logger.warning(f"GCS audit download for merge failed: {e}")
+            return []
+
+        events: List[Dict[str, Any]] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return events
+
     def sync_audit_log(self) -> bool:
-        if not self.audit_bucket or not config.AUDIT_LOG_PATH.exists():
+        """
+        Upload audit JSONL, merging with the latest GCS copy first.
+
+        Baseline and Internal Agent Engines run in separate containers but share
+        one audit blob. Merge-before-upload prevents last-writer-wins data loss.
+        """
+        local_path = config.AUDIT_LOG_PATH
+        if not self.audit_bucket or not local_path.exists():
             return False
-        return self.upload_file(config.AUDIT_LOG_PATH, self.audit_bucket, AUDIT_BLOB)
+
+        local_events = load_jsonl_events(local_path)
+        remote_events = self._download_remote_audit_events()
+        merged = merge_audit_events(remote_events, local_events)
+
+        if remote_events and len(merged) > len(local_events):
+            logger.info(
+                f"Merged audit log before upload: "
+                f"local={len(local_events)} remote={len(remote_events)} "
+                f"combined={len(merged)}"
+            )
+
+        write_jsonl_events(local_path, merged)
+        return self.upload_file(local_path, self.audit_bucket, AUDIT_BLOB)
 
     def sync_all_local_data(self) -> Dict[str, bool]:
         """Upload every known local JSON artifact to GCS."""
