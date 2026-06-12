@@ -155,6 +155,19 @@ async def run_overnight_job(dry_run: bool = False):
     )
     logger.info("=" * 80)
 
+    from src.market.calendar import check_overnight_trading_session
+
+    session_ok, session_reason = check_overnight_trading_session()
+    if not session_ok:
+        logger.info(f"OVERNIGHT JOB SKIPPED: {session_reason}")
+        end_trace(
+            "overnight",
+            system="both",
+            success=True,
+            summary={"skipped": True, "skip_reason": session_reason},
+        )
+        return True
+
     if not await run_discovery(traced=False):
         logger.warning("Discovery incomplete — internal runs without fresh DataBento")
 

@@ -73,6 +73,31 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
         + (" (DRY RUN — no orders)" if dry else "")
     )
 
+    from src.market.calendar import check_overnight_trading_session
+
+    session_ok, session_reason = check_overnight_trading_session(system=system)
+    if not session_ok:
+        logger.info(f"[daily_pipeline] Skipping overnight for {system}: {session_reason}")
+        end_trace(
+            "daily",
+            system=system,
+            success=True,
+            summary={
+                "skipped": True,
+                "skip_reason": session_reason,
+                "orders_placed": 0,
+            },
+        )
+        return {
+            "success": True,
+            "skipped": True,
+            "skip_reason": session_reason,
+            "pipeline": "deterministic",
+            "system": system,
+            "orders_placed": 0,
+            "message": f"Overnight skipped: {session_reason}",
+        }
+
     if config.LEARNING_ENABLED:
         try:
             from src.learning.reflection import refresh_system_learning

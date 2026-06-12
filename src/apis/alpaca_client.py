@@ -417,6 +417,14 @@ class AlpacaClient:
             })
         return points
 
+    def get_calendar(self, filters: Any = None) -> List[Any]:
+        """Return Alpaca exchange calendar entries for the requested date range."""
+        try:
+            return self.client.get_calendar(filters)
+        except Exception as e:
+            logger.error(f"Failed to get market calendar: {e}")
+            return []
+
     def get_clock(self) -> Optional[Dict[str, Any]]:
         """Get market clock"""
         try:

@@ -39,6 +39,13 @@ class InternalSystem:
 
     async def run_daily_workflow(self):
         """Execute daily Twin Ledger trading workflow."""
+        from src.market.calendar import check_overnight_trading_session
+
+        session_ok, session_reason = check_overnight_trading_session(system="internal")
+        if not session_ok:
+            self.logger.info(f"[INTERNAL] Overnight skipped: {session_reason}")
+            return True
+
         if config.USE_ADK:
             from src.adk.workflows.daily_pipeline import run_daily_trading_pipeline
 
