@@ -25,13 +25,23 @@ def is_trading_session_on_date(
     return bool(calendar_days)
 
 
-def check_overnight_trading_session(system: str = "baseline") -> Tuple[bool, str]:
+def check_overnight_trading_session(
+    system: str = "baseline",
+    *,
+    skip_calendar: bool = False,
+) -> Tuple[bool, str]:
     """
     Whether the overnight workflow should run today.
 
     The EOD job is scheduled after the regular close. Skip when today has no
     equity session (weekend or exchange holiday per Alpaca calendar).
+
+    ``skip_calendar=True`` bypasses this gate only when the caller explicitly opts in
+    (``force`` / ``skip_calendar`` on streamQuery, or force/retry in the message).
     """
+    if skip_calendar:
+        return True, "calendar_bypassed (triggered run)"
+
     session_date = today_et()
 
     if session_date.weekday() >= 5:

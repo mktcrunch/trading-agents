@@ -115,7 +115,11 @@ async def invoke_signal_agent(ctx, system: str, payload: Dict[str, Any]) -> Sign
     return SignalLedgerResult(decisions=[], no_action_rationale="Empty signal output")
 
 
-async def workflow_daily_setup(system: str) -> Optional[Dict[str, Any]]:
+async def workflow_daily_setup(
+    system: str,
+    *,
+    skip_calendar: bool = False,
+) -> Optional[Dict[str, Any]]:
     """Hydrate audit, start trace, optional learning refresh. Returns skip dict if calendar blocks."""
     try:
         from src.gcs.store import get_gcs_store
@@ -127,7 +131,15 @@ async def workflow_daily_setup(system: str) -> Optional[Dict[str, Any]]:
     from src.audit import start_trace
 
     dry = config.is_dry_run()
-    start_trace("daily", system=system, meta={"pipeline": "adk_workflow", "dry_run": dry})
+    start_trace(
+        "daily",
+        system=system,
+        meta={
+            "pipeline": "adk_workflow",
+            "dry_run": dry,
+            "skip_calendar": skip_calendar,
+        },
+    )
     logger.info(
         f"[ADK Workflow] Starting daily workflow for {system}"
         + (" (DRY RUN — no orders)" if dry else "")
@@ -135,7 +147,10 @@ async def workflow_daily_setup(system: str) -> Optional[Dict[str, Any]]:
 
     from src.market.calendar import check_overnight_trading_session
 
-    session_ok, session_reason = check_overnight_trading_session(system=system)
+    session_ok, session_reason = check_overnight_trading_session(
+        system=system,
+        skip_calendar=skip_calendar,
+    )
     if not session_ok:
         from src.audit import end_trace
 

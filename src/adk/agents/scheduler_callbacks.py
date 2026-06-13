@@ -9,11 +9,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.genai import types
 
 from src import config
-from src.adk.tools.alpaca_tools import (
-    run_daily_trading_workflow,
-    run_intraday_risk_check,
-    run_post_open_chase,
-)
+from src.adk.tools.alpaca_tools import run_daily_trading_workflow
 from src.audit.store import load_events
 from src.logger import setup_logger
 
@@ -22,6 +18,28 @@ logger = setup_logger(__name__)
 _DAILY_PHRASES = ("run daily trading workflow", "daily trading workflow")
 _RISK_PHRASES = ("run intraday risk check", "intraday risk check", "intraday risk")
 _CHASE_PHRASES = ("run post-open chase", "post-open chase", "post open chase")
+_FORCE_PHRASES = ("force", "retry", "re-run", "rerun", "retrigger", "manual")
+
+
+def wants_force_retry(text: str) -> bool:
+    """True when the message text explicitly asks to bypass calendar gating."""
+    return any(p in text for p in _FORCE_PHRASES)
+
+
+def resolve_skip_calendar(text: str = "", **kwargs: Any) -> bool:
+    """True only when caller explicitly opts in to bypass the market-day calendar.
+
+    Accepted signals (any one is enough):
+    - stream_query input: ``force=true`` or ``skip_calendar=true``
+    - message text containing force/retry/re-run/manual
+    """
+    for key in ("force", "skip_calendar"):
+        value = kwargs.get(key)
+        if value is True:
+            return True
+        if isinstance(value, str) and value.strip().lower() in ("1", "true", "yes"):
+            return True
+    return wants_force_retry(text)
 
 
 def _user_text(callback_context: CallbackContext) -> str:
@@ -64,32 +82,9 @@ def build_scheduler_callbacks(system: str):
     """Factory for before/after agent callbacks on baseline or internal coordinator."""
 
     async def before_agent_callback(*, callback_context: CallbackContext) -> Optional[types.Content]:
-        text = _user_text(callback_context)
-
-        if _matches(text, _DAILY_PHRASES):
-            logger.info(f"[scheduler] Direct daily pipeline for {system}")
-            result = await run_daily_trading_workflow(system=system)
-            return types.Content(
-                role="model",
-                parts=[types.Part(text=_format_result(result))],
-            )
-
-        if _matches(text, _RISK_PHRASES):
-            logger.info(f"[scheduler] Direct risk check for {system}")
-            result = await run_intraday_risk_check(system=system)
-            return types.Content(
-                role="model",
-                parts=[types.Part(text=_format_result(result))],
-            )
-
-        if _matches(text, _CHASE_PHRASES):
-            logger.info(f"[scheduler] Direct post-open chase for {system}")
-            result = await run_post_open_chase(system=system)
-            return types.Content(
-                role="model",
-                parts=[types.Part(text=_format_result(result))],
-            )
-
+        # Scheduler phrases are handled in SchedulerDirectAdkApp.stream_query so the
+        # HTTP stream always yields at least one event (before_agent short-circuit
+        # produced an empty generator and crashed ASGI with StopIteration on Py 3.11).
         return None
 
     async def after_agent_callback(*, callback_context: CallbackContext) -> Optional[types.Content]:
@@ -107,7 +102,10 @@ def build_scheduler_callbacks(system: str):
             f"[scheduler] Coordinator did not complete daily workflow for {system}; "
             "running deterministic fallback pipeline"
         )
-        result = await run_daily_trading_workflow(system=system)
+        result = await run_daily_trading_workflow(
+            system=system,
+            skip_calendar=wants_force_retry(text),
+        )
         return types.Content(
             role="model",
             parts=[types.Part(text=_format_result({**result, "fallback": True}))],

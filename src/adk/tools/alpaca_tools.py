@@ -428,7 +428,10 @@ async def execute_trading_decisions(
         return {"success": False, "error": f"Execution failed: {e}"}
 
 
-async def run_daily_trading_workflow(system: str) -> Dict[str, Any]:
+async def run_daily_trading_workflow(
+    system: str,
+    skip_calendar: bool = False,
+) -> Dict[str, Any]:
     """Run the full overnight pipeline: data → signal → risk → execute.
 
     Routes to ADK Workflow when ``USE_ADK_WORKFLOW=true`` (default), else the
@@ -436,10 +439,13 @@ async def run_daily_trading_workflow(system: str) -> Dict[str, Any]:
 
     Args:
         system: ``baseline`` or ``internal``.
+        skip_calendar: When True, bypass weekend/holiday calendar gating (explicit opt-in).
+            Default False — cron and normal triggers skip non-market days. Duplicate
+            orders are prevented by risk caps and open-order dedup.
     """
     from src.adk.workflows.daily_pipeline import run_daily_trading_pipeline
 
-    return await run_daily_trading_pipeline(system)
+    return await run_daily_trading_pipeline(system, skip_calendar=skip_calendar)
 
 
 async def run_intraday_risk_check(system: str, dry_run: bool = False) -> Dict[str, Any]:

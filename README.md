@@ -131,6 +131,13 @@ Before placing overnight orders:
 - **Delta placement** — only buy the gap vs pending open orders  
 - **Exact duplicate skip** — same symbol/side/qty/price/TIF  
 - **Buying power** — skip or scale buys when cash is insufficient  
+- **Risk caps** — per-ticker and gross exposure include held + pending + proposed weights  
+
+**Re-triggering overnight runs:** by default the pipeline skips non-market days (weekends, Alpaca holidays). Pass **`skip_calendar=true`** (or **`force=true`**) to bypass — safe to re-run because dedup + risk caps prevent duplicate orders. Ways to force:
+
+- Agent Engine `streamQuery` input: `"force": true` alongside the message (see `deploy/README.md`)
+- Coordinator tool: `run_daily_trading_workflow(system="internal", skip_calendar=true)`
+- Message keyword: include `force` or `retry` in the text
 
 ---
 

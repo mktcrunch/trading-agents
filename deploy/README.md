@@ -193,6 +193,34 @@ curl -X POST -H "X-Scheduler-Secret: $SECRET" https://SERVICE_URL/jobs/overnight
 curl -X POST -H "X-Scheduler-Secret: $SECRET" https://SERVICE_URL/jobs/risk
 ```
 
+### Force overnight run (bypass market-day calendar)
+
+Cron jobs (`internal-overnight-direct`, etc.) use the default calendar gate — they skip weekends and exchange holidays. To **manually re-trigger** after a bug (safe: open-order dedup + risk caps prevent duplicates), call Agent Engine `streamQuery` with **`force: true`**:
+
+```bash
+# Load from .env
+source deploy/load_deploy_env.sh && load_deploy_env .
+
+PROJECT="${GCP_PROJECT}"
+REGION="${GCP_REGION:-us-central1}"
+INTERNAL_ID="${AGENT_ENGINE_INTERNAL_ID}"
+
+curl -s -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  "https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${REGION}/reasoningEngines/${INTERNAL_ID}:streamQuery" \
+  -d '{
+    "classMethod": "stream_query",
+    "input": {
+      "message": "Run daily trading workflow.",
+      "user_id": "manual",
+      "force": true
+    }
+  }'
+```
+
+Alternatives: set `"skip_calendar": true` instead of `"force"`, or include `force` in the message text. Without one of these, a weekend/holiday trigger returns `skipped: true` in the audit log.
+
 ## Required env vars / secrets
 
 - `MC_API_KEY_ID`, `MC_API_SECRET_KEY`

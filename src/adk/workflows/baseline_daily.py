@@ -214,9 +214,9 @@ def build_baseline_daily_workflow() -> Workflow:
     )
 
 
-async def run_baseline_daily_adk() -> Dict[str, Any]:
+async def run_baseline_daily_adk(*, skip_calendar: bool = False) -> Dict[str, Any]:
     """Run full baseline daily pipeline through ADK Workflow + Runner."""
-    skipped = await workflow_daily_setup("baseline")
+    skipped = await workflow_daily_setup("baseline", skip_calendar=skip_calendar)
     if skipped:
         return skipped
 

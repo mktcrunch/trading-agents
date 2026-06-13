@@ -21,6 +21,13 @@ def test_skip_weekend(_mock_today):
     assert "Weekend" in reason
 
 
+@patch("src.market.calendar.today_et", return_value=date(2026, 6, 13))  # Saturday
+def test_skip_calendar_bypasses_weekend(_mock_today):
+    allowed, reason = check_overnight_trading_session(skip_calendar=True)
+    assert allowed is True
+    assert "bypassed" in reason
+
+
 @patch("src.market.calendar.today_et", return_value=date(2026, 6, 12))  # Friday
 @patch("src.apis.alpaca_client.AlpacaClient")
 def test_allow_regular_friday(mock_client_cls, _mock_today):

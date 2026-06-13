@@ -54,7 +54,11 @@ async def _ensure_discovery_fresh() -> Dict[str, Any]:
         }
 
 
-async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
+async def run_daily_trading_pipeline(
+    system: str,
+    *,
+    skip_calendar: bool = False,
+) -> Dict[str, Any]:
     """Run overnight workflow — ADK Workflow when USE_ADK_WORKFLOW else deterministic pipeline."""
     if system not in ("baseline", "internal"):
         return {"success": False, "error": f"Invalid system: {system}"}
@@ -63,12 +67,12 @@ async def run_daily_trading_pipeline(system: str) -> Dict[str, Any]:
         if system == "baseline":
             from src.adk.workflows.baseline_daily import run_baseline_daily_adk
 
-            return await run_baseline_daily_adk()
+            return await run_baseline_daily_adk(skip_calendar=skip_calendar)
         from src.adk.workflows.internal_daily import run_internal_daily_adk
 
-        return await run_internal_daily_adk()
+        return await run_internal_daily_adk(skip_calendar=skip_calendar)
 
-    return await _run_deterministic_daily_pipeline(system)
+    return await _run_deterministic_daily_pipeline(system, skip_calendar=skip_calendar)
 
 
 async def _run_deterministic_daily_pipeline(system: str) -> Dict[str, Any]:
@@ -89,7 +93,10 @@ async def _run_deterministic_daily_pipeline(system: str) -> Dict[str, Any]:
 
     from src.market.calendar import check_overnight_trading_session
 
-    session_ok, session_reason = check_overnight_trading_session(system=system)
+    session_ok, session_reason = check_overnight_trading_session(
+        system=system,
+        skip_calendar=skip_calendar,
+    )
     if not session_ok:
         logger.info(f"[daily_pipeline] Skipping overnight for {system}: {session_reason}")
         end_trace(

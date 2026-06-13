@@ -242,8 +242,8 @@ def build_internal_daily_workflow() -> Workflow:
     )
 
 
-async def run_internal_daily_adk() -> Dict[str, Any]:
-    skipped = await workflow_daily_setup("internal")
+async def run_internal_daily_adk(*, skip_calendar: bool = False) -> Dict[str, Any]:
+    skipped = await workflow_daily_setup("internal", skip_calendar=skip_calendar)
     if skipped:
         return skipped
 
