@@ -36,8 +36,8 @@ def internal_data_tools() -> list[FunctionTool]:
 
 
 def internal_signal_tools() -> list[FunctionTool]:
-    """Tools for internal signal sub-agent (context fetch, no execution)."""
-    return internal_data_tools()
+    """Read-only market tools; MC/DataBento are preloaded by the ADK workflow."""
+    return _data_read_tools()
 
 
 def coordinator_execution_tools() -> list[FunctionTool]:

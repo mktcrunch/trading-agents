@@ -58,6 +58,20 @@ class BaseAgent(ABC):
                 payload=data or {},
             )
 
+    def log_risk_rejection(self, reason: str, data: Dict[str, Any] = None):
+        """Record an expected risk-limit rejection (not a system failure)."""
+        self.logger.info(f"[{self.system.upper()}] {reason}")
+        if config.AUDIT_ENABLED:
+            from src.audit import record_event
+            record_event(
+                event_type="risk_rejected",
+                action=reason,
+                system=self.system,
+                agent=self.__class__.__name__,
+                status="ok",
+                payload=data or {},
+            )
+
     def log_error(self, error: str, exception: Exception = None):
         """Log agent error"""
         self.logger.error(f"[{self.system.upper()}] {error}")

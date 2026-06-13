@@ -46,6 +46,7 @@ MC_API_CONNECT_TIMEOUT = int(os.getenv("MC_API_CONNECT_TIMEOUT", "10"))
 MC_API_READ_TIMEOUT = int(os.getenv("MC_API_READ_TIMEOUT", "120"))
 MC_API_MAX_RETRIES = int(os.getenv("MC_API_MAX_RETRIES", "3"))
 MC_API_RETRY_BACKOFF_SEC = float(os.getenv("MC_API_RETRY_BACKOFF_SEC", "2"))
+MC_API_CACHE_TTL_SEC = int(os.getenv("MC_API_CACHE_TTL_SEC", "900"))
 
 if not MC_API_KEY_ID or not MC_API_SECRET_KEY:
     raise ValueError("Missing MC_API_KEY_ID or MC_API_SECRET_KEY environment variables")

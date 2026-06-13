@@ -170,7 +170,7 @@ Dashboard: `http://localhost:8080/dashboard`
 Every action is logged to `data/audit_events.jsonl` with trace IDs linking full job sessions:
 
 - `ledger_decision`, `order_placed`, `order_skipped`, `order_cancelled_duplicate`  
-- `discovery_probe`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
+- `discovery_probe`, `risk_rejected`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
 
 API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
 
@@ -216,6 +216,7 @@ Environment variables (`.env`):
 | Variable | Purpose |
 |----------|---------|
 | `MC_API_KEY_ID`, `MC_API_SECRET_KEY` | MarketCrunch API |
+| `MC_API_CACHE_TTL_SEC` | In-process MC `/analyze` cache TTL in seconds (default `900`; `0` disables) |
 | `ALPACA_API_KEY_BASELINE`, `ALPACA_SECRET_KEY_BASELINE` | Baseline paper account |
 | `ALPACA_API_KEY_INTERNAL`, `ALPACA_SECRET_KEY_INTERNAL` | Internal paper account |
 | `GEMINI_API_KEY` | Optional — only if not using Vertex (`GOOGLE_GENAI_USE_VERTEXAI=false`) |

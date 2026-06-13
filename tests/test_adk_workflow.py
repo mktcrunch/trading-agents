@@ -28,12 +28,15 @@ def test_signal_tools_exclude_execution():
     assert signal_names == data_names
 
 
-def test_internal_signal_tools_include_proprietary():
+def test_internal_signal_tools_exclude_proprietary_fetch():
     internal_names = {t.name for t in internal_signal_tools()}
+    data_names = {t.name for t in internal_data_tools()}
     baseline_names = {t.name for t in baseline_signal_tools()}
-    assert "get_marketcrunch_predictions" in internal_names
-    assert "get_databento_features" in internal_names
-    assert "get_marketcrunch_predictions" not in baseline_names
+    assert internal_names == baseline_names
+    assert "get_marketcrunch_predictions" in data_names
+    assert "get_databento_features" in data_names
+    assert "get_marketcrunch_predictions" not in internal_names
+    assert "get_databento_features" not in internal_names
 
 
 def test_parse_adk_signal_output_from_dict():

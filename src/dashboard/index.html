@@ -306,6 +306,7 @@
     }
     .badge-ok { background: rgba(21, 128, 61, 0.1); color: var(--green); border: 1px solid rgba(21, 128, 61, 0.28); }
     .badge-error { background: rgba(185, 28, 28, 0.08); color: var(--red); border: 1px solid rgba(185, 28, 28, 0.25); }
+    .badge-info { background: rgba(146, 96, 10, 0.08); color: #92600a; border: 1px solid rgba(146, 96, 10, 0.22); }
     .badge-type { background: rgba(20, 108, 74, 0.08); color: var(--accent); border: 1px solid rgba(20, 108, 74, 0.2); }
     .badge-baseline { background: rgba(13, 92, 72, 0.08); color: var(--baseline); border: 1px solid rgba(13, 92, 72, 0.25); }
     .badge-internal { background: rgba(47, 158, 114, 0.1); color: var(--internal); border: 1px solid rgba(47, 158, 114, 0.28); }
@@ -2967,7 +2968,11 @@
       document.getElementById("header-freshness").hidden = !onPerf;
       if (onPerf) updatePerfFreshness();
     }
-    const eventTypeLabel = (type) => (type === "mc_context_loaded" ? "signal_context_loaded" : type);
+    const eventTypeLabel = (type) => {
+      if (type === "mc_context_loaded") return "signal_context_loaded";
+      if (type === "risk_rejected") return "risk rejected";
+      return type;
+    };
     const fmtUsd = (n) => n == null ? "n/a" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     const fmtPct = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
     const pctClass = (n) => Number(n) >= 0 ? "pos" : "neg";
@@ -2996,7 +3001,10 @@
       el.classList.remove("visible");
     }
 
-    function badge(status) {
+    function badge(status, eventType = "") {
+      if (eventType === "risk_rejected") {
+        return '<span class="badge badge-info">blocked</span>';
+      }
       const cls = status === "ok" ? "badge-ok" : "badge-error";
       return `<span class="badge ${cls}">${status || "ok"}</span>`;
     }
@@ -3112,6 +3120,20 @@
           _ticker: isPortfolio ? "Portfolio" : ticker,
           _rationale: rationale,
           _meta: [size, conf, isPortfolio ? rank : ""].filter(Boolean).join(" · "),
+        };
+      }
+
+      if (et === "risk_rejected") {
+        const rationale = String(e.action || "").trim();
+        if (!rationale) return null;
+        const tickerMatch = rationale.match(/^([A-Z][A-Z0-9.-]*):/);
+        return {
+          ...e,
+          _kind: "risk",
+          _action: "BLOCKED",
+          _ticker: tickerMatch ? tickerMatch[1] : "",
+          _rationale: rationale,
+          _meta: "",
         };
       }
 
@@ -3787,7 +3809,7 @@
           <td><span class="badge badge-type">${eventTypeLabel(e.event_type)}</span></td>
           <td>${e.agent || "n/a"}</td>
           <td>${(e.action||"").slice(0, 100)}</td>
-          <td>${badge(e.status)}</td>
+          <td>${badge(e.status, e.event_type)}</td>
         </tr>`;
       }).join("");
       await loadLearning();
@@ -3874,7 +3896,7 @@
         const fields = traceDetailFields(e.event_type, payload);
         return `
         <div style="margin-bottom:0.75rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem">
-          <div><strong>${escHtml(eventTypeLabel(e.event_type))}</strong> · ${escHtml(e.agent || "")} · ${badge(e.status)}</div>
+          <div><strong>${escHtml(eventTypeLabel(e.event_type))}</strong> · ${escHtml(e.agent || "")} · ${badge(e.status, e.event_type)}</div>
           <div class="meta">${fmtTime(e.timestamp)}${e.job_type ? ` · job: ${escHtml(e.job_type)}` : ""}</div>
           <div class="trace-action">${escHtml(e.action)}</div>
           ${fields}

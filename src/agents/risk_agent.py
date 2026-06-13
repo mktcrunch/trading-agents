@@ -213,7 +213,7 @@ class RiskAgent(BaseAgent):
 
             if side == "long":
                 if running_short.get(ticker, 0.0) > 0:
-                    self.log_error(
+                    self.log_risk_rejection(
                         f"{ticker}: BUY rejected — existing short exposure "
                         f"{running_short[ticker]:.2%}"
                     )
@@ -221,7 +221,7 @@ class RiskAgent(BaseAgent):
                     continue
                 combined = running_long.get(ticker, 0.0) + weight
                 if combined > self.max_position_weight + 1e-9:
-                    self.log_error(
+                    self.log_risk_rejection(
                         f"{ticker}: long exposure {combined:.2%} would exceed max "
                         f"{self.max_position_weight:.2%} "
                         f"(held+pending={running_long.get(ticker, 0.0):.2%}, "
@@ -231,7 +231,7 @@ class RiskAgent(BaseAgent):
                     continue
             else:
                 if running_long.get(ticker, 0.0) > 0:
-                    self.log_error(
+                    self.log_risk_rejection(
                         f"{ticker}: SHORT rejected — existing long exposure "
                         f"{running_long[ticker]:.2%}"
                     )
@@ -239,7 +239,7 @@ class RiskAgent(BaseAgent):
                     continue
                 combined = running_short.get(ticker, 0.0) + weight
                 if combined > self.max_position_weight + 1e-9:
-                    self.log_error(
+                    self.log_risk_rejection(
                         f"{ticker}: short exposure {combined:.2%} would exceed max "
                         f"{self.max_position_weight:.2%} "
                         f"(held+pending={running_short.get(ticker, 0.0):.2%}, "
@@ -250,7 +250,7 @@ class RiskAgent(BaseAgent):
 
             new_ticker = ticker not in accepted_tickers
             if new_ticker and len(accepted_tickers) >= self.max_positions:
-                self.log_error(
+                self.log_risk_rejection(
                     f"{ticker}: rejected — would exceed max positions "
                     f"({self.max_positions})"
                 )
@@ -259,7 +259,7 @@ class RiskAgent(BaseAgent):
 
             projected_gross = running_gross + weight
             if projected_gross > self.max_total_exposure + 1e-9:
-                self.log_error(
+                self.log_risk_rejection(
                     f"{ticker}: rejected — gross exposure would be "
                     f"{projected_gross:.2%} > {self.max_total_exposure:.2%}"
                 )

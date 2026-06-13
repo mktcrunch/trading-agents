@@ -4,13 +4,45 @@ Fetches predictions and technical analysis
 """
 import time
 import requests
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Tuple
+
 from src import config
 from src.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 _RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+_mc_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+
+
+def clear_mc_cache() -> None:
+    """Clear in-process MC response cache (mainly for tests)."""
+    _mc_cache.clear()
+
+
+def _mc_cache_key(path: str, ticker: str) -> str:
+    return f"{path}:{ticker.upper()}"
+
+
+def _mc_cache_get(key: str) -> Optional[Dict[str, Any]]:
+    ttl = config.MC_API_CACHE_TTL_SEC
+    if ttl <= 0:
+        return None
+    entry = _mc_cache.get(key)
+    if not entry:
+        return None
+    expires_at, data = entry
+    if time.time() >= expires_at:
+        _mc_cache.pop(key, None)
+        return None
+    return data
+
+
+def _mc_cache_set(key: str, data: Dict[str, Any]) -> None:
+    ttl = config.MC_API_CACHE_TTL_SEC
+    if ttl <= 0 or not data:
+        return
+    _mc_cache[key] = (time.time() + ttl, data)
 
 
 def request_with_retry(
@@ -94,6 +126,12 @@ class MarketCrunchClient:
         }
 
     def _get_json(self, path: str, ticker: str, label: str) -> Optional[Dict[str, Any]]:
+        cache_key = _mc_cache_key(path, ticker)
+        cached = _mc_cache_get(cache_key)
+        if cached is not None:
+            logger.info(f"✓ MC cache hit for {label} {ticker}")
+            return cached
+
         url = f"{self.api_url}{path}"
         params = {"ticker": ticker.upper()}
         response = request_with_retry(
@@ -106,7 +144,9 @@ class MarketCrunchClient:
         )
         if response is None:
             return None
-        return response.json()
+        data = response.json()
+        _mc_cache_set(cache_key, data)
+        return data
 
     def get_ai_estimates(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
