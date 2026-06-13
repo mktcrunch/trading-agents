@@ -7,7 +7,11 @@ from typing import Any, Dict, List, Optional
 from src import config
 from src.adk.schemas import TradingDecisionsResponse
 from google.adk.workflow.utils._workflow_graph_utils import build_node
-from src.agents.ledger_utils import SignalLedgerResult
+from src.agents.ledger_utils import (
+    SIGNAL_JSON_PARSE_ATTEMPTS,
+    SignalLedgerResult,
+    is_malformed_json_error,
+)
 from src.agents.signal_context import fetch_signal_news
 from src.logger import setup_logger
 from src.models.trading_decision import TradingDecision
@@ -83,8 +87,32 @@ async def invoke_signal_agent(ctx, system: str, payload: Dict[str, Any]) -> Sign
     }
     wrapped = build_node(agent)
     logger.info(f"[ADK Workflow] Invoking {agent.name} via ctx.run_node")
-    output = await ctx.run_node(wrapped, node_input=brief)
-    return parse_adk_signal_output(output)
+    last_err: Exception | None = None
+    for attempt in range(1, SIGNAL_JSON_PARSE_ATTEMPTS + 1):
+        try:
+            output = await ctx.run_node(wrapped, node_input=brief)
+            return parse_adk_signal_output(output)
+        except json.JSONDecodeError as exc:
+            last_err = exc
+            if attempt < SIGNAL_JSON_PARSE_ATTEMPTS:
+                logger.warning(
+                    f"[ADK Workflow] Signal JSON parse failed for {system} "
+                    f"(attempt {attempt}/{SIGNAL_JSON_PARSE_ATTEMPTS}), retrying: {exc}"
+                )
+                continue
+            raise
+        except Exception as exc:
+            if is_malformed_json_error(exc) and attempt < SIGNAL_JSON_PARSE_ATTEMPTS:
+                last_err = exc
+                logger.warning(
+                    f"[ADK Workflow] Signal parse failed for {system} "
+                    f"(attempt {attempt}/{SIGNAL_JSON_PARSE_ATTEMPTS}), retrying: {exc}"
+                )
+                continue
+            raise
+    if last_err:
+        raise last_err
+    return SignalLedgerResult(decisions=[], no_action_rationale="Empty signal output")
 
 
 async def workflow_daily_setup(system: str) -> Optional[Dict[str, Any]]:

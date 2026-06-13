@@ -11,6 +11,7 @@ from src.apis.gemini_client import get_genai_client
 from src.apis.grounding import google_search_grounding_config
 from src.agents.ledger_utils import (
     GEMINI_FLASH_MODEL,
+    SIGNAL_JSON_PARSE_ATTEMPTS,
     SignalLedgerResult,
     emit_signal_ledger_audit,
     mc_confidence_score,
@@ -111,7 +112,8 @@ class InternalSignalAgent(BaseAgent):
 
         return f"""You are an autonomous trading agent in the Twin Ledger — a live head-to-head paper trading competition.
 
-Your goal is to maximize final rank and BEAT the competing Baseline Trader.
+Your goal is to maximize final rank and BEAT the competing Baseline Trader while delivering
+strong risk-adjusted returns (high Sharpe, low beta vs. broad market).
 You have MarketCrunch predictions, Kelly Criterion sizing guidance, technical indicators,
 and optional DataBento enrichment — use these as your edge.
 
@@ -121,14 +123,23 @@ You are shown:
    grounding for macro/sector drivers when it would improve ETF decisions).
 3. MarketCrunch predictions and Kelly-suggested weights for each ticker (your incremental edge).
 4. Optional DataBento discovered features when available.
-5. The leaderboard: Baseline Trader's account value, positions, and P&L.
+5. The leaderboard: Baseline Trader's account value, filled positions, and P&L.
+6. competition.leaderboard.information_boundary — what you can and cannot see about the competitor.
+
+Portfolio discipline (rank-aware, not cash-hoarding):
+- Primary objective: risk-adjusted alpha — deploy into high-conviction MC-backed ideas with
+  favorable reward/risk and Kelly-aligned sizing, not idle cash by default.
+- Prefer low-beta, diversified exposures that improve Sharpe; size using Kelly guidance
+  (conservative fraction: {self.kelly_fraction}).
+- When ahead: protect the lead with quality risk-adjusted trades — do NOT sit in 100% cash
+  merely to preserve rank unless no setup clears your Sharpe/confidence hurdle.
+- When behind: scale thoughtfully into prediction edge; avoid low-confidence moonshots.
+- Idle cash is a drag unless MC/technical filters offer no name with acceptable Sharpe.
+- Respect competition.information_boundary: competitor may place overnight orders you cannot see.
 
 Use this information to decide whether to:
-- preserve capital,
-- take asymmetric opportunities backed by high-confidence MC signals,
-- reduce risk when ahead on the leaderboard,
-- increase risk intelligently when behind,
-- size positions using Kelly guidance (conservative fraction: {self.kelly_fraction}),
+- take asymmetric, risk-adjusted opportunities backed by high-confidence MC signals,
+- resize or hedge existing book for lower beta,
 - avoid unnecessary churn and fees,
 - avoid liquidation or catastrophic drawdown.
 
@@ -201,7 +212,7 @@ Example (trades):
 Example (no trades):
 {{
   "decisions": [],
-  "no_action_rationale": "Rank 1 with full cash; most MC targets are negative and learning memory flags USO/SLV churn. Preserving lead until High-confidence positive setups align with Kelly weights."
+  "no_action_rationale": "No ticker meets MC confidence + Kelly Sharpe hurdle; learning memory flags USO/SLV churn. Flat book is risk-adjusted tonight — competitor overnight intent is unknown per information_boundary."
 }}"""
 
     async def make_trading_decisions(
@@ -264,14 +275,29 @@ Example (no trades):
                     if grounding_on
                     else None
                 )
-                response = self.client.models.generate_content(
-                    model=GEMINI_FLASH_MODEL,
-                    contents=prompt,
-                    config=gen_config,
-                )
-                ledger = parse_signal_ledger_response(
-                    response.text, self.ticker_universe
-                )
+                ledger = None
+                for attempt in range(1, SIGNAL_JSON_PARSE_ATTEMPTS + 1):
+                    try:
+                        response = self.client.models.generate_content(
+                            model=GEMINI_FLASH_MODEL,
+                            contents=prompt,
+                            config=gen_config,
+                        )
+                        ledger = parse_signal_ledger_response(
+                            response.text, self.ticker_universe
+                        )
+                        break
+                    except json.JSONDecodeError as exc:
+                        if attempt < SIGNAL_JSON_PARSE_ATTEMPTS:
+                            self.log_action(
+                                f"Ledger JSON parse failed (attempt {attempt}/"
+                                f"{SIGNAL_JSON_PARSE_ATTEMPTS}), retrying Gemini",
+                                data={"error": str(exc)},
+                            )
+                            continue
+                        raise
+                if ledger is None:
+                    raise RuntimeError("Signal ledger generation produced no result")
 
             emit_signal_ledger_audit(self, ledger, competition)
             return ledger

@@ -13,6 +13,7 @@ except ImportError:
     DATABENTO_AVAILABLE = False
 
 from src import config
+from src.discovery.catalog import probe_lookback_days
 from src.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -71,7 +72,7 @@ class DataBentoClient:
 
         dataset = dataset or self.dataset
         schema = schema or self.schema
-        lookback_days = lookback_days or config.DISCOVERY_CONFIG.get("sample_days", 90)
+        lookback_days = lookback_days or probe_lookback_days(schema or DEFAULT_SCHEMA)
         start, end = self._date_range(lookback_days)
 
         try:

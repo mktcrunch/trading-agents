@@ -14,11 +14,13 @@ from src.discovery.formula_engine import (
     validate_feature_spec,
 )
 
-OHLCV_SCHEMAS = ("ohlcv-1d", "ohlcv-1h", "ohlcv-1m", "ohlcv-1s")
+OHLCV_SCHEMAS = ("ohlcv-1d", "ohlcv-1h")
 
 
 def supports_probe_schema(schema: str) -> bool:
-    return schema.startswith("ohlcv")
+    from src.discovery.catalog import is_probeable_schema
+
+    return is_probeable_schema(schema)
 
 
 def normalize_bars(df: pd.DataFrame, schema: str) -> pd.DataFrame:

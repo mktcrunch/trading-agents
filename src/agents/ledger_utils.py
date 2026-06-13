@@ -1,5 +1,6 @@
 """Shared helpers for Twin Ledger competing agents."""
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, TYPE_CHECKING
@@ -13,6 +14,17 @@ if TYPE_CHECKING:
 MC_CONFIDENCE_MAP = {"High": 0.75, "Medium": 0.6, "Low": 0.4}
 GEMINI_FLASH_MODEL = config.GEMINI_FLASH_MODEL
 PORTFOLIO_TICKER = "PORTFOLIO"
+SIGNAL_JSON_PARSE_ATTEMPTS = max(
+    1, int(os.getenv("SIGNAL_JSON_PARSE_ATTEMPTS", "3"))
+)
+
+
+def is_malformed_json_error(exc: BaseException) -> bool:
+    """True when Gemini returned text that cannot be parsed as signal JSON."""
+    if isinstance(exc, json.JSONDecodeError):
+        return True
+    msg = str(exc).lower()
+    return "expecting value" in msg or "jsondecodeerror" in msg
 
 
 @dataclass

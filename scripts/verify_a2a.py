@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
-IDS_FILE = ROOT / "deploy" / "agent_engine_ids.env"
+IDS_FILE = ROOT / ".env"
 REQUIREMENTS_FILES = [
     ROOT / "deploy" / "agent_engine_requirements.txt",
     ROOT / "agents" / "twin_ledger_baseline" / "requirements.txt",
@@ -36,15 +36,12 @@ DEFAULT_REGION = "us-central1"
 
 
 def _load_ids() -> Dict[str, str]:
+    load_dotenv(ROOT / ".env")
     out: Dict[str, str] = {}
-    if not IDS_FILE.exists():
-        return out
-    for line in IDS_FILE.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, val = line.split("=", 1)
-        out[key.strip()] = val.strip()
+    for key in ("AGENT_ENGINE_BASELINE_ID", "AGENT_ENGINE_INTERNAL_ID"):
+        val = os.getenv(key, "").strip()
+        if val:
+            out[key] = val
     return out
 
 
@@ -187,7 +184,7 @@ def run_verification(project: str, region: str) -> Dict[str, Any]:
     ):
         engine_id = ids.get(env_key, "")
         if not engine_id:
-            report["engines"][key] = {"ok": False, "error": f"Missing {env_key} in {IDS_FILE}"}
+            report["engines"][key] = {"ok": False, "error": f"Missing {env_key} in .env"}
             continue
         if token:
             report["engines"][key] = {

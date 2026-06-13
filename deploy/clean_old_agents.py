@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Clean up old, unused Vertex AI Reasoning Engines (Agent Engines).
-Keeps only the active ones specified in deploy/agent_engine_ids.env.
+Keeps only the active ones specified in .env (AGENT_ENGINE_*_ID).
 """
 import os
 import sys
@@ -29,18 +29,14 @@ def clean_agents(dry_run=True):
     print(f"CLEANING OLD REASONING ENGINES (Project: {project}, Region: {location})")
     print("=" * 80)
     
-    # 1. Load active IDs
+    # 1. Load active IDs from .env
     active_ids = set()
-    ids_file = Path("deploy/agent_engine_ids.env")
-    if ids_file.exists():
-        with open(ids_file, "r") as f:
-            for line in f:
-                if "=" in line:
-                    key, val = line.strip().split("=", 1)
-                    if "ID" in key and "_RESOURCE" not in key:
-                        active_ids.add(val)
-                        
-    print(f"Active IDs to KEEP (from deploy/agent_engine_ids.env): {list(active_ids)}")
+    for key in ("AGENT_ENGINE_BASELINE_ID", "AGENT_ENGINE_INTERNAL_ID"):
+        val = os.getenv(key, "").strip()
+        if val:
+            active_ids.add(val)
+
+    print(f"Active IDs to KEEP (from .env): {list(active_ids)}")
     
     # 2. List all Reasoning Engines
     print("\nFetching deployed Reasoning Engines from Google Cloud...")

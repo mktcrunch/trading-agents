@@ -254,6 +254,14 @@ DISCOVERY_CONFIG = {
     "gate_2_t_stat_threshold": 1.25,
     "gate_3_incremental_alpha_threshold": 0.01,
     "sample_days": 90,
+    # Per-schema probe windows (intraday schemas aggregate to daily before evaluation)
+    "schema_sample_days": {
+        "ohlcv-1d": 90,
+        "ohlcv-1h": 45,
+        "ohlcv-15m": 20,
+    },
+    "intraday_sample_days_default": 20,
+    "min_probe_bar_minutes": 15,
     "max_age_hours": 24,
     "end_lag_days": 3,
     # Agentic discovery: daily catalog scan + LLM probe planner

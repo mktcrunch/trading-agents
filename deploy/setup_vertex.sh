@@ -18,11 +18,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-if [[ -z "${GCP_PROJECT:-}" ]]; then
-  echo "ERROR: Set GCP_PROJECT to your GCP project ID."
-  echo "  gcloud projects list --format='table(projectId,name)'"
-  exit 1
-fi
+# shellcheck disable=SC1091
+source "${ROOT}/deploy/load_deploy_env.sh"
+load_deploy_env "${ROOT}"
 
 case "${GCP_PROJECT}" in
   MKTCrunch-MVP|mktcrunch-mvp|MKCRUNCH-MVP)
@@ -102,19 +100,20 @@ if ! command -v adk &>/dev/null; then
 fi
 
 echo "==> Checking vertexai SDK (required for Agent Engine deploy)"
-if ! python -c "import vertexai" 2>/dev/null; then
+# Full `import vertexai` can hang on some machines (heavy google-cloud-aiplatform
+# eager imports). Presence check is enough — adk deploy validates at runtime.
+if python - <<'PY'
+import importlib.util
+import sys
+sys.exit(0 if importlib.util.find_spec("vertexai") else 1)
+PY
+then
+  echo "    vertexai package found"
+else
   echo "Installing google-cloud-aiplatform[agent_engines]..."
   pip install "google-cloud-aiplatform[agent_engines]>=1.88.0"
+  echo "    vertexai installed"
 fi
-python -c "import vertexai; print('    vertexai OK')"
-
-IDS_FILE="deploy/agent_engine_ids.env"
-if [[ -f "${IDS_FILE}" ]]; then
-  # shellcheck disable=SC1090
-  source "${IDS_FILE}"
-  echo "==> Loaded existing engine IDs from ${IDS_FILE} (will update in place if set)"
-fi
-: > "${IDS_FILE}"
 
 deploy_agent() {
   local agent_path="$1"
@@ -169,9 +168,13 @@ deploy_agent() {
   RESOURCE=$(grep -oE 'projects/[^ ]+/locations/[^ ]+/reasoningEngines/[0-9]+' "${log_file}" | tail -1 || true)
   if [[ -n "${RESOURCE}" ]]; then
     ENGINE_ID="${RESOURCE##*/}"
-    echo "${var_name}=${ENGINE_ID}" >> "${IDS_FILE}"
-    echo "${var_name}_RESOURCE=${RESOURCE}" >> "${IDS_FILE}"
-    echo "    ✓ Saved ${var_name}=${ENGINE_ID}"
+    EXPECTED_ID="${!var_name}"
+    if [[ "${ENGINE_ID}" != "${EXPECTED_ID}" ]]; then
+      echo "ERROR: Deployed ${var_name}=${ENGINE_ID} but .env has ${EXPECTED_ID}"
+      echo "    Update .env only if you intentionally created a new engine."
+      exit 1
+    fi
+    echo "    ✓ ${var_name}=${ENGINE_ID} (matches .env)"
   else
     echo "WARNING: Could not parse engine ID from log — check console manually"
   fi
@@ -181,8 +184,10 @@ deploy_agent "agents/twin_ledger_baseline" "Twin Ledger Baseline" "AGENT_ENGINE_
 deploy_agent "agents/twin_ledger_internal" "Twin Ledger Internal" "AGENT_ENGINE_INTERNAL_ID"
 
 echo ""
-echo "==> Agent Engine IDs written to ${IDS_FILE}"
-cat "${IDS_FILE}"
+echo "==> Agent Engine IDs (from .env — update scheduler if IDs changed)"
+echo "AGENT_ENGINE_BASELINE_ID=${AGENT_ENGINE_BASELINE_ID}"
+echo "AGENT_ENGINE_INTERNAL_ID=${AGENT_ENGINE_INTERNAL_ID}"
+echo "    Run: ./deploy/setup_scheduler.sh"
 
 if [[ "${DEPLOY_CLOUD_RUN}" == "true" ]]; then
   echo ""

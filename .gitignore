@@ -27,7 +27,8 @@ wheels/
 *.egg
 
 # Virtual environments
-venv/
+venv
+venv.nosync/
 ENV/
 env/
 .venv

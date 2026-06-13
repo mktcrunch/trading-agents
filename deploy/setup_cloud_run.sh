@@ -14,7 +14,12 @@
 
 set -euo pipefail
 
-PROJECT="${GCP_PROJECT:?Set GCP_PROJECT}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+source "${ROOT}/deploy/load_deploy_env.sh"
+load_deploy_env "${ROOT}"
+
+PROJECT="${GCP_PROJECT}"
 REGION="${GCP_REGION:-us-central1}"
 SERVICE="${SERVICE_NAME:-trading-agents}"
 IMAGE="gcr.io/${PROJECT}/${SERVICE}:latest"
@@ -25,11 +30,6 @@ gcloud builds submit --tag "${IMAGE}" .
 
 VERTEX_MODE="${VERTEX_MODE:-false}"
 VERTEX_ENV="GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=${PROJECT},GCP_REGION=${REGION},GOOGLE_CLOUD_LOCATION=global,GEMINI_VERTEX_LOCATION=global,GEMINI_FLASH_MODEL=gemini-3.5-flash,USE_ADK=true,USE_ADK_WORKFLOW=true"
-IDS_FILE="deploy/agent_engine_ids.env"
-if [[ -f "${IDS_FILE}" ]]; then
-  # shellcheck disable=SC1090
-  source "${IDS_FILE}"
-fi
 CHAT_ENV="DASHBOARD_CHAT_ENABLED=true,DASHBOARD_CHAT_READ_ONLY=true"
 if [[ -n "${AGENT_ENGINE_BASELINE_ID:-}" && -n "${AGENT_ENGINE_INTERNAL_ID:-}" ]]; then
   CHAT_ENV="${CHAT_ENV},AGENT_ENGINE_BASELINE_ID=${AGENT_ENGINE_BASELINE_ID},AGENT_ENGINE_INTERNAL_ID=${AGENT_ENGINE_INTERNAL_ID},CHAT_BACKEND=vertex"

@@ -12,10 +12,12 @@ cd "${ROOT}"
 AGENTS=(twin_ledger_baseline twin_ledger_internal)
 
 echo "==> Syncing src/ into agent folders for Agent Engine"
+# Incremental rsync (no rm -rf): only changed files are touched, which keeps
+# iCloud/file-sync churn near zero when the repo lives in a synced folder.
 for name in "${AGENTS[@]}"; do
   dest="agents/${name}/src"
-  rm -rf "${dest}"
-  rsync -a --exclude '__pycache__' --exclude '*.pyc' src/ "${dest}/"
+  mkdir -p "${dest}"
+  rsync -a --delete --exclude '__pycache__' --exclude '*.pyc' src/ "${dest}/"
   echo "    ${dest}/"
 done
 

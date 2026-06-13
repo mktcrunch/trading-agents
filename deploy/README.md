@@ -25,25 +25,24 @@ Env: `USE_ADK`, `USE_ADK_WORKFLOW`, `USE_ADK_MCP`, `GOOGLE_GENAI_USE_VERTEXAI`
 
 Competition stack: **Gemini on Vertex** + **ADK on Agent Engine** + **Cloud Run** for scheduler/dashboard.
 
+This deploys:
+- `twin_ledger_baseline` → Vertex AI Agent Engine
+- `twin_ledger_internal` → Vertex AI Agent Engine
+
+**Engine IDs:** set `AGENT_ENGINE_BASELINE_ID` and `AGENT_ENGINE_INTERNAL_ID` in `.env` before deploy. All deploy scripts read `.env` only and pass `--agent_engine_id` so updates happen in place (no new shells). After deploy, run `./deploy/setup_scheduler.sh` if IDs changed.
+
 ### One-time setup
 
 ```bash
 gcloud auth login
 gcloud auth application-default login
 
-export GCP_PROJECT=your-gcp-project-id
-export GCP_REGION=us-central1
-
-chmod +x deploy/setup_vertex.sh deploy/sync_agent_src.sh
+# In .env: GCP_PROJECT, AGENT_ENGINE_BASELINE_ID, AGENT_ENGINE_INTERNAL_ID
+chmod +x deploy/setup_vertex.sh deploy/sync_agent_src.sh deploy/setup_scheduler.sh
 ./deploy/setup_vertex.sh              # APIs + IAM + deploy both agents to Agent Engine
+./deploy/setup_scheduler.sh           # point Cloud Scheduler at .env engine IDs
 ./deploy/setup_vertex.sh --cloud-run  # also redeploy Cloud Run with Vertex (no API key)
 ```
-
-This deploys:
-- `twin_ledger_baseline` → Vertex AI Agent Engine
-- `twin_ledger_internal` → Vertex AI Agent Engine
-
-IDs are saved to `deploy/agent_engine_ids.env` (gitignored).
 
 ### Local Vertex (ADC)
 

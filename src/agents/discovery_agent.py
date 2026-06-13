@@ -14,7 +14,7 @@ from src.discovery.approved_sources import (
     merge_probe_results,
     save_approved_sources,
 )
-from src.discovery.catalog import scan_catalog
+from src.discovery.catalog import probe_lookback_days, scan_catalog
 from src.discovery.evaluator import evaluate_all_features
 from src.discovery.feature_planner import FeaturePlanner
 from src.discovery.features import (
@@ -73,11 +73,12 @@ class DiscoveryAgent(BaseAgent):
                 "rationale": target.rationale,
             }
 
+        lookback_days = probe_lookback_days(target.schema)
         bars = client.fetch_range(
             symbols=self.universe,
             dataset=target.dataset,
             schema=target.schema,
-            lookback_days=self.cfg.get("sample_days", 90),
+            lookback_days=lookback_days,
         )
         if bars is None or bars.empty:
             return {
@@ -227,8 +228,10 @@ class DiscoveryAgent(BaseAgent):
         probe_summaries = []
 
         for target in targets:
+            lookback_days = probe_lookback_days(target.schema)
             self.log_action(
-                f"Probing {target.dataset}/{target.schema} ({target.action})"
+                f"Probing {target.dataset}/{target.schema} "
+                f"({target.action}, {lookback_days}d lookback)"
             )
             result = await self._probe_target(client, target, registry=registry)
             probe_summaries.append({

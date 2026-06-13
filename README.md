@@ -108,7 +108,7 @@ MarketCrunch’s production ensemble is trained at scale — **50M+ parameters**
 
 Runs daily (or when stale >24h):
 
-1. Scan DataBento catalog for equity OHLCV datasets  
+1. Scan DataBento catalog for equity OHLCV datasets (bar period under 15m excluded; lookback: 90d daily, 45d hourly)  
 2. LLM planner picks probe targets; LLM proposes feature formulas per schema  
 3. Three-gate evaluation (MI, IC+t-stat, incremental alpha)  
 4. Merge approved sources into `data/approved_datasources.json`  
