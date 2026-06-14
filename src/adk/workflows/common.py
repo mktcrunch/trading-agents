@@ -11,6 +11,7 @@ from src.agents.ledger_utils import (
     SIGNAL_JSON_PARSE_ATTEMPTS,
     SignalLedgerResult,
     is_malformed_json_error,
+    record_signal_gemini_query,
 )
 from src.agents.signal_context import fetch_signal_news
 from src.logger import setup_logger
@@ -78,13 +79,19 @@ async def invoke_signal_agent(ctx, system: str, payload: Dict[str, Any]) -> Sign
     else:
         raise ValueError(f"Invalid system: {system}")
 
-    brief = {
-        "request": (
-            "Generate overnight Twin Ledger decisions from the JSON context below. "
-            "Prefer the provided data; only call tools if required fields are missing.\n\n"
-            + json.dumps(payload, default=str)
-        )
-    }
+    query_text = (
+        "Generate overnight Twin Ledger decisions from the JSON context below. "
+        "Prefer the provided data; only call tools if required fields are missing.\n\n"
+        + json.dumps(payload, default=str)
+    )
+    brief = {"request": query_text}
+    record_signal_gemini_query(
+        system=system,
+        path="adk_brief",
+        query_text=query_text,
+        payload=payload,
+        agent=agent.name,
+    )
     wrapped = build_node(agent)
     logger.info(f"[ADK Workflow] Invoking {agent.name} via ctx.run_node")
     last_err: Exception | None = None

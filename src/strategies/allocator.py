@@ -22,11 +22,21 @@ class PositionAllocator:
     """
 
     @staticmethod
+    def kelly_edge_for_side(predicted_return: float, side: str) -> float:
+        """MC edge magnitude for Kelly: positive target → long, negative → short."""
+        side = (side or "long").lower()
+        ret = float(predicted_return or 0)
+        if side == "short":
+            return max(0.0, -ret)
+        return max(0.0, ret)
+
+    @staticmethod
     def kelly_criterion(
         predicted_return: float,
         confidence: float,
         estimated_win_rate: float = 0.55,
-        max_kelly: float = 0.25
+        max_kelly: float = 0.25,
+        side: str = "long",
     ) -> float:
         """
         Kelly Criterion: f* = (bp - q) / b
@@ -36,26 +46,23 @@ class PositionAllocator:
         - q = loss probability (1-p)
 
         Args:
-            predicted_return: Expected return (e.g., 0.02 for 2%)
+            predicted_return: MC expected return (e.g., 0.02 for +2%, -0.01 for -1%)
             confidence: Confidence score (0-1)
             estimated_win_rate: Historical win rate
             max_kelly: Cap kelly allocation (default 25%)
+            side: ``long`` uses positive MC edge; ``short`` uses negative MC edge
 
         Returns:
             Position size as fraction of portfolio (0-1)
         """
         try:
-            # Map confidence to win rate adjustment
-            # High confidence = higher win rate
+            edge = PositionAllocator.kelly_edge_for_side(predicted_return, side)
+            if edge <= 0:
+                return 0.0
+
             adjusted_win_rate = estimated_win_rate + (confidence - 0.5) * 0.2  # ±10%
             adjusted_win_rate = np.clip(adjusted_win_rate, 0.35, 0.65)
 
-            # Risk/reward based on predicted return
-            if predicted_return <= 0:
-                return 0.0
-
-            # Simple kelly: assume 1:1 risk/reward
-            # f = (p - q) / 1
             kelly = adjusted_win_rate - (1 - adjusted_win_rate)
             kelly = np.clip(kelly, 0, max_kelly)
 
@@ -66,30 +73,12 @@ class PositionAllocator:
             return 0.0
 
     @staticmethod
-    def baseline_target_weights(signals: Dict[str, Signal]) -> Dict[str, float]:
-        """Equal-weight targets capped at 10% per position."""
-        if not signals:
-            return {}
-        weight = min(1.0 / len(signals), 0.10)
-        return {ticker: weight for ticker in signals}
-
-    @staticmethod
-    def internal_target_weights(signals: Dict[str, Signal]) -> Dict[str, float]:
-        """Kelly-normalized targets capped at 10% per position."""
-        if not signals:
-            return {}
-
-        kelly_weights = {}
-        total_kelly = 0.0
-        for ticker, signal in signals.items():
-            kelly = PositionAllocator.kelly_criterion(
-                predicted_return=signal.predicted_return,
-                confidence=signal.confidence,
-            )
-            kelly_weights[ticker] = kelly
-            total_kelly += kelly
-
-        weights = {}
+    def _normalize_kelly_weights(
+        kelly_weights: Dict[str, float],
+        signals: Dict[str, Signal],
+    ) -> Dict[str, float]:
+        total_kelly = sum(kelly_weights.values())
+        weights: Dict[str, float] = {}
         for ticker, kelly in kelly_weights.items():
             if kelly <= 0:
                 weights[ticker] = 0.0
@@ -97,6 +86,48 @@ class PositionAllocator:
             weight = kelly / total_kelly if total_kelly > 0 else 1.0 / len(signals)
             weights[ticker] = min(weight, 0.10)
         return weights
+
+    @staticmethod
+    def internal_entry_target_weights(
+        signals: Dict[str, Signal],
+        entry_sides: Dict[str, str],
+        max_kelly: Optional[float] = None,
+    ) -> Dict[str, float]:
+        """Kelly-normalized portfolio weights for BUY (long) and SHORT entries."""
+        if not signals:
+            return {}
+
+        from src import config
+
+        cap = max_kelly if max_kelly is not None else config.INTERNAL_CONFIG.get(
+            "kelly_fraction", 0.25
+        )
+        kelly_weights: Dict[str, float] = {}
+        for ticker, signal in signals.items():
+            side = entry_sides.get(ticker, "long")
+            kelly_weights[ticker] = PositionAllocator.kelly_criterion(
+                predicted_return=signal.predicted_return,
+                confidence=signal.confidence,
+                max_kelly=cap,
+                side=side,
+            )
+        return PositionAllocator._normalize_kelly_weights(kelly_weights, signals)
+
+    @staticmethod
+    def internal_target_weights(signals: Dict[str, Signal]) -> Dict[str, float]:
+        """Kelly-normalized long-only targets (legacy helper)."""
+        if not signals:
+            return {}
+        entry_sides = {ticker: "long" for ticker in signals}
+        return PositionAllocator.internal_entry_target_weights(signals, entry_sides)
+
+    @staticmethod
+    def baseline_target_weights(signals: Dict[str, Signal]) -> Dict[str, float]:
+        """Equal-weight targets capped at 10% per position."""
+        if not signals:
+            return {}
+        weight = min(1.0 / len(signals), 0.10)
+        return {ticker: weight for ticker in signals}
 
     @staticmethod
     def decision_target_weights(decisions: List["TradingDecision"]) -> Dict[str, float]:
@@ -172,18 +203,19 @@ class PositionAllocator:
     @staticmethod
     def allocate_internal_from_decisions(
         decisions: List["TradingDecision"],
-        buy_signals: Dict[str, Signal],
+        entry_signals: Dict[str, Signal],
         portfolio_value: float,
         current_positions: Dict[str, "Position"],
         prices: Dict[str, float],
+        entry_sides: Dict[str, str],
     ) -> Dict[str, int]:
         """
-        Internal Twin Ledger sizing: Kelly for BUYs, decision-based for SELL/CLOSE.
+        Internal Twin Ledger sizing: Kelly for BUY and SHORT entries; decision-based exits.
         """
         position_changes: Dict[str, int] = {}
 
         exit_decisions = [
-            d for d in decisions if d.action in ("SELL", "CLOSE", "SHORT", "COVER")
+            d for d in decisions if d.action in ("SELL", "CLOSE", "COVER")
         ]
         if exit_decisions:
             position_changes.update(
@@ -192,20 +224,47 @@ class PositionAllocator:
                 )
             )
 
-        buy_tickers = {d.ticker for d in decisions if d.action == "BUY"}
-        kelly_signals = {t: s for t, s in buy_signals.items() if t in buy_tickers}
-        if kelly_signals:
-            allocations = PositionAllocator.allocate_internal(kelly_signals, portfolio_value)
-            for ticker, dollars in allocations.items():
-                price = prices.get(ticker, 0)
-                if price > 0:
-                    qty = int(dollars / price)
-                    if qty > 0:
-                        position_changes[ticker] = qty
+        entry_tickers = {
+            d.ticker for d in decisions if d.action in ("BUY", "SHORT")
+        }
+        kelly_signals = {
+            t: s for t, s in entry_signals.items() if t in entry_tickers
+        }
+        sides = {
+            t: entry_sides[t]
+            for t in kelly_signals
+            if t in entry_sides
+        }
+        weights = PositionAllocator.internal_entry_target_weights(
+            kelly_signals, sides
+        )
+
+        kelly_buys = 0
+        kelly_shorts = 0
+        for ticker, weight in weights.items():
+            if weight <= 0:
+                continue
+            side = sides.get(ticker, "long")
+            price = prices.get(ticker, 0)
+            if price <= 0:
+                logger.warning(f"No price for {ticker}, skipping Kelly {side}")
+                continue
+            if side == "short":
+                position = current_positions.get(ticker)
+                if position and position.qty > 0:
+                    continue
+                kelly_shorts += 1
+            else:
+                kelly_buys += 1
+            dollars = portfolio_value * weight
+            qty = int(dollars / price)
+            if qty > 0:
+                position_changes[ticker] = qty if side == "long" else -qty
 
         logger.info(
             f"Internal Twin Ledger allocation: {len(position_changes)} order(s) "
-            f"({len(kelly_signals)} Kelly BUY, {len(exit_decisions)} exit/short/cover)"
+            f"({kelly_buys} Kelly BUY, {kelly_shorts} Kelly SHORT, "
+            f"{len(exit_decisions)} exit/cover)"
         )
         return position_changes
 

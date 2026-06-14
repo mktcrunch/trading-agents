@@ -242,7 +242,11 @@ async def execute_trading_decisions(
         portfolio_value = float(account_info.get("portfolio_value", 0))
 
         current_positions = client.get_positions()
-        open_orders_raw = client.get_orders(status="open")
+        from src.strategies.order_dedup import filter_actionable_open_orders
+
+        open_orders_raw = filter_actionable_open_orders(
+            client.get_orders(status="open")
+        )
 
         # Fetch latest prices for allocation
         latest_prices = get_latest_prices(system=system)
@@ -303,14 +307,11 @@ async def execute_trading_decisions(
                 decisions, technical_data, mc_predictions
             )
 
-            buy_signals = {
-                t: s for t, s in signals.items()
-                if any(d.action == "BUY" and d.ticker == t for d in decisions)
-            }
-            short_decisions = [d for d in decisions if d.action == "SHORT"]
-            proposed_weights = PositionAllocator.internal_target_weights(buy_signals)
-            proposed_weights.update(
-                PositionAllocator.decision_target_weights(short_decisions)
+            entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
+            entry_sides = entry_sides_from_decisions(entry_decisions)
+            entry_signals = {t: s for t, s in signals.items() if t in entry_sides}
+            proposed_weights = PositionAllocator.internal_entry_target_weights(
+                entry_signals, entry_sides
             )
             validation = await risk_agent.validate_positions(
                 proposed_weights,
@@ -324,14 +325,20 @@ async def execute_trading_decisions(
                 d for d in decisions
                 if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
             ]
-            filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_entries}
+            filtered_entry_signals = {
+                t: s for t, s in entry_signals.items() if t in valid_entries
+            }
+            filtered_entry_sides = {
+                t: entry_sides[t] for t in valid_entries if t in entry_sides
+            }
 
             position_changes = PositionAllocator.allocate_internal_from_decisions(
                 filtered,
-                filtered_buy_signals,
+                filtered_entry_signals,
                 portfolio_value,
                 current_positions,
                 latest_prices,
+                entry_sides=filtered_entry_sides,
             )
         else:
             # Baseline uses equal weights

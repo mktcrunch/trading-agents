@@ -129,24 +129,20 @@ class InternalSystem:
                 f"conf={d.confidence:.2f} | {mc_note} | {d.rationale[:80]}"
             )
 
-        # Step 5: Risk validation (Kelly weights for BUYs, size_pct for SHORTs)
+        # Step 5: Risk validation (Kelly weights for BUY and SHORT)
         self.logger.info("\n[Step 5] Risk validation...")
         current_positions = await self.data_agent.get_current_positions()
-        buy_signals = {
-            t: s for t, s in signals.items()
-            if any(d.action == "BUY" and d.ticker == t for d in decisions)
-        }
-        short_decisions = [d for d in decisions if d.action == "SHORT"]
-        proposed_weights = PositionAllocator.internal_target_weights(buy_signals)
-        proposed_weights.update(
-            PositionAllocator.decision_target_weights(short_decisions)
-        )
         entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
+        entry_sides = entry_sides_from_decisions(entry_decisions)
+        entry_signals = {t: s for t, s in signals.items() if t in entry_sides}
+        proposed_weights = PositionAllocator.internal_entry_target_weights(
+            entry_signals, entry_sides
+        )
         validation_results = await self.risk_agent.validate_positions(
             proposed_weights,
             float(account_info.get("portfolio_value", 0)),
             current_positions,
-            entry_sides=entry_sides_from_decisions(entry_decisions),
+            entry_sides=entry_sides,
             open_orders_raw=self.execution_agent.alpaca_client.get_orders(status="open"),
         )
 
@@ -155,7 +151,12 @@ class InternalSystem:
             d for d in decisions
             if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
         ]
-        filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_entries}
+        filtered_entry_signals = {
+            t: s for t, s in entry_signals.items() if t in valid_entries
+        }
+        filtered_entry_sides = {
+            t: entry_sides[t] for t in valid_entries if t in entry_sides
+        }
         self.logger.info(
             f"Valid entry decisions after risk check: "
             f"{len([d for d in filtered_decisions if d.action in ('BUY', 'SHORT')])}"
@@ -170,10 +171,11 @@ class InternalSystem:
         }
         position_changes = PositionAllocator.allocate_internal_from_decisions(
             filtered_decisions,
-            filtered_buy_signals,
+            filtered_entry_signals,
             float(account_info.get("portfolio_value", 0)),
             current_positions,
             latest_prices,
+            entry_sides=filtered_entry_sides,
         )
         self.logger.info(f"Orders to place: {len(position_changes)}")
 

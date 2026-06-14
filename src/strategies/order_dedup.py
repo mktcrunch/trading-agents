@@ -31,6 +31,121 @@ def _order_tif(order: Any) -> str:
     return tif.value.lower() if hasattr(tif, "value") else str(tif).lower()
 
 
+TERMINAL_ORDER_STATUSES = frozenset({
+    "filled",
+    "canceled",
+    "cancelled",
+    "expired",
+    "rejected",
+    "done_for_day",
+})
+
+
+def _order_status(order: Any) -> str:
+    status = getattr(order, "status", None)
+    if status is None:
+        if hasattr(order, "get"):
+            return str(order.get("status", "")).lower()
+        return ""
+    return status.value.lower() if hasattr(status, "value") else str(status).lower()
+
+
+def is_actionable_open_order(order: Any) -> bool:
+    """
+    True if an order should count toward pending exposure or dedup.
+
+    Cancelled, expired, rejected, and fully filled orders are mistakes/history —
+    they must not block new placements.
+    """
+    if _order_status(order) in TERMINAL_ORDER_STATUSES:
+        return False
+    qty = float(getattr(order, "qty", 0) or 0)
+    filled = float(getattr(order, "filled_qty", 0) or 0)
+    return max(0.0, qty - filled) > 0
+
+
+def filter_actionable_open_orders(orders: Optional[List[Any]]) -> List[Any]:
+    """Drop terminal or zero-remaining orders before risk checks or dedup."""
+    if not orders:
+        return []
+    actionable = [o for o in orders if is_actionable_open_order(o)]
+    dropped = len(orders) - len(actionable)
+    if dropped:
+        logger.info(
+            f"Ignoring {dropped} non-actionable orders "
+            f"(cancelled/expired/filled/empty)"
+        )
+    return actionable
+
+
+_OPEN_ALPACA_STATUSES = frozenset({
+    "",
+    "accepted",
+    "new",
+    "pending_new",
+    "accepted_for_bidding",
+    "stopped",
+    "pending_cancel",
+    "pending_replace",
+    "partially_filled",
+})
+
+_ALPACA_STATUS_NOTES = {
+    "open": "Still open on Alpaca — counts toward risk and dedup",
+    "canceled": "Cancelled on Alpaca — not counted for risk or dedup",
+    "filled": "Fully filled on Alpaca",
+    "expired": "Expired on Alpaca — not counted for risk or dedup",
+    "rejected": "Rejected by Alpaca",
+    "partially_filled": "Partially filled on Alpaca",
+    "simulated": "Dry run — no live Alpaca order",
+    "unknown": "Not found in Alpaca (may be purged or outside the query window)",
+}
+
+
+def _display_alpaca_status(raw_status: str, is_active: bool) -> str:
+    status = raw_status or ""
+    if status == "cancelled":
+        status = "canceled"
+    if is_active and status not in TERMINAL_ORDER_STATUSES:
+        if status in _OPEN_ALPACA_STATUSES:
+            return "open"
+        return status or "open"
+    return status or "unknown"
+
+
+def order_live_snapshot(order: Any) -> Dict[str, Any]:
+    """Normalize an Alpaca order for dashboard / audit display."""
+    norm = normalize_open_order(order)
+    raw_status = _order_status(order)
+    active = is_actionable_open_order(order)
+    display = _display_alpaca_status(raw_status, active)
+    return {
+        "alpaca_status": display,
+        "alpaca_filled_qty": norm["filled_qty"],
+        "alpaca_remaining_qty": norm["remaining_qty"],
+        "alpaca_is_active": active,
+        "alpaca_status_note": _ALPACA_STATUS_NOTES.get(
+            display,
+            "Live Alpaca status",
+        ),
+    }
+
+
+def static_order_snapshot(order_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Snapshots for audit rows that never hit Alpaca."""
+    if not order_id:
+        return None
+    if order_id == "dry-run":
+        return {
+            "alpaca_status": "simulated",
+            "alpaca_filled_qty": 0.0,
+            "alpaca_remaining_qty": 0.0,
+            "alpaca_is_active": False,
+            "alpaca_status_note": _ALPACA_STATUS_NOTES["simulated"],
+        }
+    return None
+
+
 def normalize_open_order(order: Any) -> Dict:
     """Normalize an Alpaca order object to a comparable dict."""
     qty = float(getattr(order, "qty", 0) or 0)
@@ -154,7 +269,10 @@ def reconcile_duplicate_open_orders(
         return []
 
     open_orders_raw = open_orders_raw or alpaca_client.get_orders(status="open")
-    open_orders = [normalize_open_order(o) for o in open_orders_raw]
+    open_orders = [
+        normalize_open_order(o)
+        for o in filter_actionable_open_orders(open_orders_raw)
+    ]
 
     groups: Dict[Tuple[str, str, float], List[Dict]] = defaultdict(list)
     for o in open_orders:
@@ -220,7 +338,10 @@ def filter_orders_for_placement(
     min_order_value = config.ORDER_CONFIG.get("min_order_value", 100)
     current_positions = current_positions or {}
 
-    open_orders = [normalize_open_order(o) for o in open_orders_raw]
+    open_orders = [
+        normalize_open_order(o)
+        for o in filter_actionable_open_orders(open_orders_raw)
+    ]
     available_bp = max(0.0, float(buying_power) - _open_buy_commitment(open_orders))
 
     filtered: Dict[str, float] = {}

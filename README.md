@@ -20,7 +20,7 @@ Licensed under the [Apache License 2.0](LICENSE).
 |---|----------|----------|
 | **Account** | Alpaca paper #1 | Alpaca paper #2 |
 | **Signals** | Gemini 3.5 Flash ledger decisions, Alpaca OHLCV only | Same + **MarketCrunch ensemble forecasts** + discovered features |
-| **Sizing** | `size_pct` from LLM (max 10%/position) | Ledger decisions + Kelly on BUYs |
+| **Sizing** | `size_pct` from LLM (max 10%/position) | Ledger decisions + Kelly on BUY and SHORT entries |
 | **Discovery** | — | Agentic DataBento catalog scan, LLM feature formulas |
 | **Overnight orders** | OPG limit ±0.5% from close | Same |
 | **Intraday risk** | Fixed -1% stop, pure LLM trailing | ATR stops, hybrid trailing, 15-min prediction gate, EOD exit |
@@ -176,10 +176,13 @@ Dashboard: `http://localhost:8080/dashboard`
 
 Every action is logged to `data/audit_events.jsonl` with trace IDs linking full job sessions:
 
-- `ledger_decision`, `order_placed`, `order_skipped`, `order_cancelled_duplicate`  
+- `ledger_decision`, `order_placed`, `order_skipped`, `order_cancelled_duplicate`
+- `signal_gemini_query` — exact Gemini input for the signal step (`query_text`, `coverage` counts)  
 - `discovery_probe`, `risk_rejected`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
 
 API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
+
+`order_placed` rows returned by `/api/events`, `/api/trace/{id}`, and `get_recent_trading_activity` are annotated with live Alpaca fields (`alpaca_status`, `alpaca_is_active`, …) so manual cancels show as `canceled` even though the audit only records placement.
 
 Persistent storage uses two GCS buckets — create them with `./deploy/setup_gcs.sh`, then set `GCS_AUDIT_BUCKET` and `GCS_DATA_BUCKET` in `.env`.
 

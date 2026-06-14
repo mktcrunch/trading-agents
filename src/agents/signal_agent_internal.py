@@ -16,6 +16,7 @@ from src.agents.ledger_utils import (
     emit_signal_ledger_audit,
     mc_confidence_score,
     parse_signal_ledger_response,
+    record_signal_gemini_query,
 )
 from src.agents.signal_context import fetch_signal_news, format_news_block
 from src.agents.base_agent import BaseAgent
@@ -58,16 +59,25 @@ class InternalSignalAgent(BaseAgent):
             confidence = mc_confidence_score(conf_label)
             predicted_return = target_delta / 100
 
-            kelly_raw = PositionAllocator.kelly_criterion(
+            kelly_raw_long = PositionAllocator.kelly_criterion(
                 predicted_return=predicted_return,
                 confidence=confidence,
                 max_kelly=self.kelly_fraction,
+                side="long",
+            )
+            kelly_raw_short = PositionAllocator.kelly_criterion(
+                predicted_return=predicted_return,
+                confidence=confidence,
+                max_kelly=self.kelly_fraction,
+                side="short",
             )
             kelly_ctx[ticker] = {
                 "mc_confidence": conf_label,
                 "mc_confidence_score": confidence,
                 "mc_target_return_pct": target_delta,
-                "kelly_suggested_weight": round(kelly_raw, 4),
+                "kelly_suggested_weight_long": round(kelly_raw_long, 4),
+                "kelly_suggested_weight_short": round(kelly_raw_short, 4),
+                "kelly_suggested_weight": round(kelly_raw_long, 4),
                 "kelly_max_fraction": self.kelly_fraction,
             }
         return kelly_ctx
@@ -107,7 +117,8 @@ class InternalSignalAgent(BaseAgent):
                 f"BB_z={tech.get('bollinger_zscore', 0):.2f} | "
                 f"MC_target={ai_est.get('target_delta_numeric', 'N/A')}% | "
                 f"MC_conf={ai_est.get('confidence', 'N/A')} | "
-                f"Kelly_weight={kelly.get('kelly_suggested_weight', 0):.4f}{db_note}"
+                f"Kelly_long={kelly.get('kelly_suggested_weight_long', 0):.4f} | "
+                f"Kelly_short={kelly.get('kelly_suggested_weight_short', 0):.4f}{db_note}"
             )
 
         return f"""You are an autonomous trading agent in the Twin Ledger — a live head-to-head paper trading competition.
@@ -269,6 +280,22 @@ Example (no trades):
                     databento_sources,
                     learning_block=learning_block,
                     news_data=news_data,
+                )
+                record_signal_gemini_query(
+                    system="internal",
+                    path="direct_prompt",
+                    query_text=prompt,
+                    payload={
+                        "valid_tickers": list(self.ticker_universe),
+                        "competition": competition,
+                        "technical_data": technical_data,
+                        "mc_predictions": mc_predictions,
+                        "kelly_context": kelly_context,
+                        "databento_sources": databento_sources or {},
+                        "news_data": news_data or {},
+                        "signal_learning": learning_block,
+                    },
+                    agent=self.__class__.__name__,
                 )
                 gen_config = (
                     google_search_grounding_config()

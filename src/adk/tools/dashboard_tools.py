@@ -10,6 +10,13 @@ from src.adk.tools.competition_tools import get_competition_status, get_leaderbo
 from src.audit.store import load_events
 from src.discovery.approved_sources import load_approved_sources
 from src.discovery.registry import load_registry
+from src.logger import setup_logger
+from src.strategies.order_dedup import (
+    order_live_snapshot,
+    static_order_snapshot,
+)
+
+logger = setup_logger(__name__)
 
 
 def _hydrate_discovery_artifacts() -> None:
@@ -229,6 +236,114 @@ def get_trader_status(system: str = "baseline") -> Dict[str, Any]:
     }
 
 
+def _fetch_live_order_statuses(
+    system: str,
+    order_ids: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Build order_id -> live Alpaca snapshot for dashboard reconciliation."""
+    unique_ids = sorted({oid for oid in order_ids if oid and oid != "dry-run"})
+    if not unique_ids:
+        return {}
+
+    from src.apis.alpaca_client import AlpacaClient
+
+    lookup: Dict[str, Dict[str, Any]] = {}
+    try:
+        client = AlpacaClient(system=system)
+    except Exception as exc:
+        logger.warning(f"Could not initialize Alpaca client for {system}: {exc}")
+        return {}
+
+    try:
+        for order in client.get_orders(status="all"):
+            oid = str(getattr(order, "id", "") or "")
+            if oid in unique_ids:
+                lookup[oid] = order_live_snapshot(order)
+    except Exception as exc:
+        logger.warning(f"Failed to list Alpaca orders for {system}: {exc}")
+
+    for oid in unique_ids:
+        if oid in lookup:
+            continue
+        try:
+            order = client.get_order(oid)
+        except Exception:
+            order = None
+        if order:
+            lookup[oid] = order_live_snapshot(order)
+
+    return lookup
+
+
+def _unknown_order_snapshot() -> Dict[str, Any]:
+    return {
+        "alpaca_status": "unknown",
+        "alpaca_filled_qty": None,
+        "alpaca_remaining_qty": None,
+        "alpaca_is_active": False,
+        "alpaca_status_note": (
+            "Not found in Alpaca (may be purged or outside the query window)"
+        ),
+    }
+
+
+def annotate_orders_with_alpaca_status(
+    system: str,
+    orders: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Attach live Alpaca status to audit order rows (display only)."""
+    order_ids = [str(o.get("order_id") or "") for o in orders]
+    live = _fetch_live_order_statuses(system, order_ids)
+
+    annotated: List[Dict[str, Any]] = []
+    for row in orders:
+        oid = str(row.get("order_id") or "")
+        snap = static_order_snapshot(oid)
+        if snap is None and oid:
+            snap = live.get(oid) or _unknown_order_snapshot()
+        annotated.append({**row, **(snap or {})})
+    return annotated
+
+
+def enrich_order_placed_audit_events(
+    events: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Add live Alpaca status into order_placed audit payloads for the dashboard API."""
+    ids_by_system: Dict[str, List[str]] = {}
+    for ev in events:
+        if ev.get("event_type") != "order_placed":
+            continue
+        system = ev.get("system") or "baseline"
+        if system not in ("baseline", "internal"):
+            continue
+        payload = ev.get("payload") or {}
+        oid = str(payload.get("order_id") or "")
+        if oid:
+            ids_by_system.setdefault(system, []).append(oid)
+
+    live_by_system = {
+        system: _fetch_live_order_statuses(system, ids)
+        for system, ids in ids_by_system.items()
+    }
+
+    enriched: List[Dict[str, Any]] = []
+    for ev in events:
+        if ev.get("event_type") != "order_placed":
+            enriched.append(ev)
+            continue
+
+        payload = dict(ev.get("payload") or {})
+        oid = str(payload.get("order_id") or "")
+        system = ev.get("system") or "baseline"
+        snap = static_order_snapshot(oid)
+        if snap is None and oid:
+            snap = live_by_system.get(system, {}).get(oid) or _unknown_order_snapshot()
+        if snap:
+            payload.update(snap)
+        enriched.append({**ev, "payload": payload})
+    return enriched
+
+
 def get_recent_trading_activity(
     system: str = "baseline",
     hours: int = 72,
@@ -315,12 +430,14 @@ def get_recent_trading_activity(
         reverse=True,
     )[:limit]
 
+    orders = annotate_orders_with_alpaca_status(system, orders[:limit])
+
     return {
         "success": True,
         "system": system,
         "since_hours": hours,
         "decisions": decisions[:limit],
-        "orders": orders[:limit],
+        "orders": orders,
         "recent_jobs": job_list,
         "counts": {
             "decisions": len(decisions),

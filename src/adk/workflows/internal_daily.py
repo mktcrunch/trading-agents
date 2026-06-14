@@ -144,26 +144,29 @@ async def internal_risk_and_execute(ctx):
     signals = signal_agent.decisions_to_signals(decisions, technical_data, mc_predictions)
 
     risk_agent = RiskAgent(system="internal")
-    buy_signals = {
-        t: s for t, s in signals.items()
-        if any(d.action == "BUY" and d.ticker == t for d in decisions)
-    }
-    short_decisions = [d for d in decisions if d.action == "SHORT"]
     entry_decisions = [d for d in decisions if d.action in ("BUY", "SHORT")]
-    proposed_weights = PositionAllocator.internal_target_weights(buy_signals)
-    proposed_weights.update(PositionAllocator.decision_target_weights(short_decisions))
+    entry_sides = entry_sides_from_decisions(entry_decisions)
+    entry_signals = {t: s for t, s in signals.items() if t in entry_sides}
+    proposed_weights = PositionAllocator.internal_entry_target_weights(
+        entry_signals, entry_sides
+    )
     validation = await risk_agent.validate_positions(
         proposed_weights,
         float(account_info.get("portfolio_value", 0)),
         current_positions,
-        entry_sides=entry_sides_from_decisions(entry_decisions),
+        entry_sides=entry_sides,
     )
     valid_entries = {t for t, ok in validation.items() if ok}
     filtered = [
         d for d in decisions
         if d.action not in ("BUY", "SHORT") or d.ticker in valid_entries
     ]
-    filtered_buy_signals = {t: s for t, s in buy_signals.items() if t in valid_entries}
+    filtered_entry_signals = {
+        t: s for t, s in entry_signals.items() if t in valid_entries
+    }
+    filtered_entry_sides = {
+        t: entry_sides[t] for t in valid_entries if t in entry_sides
+    }
 
     latest_prices = {
         t: technical_data[t].get("close", 0)
@@ -172,10 +175,11 @@ async def internal_risk_and_execute(ctx):
     }
     position_changes = PositionAllocator.allocate_internal_from_decisions(
         filtered,
-        filtered_buy_signals,
+        filtered_entry_signals,
         float(account_info.get("portfolio_value", 0)),
         current_positions,
         latest_prices,
+        entry_sides=filtered_entry_sides,
     )
 
     execution_agent = ExecutionAgent(system="internal")

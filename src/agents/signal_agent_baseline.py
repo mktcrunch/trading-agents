@@ -16,6 +16,7 @@ from src.agents.ledger_utils import (
     SignalLedgerResult,
     emit_signal_ledger_audit,
     parse_signal_ledger_response,
+    record_signal_gemini_query,
 )
 from src.agents.signal_context import fetch_signal_news, format_news_block
 from src.agents.base_agent import BaseAgent
@@ -204,6 +205,19 @@ Example (no trades):
                     technical_data,
                     learning_block=learning_block,
                     news_data=news_data,
+                )
+                record_signal_gemini_query(
+                    system="baseline",
+                    path="direct_prompt",
+                    query_text=prompt,
+                    payload={
+                        "valid_tickers": list(self.ticker_universe),
+                        "competition": competition,
+                        "technical_data": technical_data,
+                        "news_data": news_data or {},
+                        "signal_learning": learning_block,
+                    },
+                    agent=self.__class__.__name__,
                 )
                 gen_config = (
                     google_search_grounding_config()

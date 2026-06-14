@@ -171,6 +171,7 @@ Every action is recorded to `data/audit_events.jsonl` with a `trace_id` linking 
 |------------|--------|
 | `job_started` / `job_completed` | Overnight, risk, discovery jobs |
 | `ledger_decision` | Baseline + internal signal agents |
+| `signal_gemini_query` | Exact Gemini signal input (`payload.query_text`, per-section ticker coverage) |
 | `order_placed` | Execution agent |
 | `discovery_probe` | Discovery agent |
 | `risk_stop_exit` / `risk_eod_exit` / `risk_held` | Risk monitor |

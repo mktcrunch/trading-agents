@@ -1771,6 +1771,19 @@
       border: 1px solid var(--border);
     }
     .activity-kind.risk { color: var(--accent-deep); background: rgba(20, 108, 74, 0.08); border-color: rgba(20, 108, 74, 0.15); }
+    .activity-kind.order { color: #1d4ed8; background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.18); }
+    .placement-pill {
+      font-size: 0.58rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .placement-pill.placed { color: var(--accent-deep); background: rgba(20, 108, 74, 0.1); border-color: rgba(20, 108, 74, 0.22); }
+    .placement-pill.skipped { color: var(--amber); background: rgba(146, 97, 10, 0.1); border-color: rgba(146, 97, 10, 0.22); }
     .decision-ticker {
       font-family: var(--mono);
       font-size: 0.78rem;
@@ -3001,9 +3014,16 @@
       el.classList.remove("visible");
     }
 
-    function badge(status, eventType = "") {
+    function badge(status, eventType = "", payload = null) {
       if (eventType === "risk_rejected") {
         return '<span class="badge badge-info">blocked</span>';
+      }
+      if (eventType === "order_placed" && payload?.alpaca_status) {
+        const s = payload.alpaca_status;
+        const cls = s === "open"
+          ? "badge-ok"
+          : (s === "filled" ? "badge-info" : "badge-error");
+        return `<span class="badge ${cls}" title="${escHtml(payload.alpaca_status_note || "")}">${escHtml(s)}</span>`;
       }
       const cls = status === "ok" ? "badge-ok" : "badge-error";
       return `<span class="badge ${cls}">${status || "ok"}</span>`;
@@ -3197,6 +3217,51 @@
       return null;
     }
 
+    function orderPlacementKey(traceId, ticker, side) {
+      return `${traceId || ""}|${String(ticker || "").toUpperCase()}|${String(side || "").toLowerCase()}`;
+    }
+
+    function decisionToOrderSide(action) {
+      const a = String(action || "").toUpperCase();
+      if (a === "SHORT" || a === "SELL" || a === "CLOSE") return "sell";
+      if (a === "BUY" || a === "COVER") return "buy";
+      return "";
+    }
+
+    function annotatePlacementStatus(events, rawEvents, system) {
+      const placed = new Map();
+      for (const e of rawEvents || []) {
+        if (e.event_type !== "order_placed") continue;
+        const p = e.payload || {};
+        const key = orderPlacementKey(e.trace_id, p.ticker, p.side);
+        placed.set(key, p);
+      }
+      return (events || []).map(ev => {
+        if (ev._kind !== "signal") return ev;
+        const orderSide = decisionToOrderSide(ev._action);
+        if (!orderSide || ev._ticker === "Portfolio") return ev;
+        const key = orderPlacementKey(ev.trace_id, ev._ticker, orderSide);
+        const order = placed.get(key);
+        if (order) {
+          const price = order.limit_price != null ? `@ $${Number(order.limit_price).toFixed(2)}` : "";
+          const status = order.alpaca_status ? ` · ${order.alpaca_status}` : "";
+          return {
+            ...ev,
+            _placementStatus: "Placed",
+            _placementClass: "placed",
+            _meta: [ev._meta, `Placed on Alpaca${price}${status}`].filter(Boolean).join(" · "),
+          };
+        }
+        const skipNote = "Not placed · Kelly/MC sizing 0%";
+        return {
+          ...ev,
+          _placementStatus: "Not placed",
+          _placementClass: "skipped",
+          _meta: [ev._meta, skipNote].filter(Boolean).join(" · "),
+        };
+      });
+    }
+
     function pickRecentActivity(events, limit = 5) {
       const seen = new Set();
       const sorted = [...(events || [])].sort((a, b) =>
@@ -3231,6 +3296,7 @@
     async function fetchRecentActivity(system, limit = 5) {
       const types = [
         "ledger_decision",
+        "order_placed",
         "risk_stop_exit",
         "risk_eod_exit",
         "risk_held",
@@ -3242,8 +3308,10 @@
             `/api/events?hours=168&limit=80&system=${encodeURIComponent(system)}&event_type=${t}`
           ).then(d => d.events || []).catch(() => [])
         ));
-        const normalized = batches.flat().map(normalizeActivityEvent).filter(Boolean);
-        return pickRecentActivity(normalized, limit);
+        const rawEvents = batches.flat();
+        const normalized = rawEvents.map(normalizeActivityEvent).filter(Boolean);
+        const annotated = annotatePlacementStatus(normalized, rawEvents, system);
+        return pickRecentActivity(annotated, limit);
       } catch (_) {
         return [];
       }
@@ -3251,20 +3319,28 @@
 
     function renderActivityFeed(items) {
       if (!items.length) {
-        return `<div class="decision-empty"><span class="holdings-empty-title">No recent activity</span><span class="holdings-empty-sub">Overnight signals and intraday risk actions from the last 7 days appear here.</span></div>`;
+        return `<div class="decision-empty"><span class="holdings-empty-title">No recent activity</span><span class="holdings-empty-sub">Signal proposals and risk actions from the last 7 days appear here. Placement status shows what actually reached Alpaca.</span></div>`;
       }
       return `<div class="decision-feed">${items.map(e => {
         const traceAttr = e.trace_id
           ? ` class="decision-card clickable" onclick="showTrace('${e.trace_id}')"`
           : ` class="decision-card"`;
-        const kindCls = e._kind === "risk" ? "activity-kind risk" : "activity-kind";
-        const kindLabel = e._kind === "risk" ? "Risk" : "Signal";
+        const kindCls = e._kind === "risk"
+          ? "activity-kind risk"
+          : e._kind === "order"
+            ? "activity-kind order"
+            : "activity-kind";
+        const kindLabel = e._kind === "risk" ? "Risk" : e._kind === "order" ? "Order" : "Signal";
+        const placementPill = e._placementStatus
+          ? `<span class="placement-pill ${escHtml(e._placementClass || "skipped")}">${escHtml(e._placementStatus)}</span>`
+          : "";
         return `
           <div${traceAttr} title="${escHtml(e._rationale)}">
             <div class="decision-head">
               ${actionPill(e._action)}
               <span class="decision-ticker">${escHtml(e._ticker)}</span>
               <span class="${kindCls}">${kindLabel}</span>
+              ${placementPill}
               <span class="decision-time">${fmtTimeRel(e.timestamp)}</span>
             </div>
             <p class="decision-rationale">${escHtml(e._rationale)}</p>
@@ -3278,7 +3354,7 @@
         return `
           <div class="holdings-empty">
             <span class="holdings-empty-title">All cash, no open positions</span>
-            <span class="holdings-empty-sub">Recent activity above covers overnight signals and intraday risk.</span>
+            <span class="holdings-empty-sub">Recent activity shows signal proposals; only items marked Placed reached Alpaca.</span>
           </div>`;
       }
       const rows = positions.map(p => `
@@ -3801,6 +3877,10 @@
       document.querySelector("#events-table tbody").innerHTML = (events.events || []).map(e => {
         const sysBadge = e.system === "baseline" ? "badge-baseline"
           : e.system === "internal" ? "badge-internal" : "badge-type";
+        const payload = e.payload || {};
+        const actionText = e.event_type === "order_placed" && payload.ticker
+          ? `${payload.side || ""} ${payload.qty || ""} ${payload.ticker}`.trim()
+          : (e.action || "");
         return `
         <tr>
           <td class="mono">${fmtTime(e.timestamp)}</td>
@@ -3808,8 +3888,8 @@
           <td><span class="badge ${sysBadge}">${e.system}</span></td>
           <td><span class="badge badge-type">${eventTypeLabel(e.event_type)}</span></td>
           <td>${e.agent || "n/a"}</td>
-          <td>${(e.action||"").slice(0, 100)}</td>
-          <td>${badge(e.status, e.event_type)}</td>
+          <td>${escHtml(actionText).slice(0, 100)}</td>
+          <td>${badge(e.status, e.event_type, payload)}</td>
         </tr>`;
       }).join("");
       await loadLearning();
@@ -3850,6 +3930,9 @@
       } else if (eventType === "order_placed") {
         add("Order", `${payload.side} ${payload.qty} ${payload.ticker} @ $${payload.limit_price} (${payload.time_in_force})`);
         if (payload.order_id) add("Order ID", payload.order_id);
+        if (payload.alpaca_status) add("Alpaca status", payload.alpaca_status);
+        if (payload.alpaca_status_note) add("Status note", payload.alpaca_status_note);
+        if (payload.alpaca_remaining_qty != null) add("Remaining qty", payload.alpaca_remaining_qty);
       } else if (eventType === "discovery_probe") {
         add("Dataset", `${payload.dataset}/${payload.schema}`);
         add("Status", payload.status);
@@ -3896,7 +3979,7 @@
         const fields = traceDetailFields(e.event_type, payload);
         return `
         <div style="margin-bottom:0.75rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem">
-          <div><strong>${escHtml(eventTypeLabel(e.event_type))}</strong> · ${escHtml(e.agent || "")} · ${badge(e.status, e.event_type)}</div>
+          <div><strong>${escHtml(eventTypeLabel(e.event_type))}</strong> · ${escHtml(e.agent || "")} · ${badge(e.status, e.event_type, payload)}</div>
           <div class="meta">${fmtTime(e.timestamp)}${e.job_type ? ` · job: ${escHtml(e.job_type)}` : ""}</div>
           <div class="trace-action">${escHtml(e.action)}</div>
           ${fields}

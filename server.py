@@ -91,12 +91,19 @@ class JobHandler(BaseHTTPRequestHandler):
                 event_type=q.get("event_type") or None,
                 since_hours=int(q["hours"]) if q.get("hours") else None,
             )
+            from src.adk.tools.dashboard_tools import enrich_order_placed_audit_events
+
+            events = enrich_order_placed_audit_events(events)
             _json_response(self, 200, {"events": events, "count": len(events)})
             return
 
         if path.startswith("/api/trace/"):
             trace_id = path.split("/api/trace/")[-1]
-            _json_response(self, 200, get_trace(trace_id))
+            trace = get_trace(trace_id)
+            from src.adk.tools.dashboard_tools import enrich_order_placed_audit_events
+
+            trace["events"] = enrich_order_placed_audit_events(trace.get("events", []))
+            _json_response(self, 200, trace)
             return
 
         if path == "/api/chat/status":

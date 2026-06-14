@@ -29,7 +29,8 @@ Trading constraints:
 - Actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
 - Use SHORT when MC target is negative with sufficient confidence; COVER to reduce/exit shorts
 
-Return structured decisions via output_schema. Size BUYs using Kelly guidance when confident.
+Return structured decisions via output_schema. Size BUY and SHORT entries using Kelly
+guidance when MC edge supports the direction (positive target → BUY, negative → SHORT).
 Each decision needs: action, ticker, size_pct, confidence, rationale, invalidation, competitive_note.
 """
 

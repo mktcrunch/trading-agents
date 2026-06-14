@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union
 
 from src.agents.base_agent import BaseAgent
 from src.logger import setup_logger
-from src.strategies.order_dedup import normalize_open_order
+from src.strategies.order_dedup import filter_actionable_open_orders, normalize_open_order
 
 logger = setup_logger(__name__)
 
@@ -169,6 +169,7 @@ class RiskAgent(BaseAgent):
         """
         if open_orders_raw is None:
             open_orders_raw = self._alpaca.get_orders(status="open")
+        open_orders_raw = filter_actionable_open_orders(open_orders_raw)
 
         current_positions = current_positions or {}
         entry_sides = entry_sides or {}

@@ -98,6 +98,8 @@ if ! command -v adk &>/dev/null; then
   echo "ERROR: adk CLI not found. Activate venv: source venv/bin/activate"
   exit 1
 fi
+ADK_CMD="$(command -v adk)"
+echo "    adk CLI: ${ADK_CMD}"
 
 echo "==> Checking vertexai SDK (required for Agent Engine deploy)"
 # Full `import vertexai` can hang on some machines (heavy google-cloud-aiplatform
@@ -150,7 +152,7 @@ deploy_agent() {
   adk_args+=("${agent_path}")
 
   set +e
-  adk "${adk_args[@]}" 2>&1 | tee "${log_file}"
+  "${ADK_CMD}" "${adk_args[@]}" 2>&1 | tee "${log_file}"
   DEPLOY_STATUS=${PIPESTATUS[0]}
   set -e
 

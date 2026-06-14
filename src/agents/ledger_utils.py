@@ -6,10 +6,13 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, TYPE_CHECKING
 
 from src import config
+from src.logger import setup_logger
 from src.models.trading_decision import TradingDecision
 
 if TYPE_CHECKING:
     from src.agents.base_agent import BaseAgent
+
+logger = setup_logger(__name__)
 
 MC_CONFIDENCE_MAP = {"High": 0.75, "Medium": 0.6, "Low": 0.4}
 GEMINI_FLASH_MODEL = config.GEMINI_FLASH_MODEL
@@ -146,3 +149,78 @@ def emit_signal_ledger_audit(
 
 def mc_confidence_score(confidence_label: str) -> float:
     return MC_CONFIDENCE_MAP.get(confidence_label, 0.4)
+
+
+def _section_ticker_coverage(
+    data: Any,
+    valid_tickers: List[str],
+) -> Dict[str, Any]:
+    """Count how many universe tickers appear in a dict keyed by ticker."""
+    if not isinstance(data, dict):
+        return {
+            "present": 0,
+            "missing": list(valid_tickers),
+            "universe": len(valid_tickers),
+        }
+    present = [t for t in valid_tickers if t in data]
+    return {
+        "present": len(present),
+        "missing": [t for t in valid_tickers if t not in data],
+        "universe": len(valid_tickers),
+    }
+
+
+def signal_context_coverage(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Summarize which context sections cover the trading universe."""
+    valid_tickers = list(payload.get("valid_tickers") or config.TICKER_UNIVERSE)
+    learning = payload.get("signal_learning")
+    learning_chars = len(learning.strip()) if isinstance(learning, str) else 0
+    return {
+        "technical_data": _section_ticker_coverage(
+            payload.get("technical_data"), valid_tickers
+        ),
+        "mc_predictions": _section_ticker_coverage(
+            payload.get("mc_predictions"), valid_tickers
+        ),
+        "news_data": _section_ticker_coverage(
+            payload.get("news_data"), valid_tickers
+        ),
+        "databento_sources": _section_ticker_coverage(
+            payload.get("databento_sources"), valid_tickers
+        ),
+        "kelly_context": _section_ticker_coverage(
+            payload.get("kelly_context"), valid_tickers
+        ),
+        "has_competition": bool(payload.get("competition")),
+        "signal_learning_chars": learning_chars,
+    }
+
+
+def record_signal_gemini_query(
+    *,
+    system: str,
+    path: str,
+    query_text: str,
+    payload: Dict[str, Any] | None = None,
+    agent: str = "SignalAgent",
+) -> None:
+    """Audit the exact Gemini input for signal generation. Never raises."""
+    if not config.AUDIT_ENABLED:
+        return
+    try:
+        from src.audit import record_event
+
+        record_event(
+            event_type="signal_gemini_query",
+            action=f"Signal Gemini query ({path}): {len(query_text):,} chars",
+            system=system,
+            agent=agent,
+            payload={
+                "path": path,
+                "query_chars": len(query_text),
+                "query_text": query_text,
+                "coverage": signal_context_coverage(payload or {}),
+            },
+        )
+    except Exception as exc:
+        logger.warning(f"signal_gemini_query audit failed: {exc}")
