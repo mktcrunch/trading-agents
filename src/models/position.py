@@ -25,10 +25,14 @@ class Position:
     source_signal: Optional[str] = None  # Which signal generated this position
 
     def __post_init__(self):
-        """Calculate P&L metrics"""
+        """Calculate P&L metrics (long and short)."""
         if self.current_price and self.avg_entry_price:
             self.unrealized_pnl = (self.current_price - self.avg_entry_price) * self.qty
-            self.unrealized_return = (self.current_price - self.avg_entry_price) / self.avg_entry_price
+            cost_basis = abs(self.qty * self.avg_entry_price)
+            if cost_basis > 0:
+                self.unrealized_return = self.unrealized_pnl / cost_basis
+            else:
+                self.unrealized_return = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -54,7 +58,7 @@ class Position:
     @property
     def is_profitable(self) -> bool:
         """Position is in profit"""
-        return self.unrealized_return > 0 if self.unrealized_return else False
+        return (self.unrealized_pnl or 0) > 0
 
     @property
     def days_held(self) -> int:

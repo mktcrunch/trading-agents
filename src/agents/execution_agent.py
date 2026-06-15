@@ -5,6 +5,7 @@ Places orders on Alpaca:
 - Post-open: Chase unfilled with MARKET orders
 - EOD: Hold/trim based on next-day predictions
 """
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from src import config
 from src.agents.base_agent import BaseAgent
@@ -17,6 +18,142 @@ from src.strategies.order_dedup import (
 from src.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+_OPEN_ORDER_STATUSES = frozenset({
+    "new",
+    "partially_filled",
+    "accepted",
+    "pending_new",
+    "accepted_for_bidding",
+    "held",
+})
+
+_CANCELLED_ORDER_STATUSES = frozenset({"canceled", "cancelled"})
+
+# ``open_limit``: cancel the live DAY/OPG limit, then market the remainder.
+# ``expired_opg``: OPG limit expired at the open — market only (never re-chase cancels).
+ChaseMode = str  # "open_limit" | "expired_opg"
+
+
+def _order_status_str(order_obj: Any) -> str:
+    status_val = getattr(order_obj, "status", None)
+    if status_val is None and isinstance(order_obj, dict):
+        status_val = order_obj.get("status")
+    if hasattr(status_val, "value"):
+        status_val = status_val.value
+    return str(status_val).lower() if status_val else ""
+
+
+def _order_created_at(order_obj: Any):
+    from datetime import datetime
+
+    created_at = getattr(order_obj, "created_at", None)
+    if created_at is None and isinstance(order_obj, dict):
+        created_at = order_obj.get("created_at")
+    if isinstance(created_at, str):
+        try:
+            if created_at.endswith("Z"):
+                created_at = created_at[:-1] + "+00:00"
+            return datetime.fromisoformat(created_at)
+        except Exception:
+            return None
+    return created_at
+
+
+def _overnight_lookback_cutoff_et(now_et):
+    from datetime import timedelta
+
+    if now_et.weekday() == 0:  # Monday → since prior Friday 4:00 PM ET
+        return (now_et - timedelta(days=3)).replace(hour=16, minute=0, second=0, microsecond=0)
+    return (now_et - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
+
+
+def _overnight_limit_chase_mode(order_obj: Any, norm: Dict[str, Any]) -> Optional[ChaseMode]:
+    """
+    Whether an overnight limit is eligible for post-open chase, and how.
+
+    - Open DAY/OPG limits → cancel then market.
+    - Expired OPG limits → market only (auction miss).
+    - Cancelled limits (any TIF) → never chase (explicit exit from the book).
+    - Expired DAY limits → not chased (distinct from auction expiry).
+    """
+    status = _order_status_str(order_obj)
+    if status in _CANCELLED_ORDER_STATUSES:
+        return None
+    if norm["time_in_force"] not in ("day", "opg") or norm["limit_price"] is None:
+        return None
+    if status in _OPEN_ORDER_STATUSES:
+        return "open_limit"
+    if status == "expired" and norm["time_in_force"] == "opg":
+        return "expired_opg"
+    return None
+
+
+def collect_overnight_chase_candidates(
+    orders: List[Any],
+    lookback_cutoff_et,
+    *,
+    normalize_order,
+) -> Dict[str, tuple]:
+    """
+    Newest chase-eligible overnight limit per symbol placed after ``lookback_cutoff_et``.
+
+    Returns ``symbol -> (norm, created_at_et, order_obj, chase_mode)``.
+    """
+    symbol_orders: Dict[str, list] = {}
+    for order_obj in orders:
+        norm = normalize_order(order_obj)
+        chase_mode = _overnight_limit_chase_mode(order_obj, norm)
+        if not chase_mode:
+            continue
+        created_at = _order_created_at(order_obj)
+        if not created_at:
+            continue
+        created_at_et = created_at.astimezone(lookback_cutoff_et.tzinfo)
+        if created_at_et < lookback_cutoff_et:
+            continue
+        symbol = norm["symbol"]
+        symbol_orders.setdefault(symbol, []).append(
+            (norm, created_at_et, order_obj, chase_mode)
+        )
+
+    candidates: Dict[str, tuple] = {}
+    for symbol, rows in symbol_orders.items():
+        rows.sort(key=lambda x: x[1], reverse=True)
+        candidates[symbol] = rows[0]
+    return candidates
+
+
+def collect_open_overnight_chase_candidates(
+    open_orders: List[Any],
+    lookback_cutoff_et,
+    *,
+    normalize_order,
+) -> Dict[str, tuple]:
+    """Backward-compatible wrapper — open orders only."""
+    return collect_overnight_chase_candidates(
+        open_orders,
+        lookback_cutoff_et,
+        normalize_order=normalize_order,
+    )
+
+
+def overnight_order_already_chased(
+    symbol_orders: List[tuple],
+    overnight_order_id: str,
+    overnight_created_at,
+    overnight_side: str,
+) -> bool:
+    """True when a market order for the same side was placed after the overnight limit."""
+    for norm, created_at_et, _ in symbol_orders:
+        if norm["order_id"] == overnight_order_id:
+            continue
+        if created_at_et <= overnight_created_at:
+            continue
+        is_market = norm.get("limit_price") is None
+        if is_market and norm["side"] == overnight_side:
+            return True
+    return False
 
 
 class ExecutionAgent(BaseAgent):
@@ -168,204 +305,159 @@ class ExecutionAgent(BaseAgent):
 
     async def chase_unfilled_orders(self, fill_threshold: float = 0.7) -> Dict[str, Optional[str]]:
         """
-        Post-market-open: chase unfilled overnight orders (both DAY and OPG) with MARKET orders.
-        - For active DAY limit orders (still "open"), we cancel them first and place a market order for the remaining qty.
-        - For expired/cancelled OPG limit orders, we directly place a market order for the remaining qty.
-        To avoid double-chasing, we check if a market order has already been placed for the symbol after the overnight order.
+        Post-market-open chase for unfilled overnight limits.
 
-        Args:
-            fill_threshold: Threshold % for chasing (default 70%)
-
-        Returns:
-            Dict mapping ticker -> new order ID
+        - **Open DAY/OPG limits** → cancel, then market the remainder.
+        - **Expired OPG limits** (opening auction miss) → market only.
+        - **Cancelled limits** (any TIF, including DAY) → never chased.
         """
-        from datetime import datetime, timezone, timedelta
+        import asyncio
         import pytz
         from src.strategies.order_dedup import normalize_open_order
 
         new_orders = {}
         ET = pytz.timezone("US/Eastern")
         now_et = datetime.now(ET)
-        
-        # Determine the start of the current trading session's order placement window.
-        # Orders placed after the previous trading day's close (4:00 PM ET) are for today's session.
-        # This ensures we do not check or chase expired/cancelled orders from previous trading days.
-        if now_et.weekday() == 0:  # Monday
-            # Look back to Friday 4:00 PM ET
-            lookback_cutoff = (now_et - timedelta(days=3)).replace(hour=16, minute=0, second=0, microsecond=0)
-        else:
-            # Look back to yesterday 4:00 PM ET
-            lookback_cutoff = (now_et - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
-
-        def _order_created_at(order_obj: Any) -> Optional[datetime]:
-            created_at = getattr(order_obj, "created_at", None)
-            if created_at is None:
-                created_at = order_obj.get("created_at")
-            if isinstance(created_at, str):
-                try:
-                    if created_at.endswith("Z"):
-                        created_at = created_at[:-1] + "+00:00"
-                    return datetime.fromisoformat(created_at)
-                except Exception:
-                    return None
-            return created_at
+        lookback_cutoff = _overnight_lookback_cutoff_et(now_et)
 
         try:
-            # Query all orders (both open and closed/cancelled/expired)
             all_orders = self.alpaca_client.get_orders(status="all")
-            
-            # Group normalized orders by symbol
-            symbol_orders = {}
-            for o in all_orders:
-                norm = normalize_open_order(o)
+            candidates = collect_overnight_chase_candidates(
+                all_orders,
+                lookback_cutoff,
+                normalize_order=normalize_open_order,
+            )
+            if not candidates:
+                self.log_action("No overnight limit orders eligible for chase")
+                return new_orders
+
+            symbol_history: Dict[str, list] = {}
+            for order_obj in all_orders:
+                norm = normalize_open_order(order_obj)
                 symbol = norm["symbol"]
-                created_at = _order_created_at(o)
+                created_at = _order_created_at(order_obj)
                 if not created_at:
                     continue
                 created_at_et = created_at.astimezone(ET)
-                
-                # Only consider orders within our lookback window
                 if created_at_et >= lookback_cutoff:
-                    if symbol not in symbol_orders:
-                        symbol_orders[symbol] = []
-                    symbol_orders[symbol].append((norm, created_at_et, o))
+                    symbol_history.setdefault(symbol, []).append(
+                        (norm, created_at_et, order_obj)
+                    )
 
-            # Process each symbol
-            for symbol, orders in symbol_orders.items():
-                # Sort orders by creation time descending (most recent first)
-                orders.sort(key=lambda x: x[1], reverse=True)
-                
-                # Find the most recent overnight limit order (TIF is "day" or "opg", and has limit price)
-                overnight_order_info = None
-                for norm, created_at_et, original_obj in orders:
-                    if norm["time_in_force"] in ("day", "opg") and norm["limit_price"] is not None:
-                        overnight_order_info = (norm, created_at_et, original_obj)
-                        break
-                
-                if not overnight_order_info:
-                    continue
-                
-                on_norm, on_created_at, on_original = overnight_order_info
+            for symbol, (on_norm, on_created_at, on_original, chase_mode) in candidates.items():
                 qty = on_norm["qty"]
                 filled_qty = on_norm["filled_qty"]
                 fill_rate = (filled_qty / qty) if qty > 0 else 0.0
-                
-                if fill_rate < fill_threshold:
-                    # Check if we already placed a market order for this symbol after the overnight order
-                    already_chased = False
-                    for norm, created_at_et, _ in orders:
-                        if norm["order_id"] != on_norm["order_id"] and created_at_et > on_created_at:
-                            is_market = norm.get("limit_price") is None
-                            if is_market and norm["side"] == on_norm["side"]:
-                                already_chased = True
-                                break
-                    
-                    if already_chased:
-                        self.log_action(
-                            f"Skipping chase for {symbol}: already chased after overnight order {on_norm['order_id']}"
+                if fill_rate >= fill_threshold:
+                    self.log_action(
+                        f"Skipping chase for {symbol}: overnight order {on_norm['order_id']} "
+                        f"already {fill_rate * 100:.0f}% filled"
+                    )
+                    continue
+
+                history = symbol_history.get(symbol, [])
+                if overnight_order_already_chased(
+                    history,
+                    on_norm["order_id"],
+                    on_created_at,
+                    on_norm["side"],
+                ):
+                    self.log_action(
+                        f"Skipping chase for {symbol}: already chased after overnight order "
+                        f"{on_norm['order_id']}"
+                    )
+                    continue
+
+                remaining_qty = round(qty - filled_qty, 4)
+                if remaining_qty <= 0:
+                    continue
+
+                side = on_norm["side"]
+                if chase_mode == "open_limit":
+                    self.log_action(
+                        f"Cancelling open overnight limit order {on_norm['order_id']} for {symbol} "
+                        f"to chase with market order"
+                    )
+                    cancelled = self.alpaca_client.cancel_order(on_norm["order_id"])
+                    if not cancelled:
+                        self.log_error(
+                            f"Failed to cancel order {on_norm['order_id']} for {symbol} — skipping market chase"
                         )
                         continue
-                    
-                    remaining_qty = round(qty - filled_qty, 4)
-                    if remaining_qty <= 0:
-                        continue
-                        
-                    side = on_norm["side"]
-                    
-                    # If the overnight order is still open (e.g. a DAY order), cancel it first
-                    status_val = getattr(on_original, "status", None)
-                    if status_val is None:
-                        status_val = on_original.get("status")
-                    if hasattr(status_val, "value"):
-                        status_val = status_val.value
-                    status_str = str(status_val).lower() if status_val else ""
-                    
-                    is_open = status_str in ("new", "partially_filled", "accepted", "pending_new", "accepted_for_bidding", "held")
-                    
-                    if is_open:
-                        self.log_action(f"Cancelling open overnight limit order {on_norm['order_id']} for {symbol} to chase with market order")
-                        cancelled = self.alpaca_client.cancel_order(on_norm["order_id"])
-                        if not cancelled:
-                            self.log_error(f"Failed to cancel order {on_norm['order_id']} for {symbol} — skipping market chase")
-                            continue
-                    
-                    # Place a market order for the remaining quantity
-                    try:
-                        # Adaptive Execution: Check recent market conditions (volatility in the last 30 minutes)
-                        # We define "calm" as:
-                        # - Standard deviation of 1-minute returns is < 0.15% (per minute)
-                        # - Total high-low range over the last 30 minutes is < 1.2%
-                        # If the ticker is too volatile, we wait up to 3 retries (1 minute apart) for it to calm down.
-                        max_retries = 3
-                        retry_delay_sec = 60
-                        is_calm = False
-                        
-                        for attempt in range(max_retries + 1):
-                            vol_metrics = self.alpaca_client.get_recent_volatility(symbol, minutes=30)
-                            if not vol_metrics:
-                                if attempt < max_retries:
-                                    self.log_action(
-                                        f"⚠️ Could not calculate volatility for {symbol} (insufficient data) — "
-                                        f"retrying in {retry_delay_sec}s..."
-                                    )
-                                    import asyncio
-                                    await asyncio.sleep(retry_delay_sec)
-                                else:
-                                    self.log_error(
-                                        f"❌ Failed to calculate volatility for {symbol} after {max_retries} retries — "
-                                        f"skipping chase to prevent unsafe execution"
-                                    )
-                                continue
-                                
-                            std_dev = vol_metrics["std_dev_pct"]
-                            hl_range = vol_metrics["range_pct"]
-                            
-                            # Thresholds: std_dev < 0.15% AND range < 1.2%
-                            if std_dev < 0.15 and hl_range < 1.2:
+                else:
+                    self.log_action(
+                        f"Chasing expired OPG limit {on_norm['order_id']} for {symbol} with market order"
+                    )
+
+                try:
+                    max_retries = 3
+                    retry_delay_sec = 60
+                    is_calm = False
+
+                    for attempt in range(max_retries + 1):
+                        vol_metrics = self.alpaca_client.get_recent_volatility(symbol, minutes=30)
+                        if not vol_metrics:
+                            if attempt < max_retries:
                                 self.log_action(
-                                    f"Market conditions for {symbol} are calm: "
-                                    f"30-min std dev is {std_dev:.3f}% (< 0.15%), range is {hl_range:.2f}% (< 1.2%). "
-                                    f"Proceeding with chase."
+                                    f"⚠️ Could not calculate volatility for {symbol} (insufficient data) — "
+                                    f"retrying in {retry_delay_sec}s..."
                                 )
-                                is_calm = True
-                                break
+                                await asyncio.sleep(retry_delay_sec)
                             else:
-                                if attempt < max_retries:
-                                    self.log_action(
-                                        f"⚠️ {symbol} is highly volatile right now (attempt {attempt+1}/{max_retries+1}): "
-                                        f"30-min std dev is {std_dev:.3f}% (threshold: 0.15%), range is {hl_range:.2f}% (threshold: 1.2%). "
-                                        f"Waiting {retry_delay_sec}s for market to calm down before chasing..."
-                                    )
-                                    import asyncio
-                                    await asyncio.sleep(retry_delay_sec)
-                                else:
-                                    self.log_action(
-                                        f"❌ {symbol} remained highly volatile after {max_retries} retries "
-                                        f"(std dev: {std_dev:.3f}%, range: {hl_range:.2f}%). "
-                                        f"Skipping chase for this session to protect against bad execution fills."
-                                    )
-                                    
-                        if not is_calm:
+                                self.log_error(
+                                    f"❌ Failed to calculate volatility for {symbol} after {max_retries} retries — "
+                                    f"skipping chase to prevent unsafe execution"
+                                )
                             continue
 
-                        order_id = self.alpaca_client.place_market_order(
-                            ticker=symbol,
-                            qty=remaining_qty,
-                            side=side
-                        )
-                        new_orders[symbol] = order_id
-                        self.log_action(
-                            f"Chased unfilled overnight {on_norm['time_in_force'].upper()} order {on_norm['order_id']} for {symbol}: "
-                            f"{fill_rate*100:.0f}% filled, placed market order {order_id} "
-                            f"for remaining {remaining_qty} {side.upper()}",
-                            event_type="order_chased"
-                        )
-                    except Exception as e:
-                        self.log_error(f"Failed to chase order for {symbol}: {e}")
-                        
+                        std_dev = vol_metrics["std_dev_pct"]
+                        hl_range = vol_metrics["range_pct"]
+
+                        if std_dev < 0.15 and hl_range < 1.2:
+                            self.log_action(
+                                f"Market conditions for {symbol} are calm: "
+                                f"30-min std dev is {std_dev:.3f}% (< 0.15%), range is {hl_range:.2f}% (< 1.2%). "
+                                f"Proceeding with chase."
+                            )
+                            is_calm = True
+                            break
+
+                        if attempt < max_retries:
+                            self.log_action(
+                                f"⚠️ {symbol} is highly volatile right now (attempt {attempt+1}/{max_retries+1}): "
+                                f"30-min std dev is {std_dev:.3f}% (threshold: 0.15%), range is {hl_range:.2f}% (threshold: 1.2%). "
+                                f"Waiting {retry_delay_sec}s for market to calm down before chasing..."
+                            )
+                            await asyncio.sleep(retry_delay_sec)
+                        else:
+                            self.log_action(
+                                f"❌ {symbol} remained highly volatile after {max_retries} retries "
+                                f"(std dev: {std_dev:.3f}%, range: {hl_range:.2f}%). "
+                                f"Skipping chase for this session to protect against bad execution fills."
+                            )
+
+                    if not is_calm:
+                        continue
+
+                    order_id = self.alpaca_client.place_market_order(
+                        ticker=symbol,
+                        qty=remaining_qty,
+                        side=side,
+                    )
+                    new_orders[symbol] = order_id
+                    self.log_action(
+                        f"Chased unfilled overnight {on_norm['time_in_force'].upper()} order "
+                        f"{on_norm['order_id']} for {symbol}: "
+                        f"{fill_rate*100:.0f}% filled, placed market order {order_id} "
+                        f"for remaining {remaining_qty} {side.upper()}",
+                        event_type="order_chased",
+                    )
+                except Exception as e:
+                    self.log_error(f"Failed to chase order for {symbol}: {e}")
+
         except Exception as e:
             self.log_error(f"Failed to run chase unfilled orders: {e}")
-            
+
         return new_orders
 
     async def execute(self) -> bool:
