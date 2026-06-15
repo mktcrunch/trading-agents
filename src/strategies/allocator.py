@@ -139,6 +139,24 @@ class PositionAllocator:
         return weights
 
     @staticmethod
+    def _shares_from_portfolio_weight(
+        size_pct: float,
+        portfolio_value: float,
+        price: float,
+        max_shares: int,
+    ) -> int:
+        """size_pct is portfolio weight; return share count capped at max_shares."""
+        if portfolio_value <= 0 or price <= 0 or max_shares <= 0:
+            return 0
+        weight = min(max(float(size_pct), 0.0), 1.0)
+        if weight <= 0:
+            return 0
+        qty = int(portfolio_value * weight / price)
+        if qty <= 0:
+            return 0
+        return min(qty, max_shares)
+
+    @staticmethod
     def allocate_from_decisions(
         decisions: List["TradingDecision"],
         portfolio_value: float,
@@ -175,27 +193,41 @@ class PositionAllocator:
                 if qty > 0:
                     position_changes[decision.ticker] = -qty
 
-            elif decision.action in ("SELL", "CLOSE"):
+            elif decision.action == "CLOSE":
+                position = current_positions.get(decision.ticker)
+                if not position or position.qty == 0:
+                    continue
+                if position.qty > 0:
+                    position_changes[decision.ticker] = -int(position.qty)
+                else:
+                    position_changes[decision.ticker] = abs(int(position.qty))
+
+            elif decision.action == "SELL":
                 position = current_positions.get(decision.ticker)
                 if not position or position.qty <= 0:
                     continue
-                if decision.action == "CLOSE":
-                    sell_qty = int(position.qty)
-                else:
-                    sell_pct = min(max(decision.size_pct, 0.01), 1.0)
-                    sell_qty = max(1, int(position.qty * sell_pct))
-                    sell_qty = min(sell_qty, int(position.qty))
-                position_changes[decision.ticker] = -sell_qty
+                sell_qty = PositionAllocator._shares_from_portfolio_weight(
+                    decision.size_pct,
+                    portfolio_value,
+                    price,
+                    int(position.qty),
+                )
+                if sell_qty > 0:
+                    position_changes[decision.ticker] = -sell_qty
 
             elif decision.action == "COVER":
                 position = current_positions.get(decision.ticker)
                 if not position or position.qty >= 0:
                     continue
                 short_qty = abs(int(position.qty))
-                cover_pct = min(max(decision.size_pct, 0.01), 1.0)
-                cover_qty = max(1, int(short_qty * cover_pct))
-                cover_qty = min(cover_qty, short_qty)
-                position_changes[decision.ticker] = cover_qty
+                cover_qty = PositionAllocator._shares_from_portfolio_weight(
+                    decision.size_pct,
+                    portfolio_value,
+                    price,
+                    short_qty,
+                )
+                if cover_qty > 0:
+                    position_changes[decision.ticker] = cover_qty
 
         logger.info(f"Twin Ledger allocation: {len(position_changes)} order(s) from decisions")
         return position_changes

@@ -27,6 +27,7 @@ Trading constraints:
 - Kelly fraction cap: {config.INTERNAL_CONFIG.get('kelly_fraction', 0.25)}
 - Max 10% portfolio per BUY or SHORT (size_pct <= 0.10)
 - Actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
+- size_pct is always portfolio weight (same for entries and exits). CLOSE exits the full position; COVER/SELL reduce by that portfolio slice (capped at open qty)
 - Use SHORT when MC target is negative with sufficient confidence; COVER to reduce/exit shorts
 
 Return structured decisions via output_schema. Size BUY and SHORT entries using Kelly

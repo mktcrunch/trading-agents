@@ -407,8 +407,7 @@ class RiskMonitor:
         else:
             stop_px = pos.avg_entry_price + dist
             atr_return = (pos.avg_entry_price - stop_px) / pos.avg_entry_price
-        effective = max(fixed, atr_return)
-        return effective, f"scripted_fixed+atr({effective * 100:.1f}%)"
+        return atr_return, f"atr_{mult}x({atr_return * 100:.1f}%)"
 
     def _llm_base_stop_plan(
         self,

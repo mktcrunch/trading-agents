@@ -121,7 +121,7 @@ Overnight internal: try discovery → on failure use GCS cache → else continue
 
 | Feature | Baseline | Internal |
 |---------|----------|----------|
-| Base stop | Pure LLM return threshold | Scripted -1%/ATR floor merged with LLM tightening |
+| Base stop | Pure LLM return threshold | ATR × 1.5 scripted floor (fallback -1%) merged with LLM tightening |
 | Trailing | Pure LLM activation + profit lock | Scripted 1%/70% floor merged with LLM tightening |
 | Overnight risk | Pure LLM entry approval + hard caps | Scripted caps + LLM reject gate |
 | Prediction gate | No | 15-min MC API can defer exits |

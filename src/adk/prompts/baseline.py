@@ -23,6 +23,7 @@ Trading constraints:
 - Max {config.BASELINE_CONFIG.get('max_positions', 8)} open positions
 - Max 10% portfolio per BUY or SHORT (size_pct <= 0.10)
 - Actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
+- size_pct is always portfolio weight (same for entries and exits). CLOSE exits the full position; COVER/SELL reduce by that portfolio slice (capped at open qty)
 
 Return structured decisions via output_schema. Include non-HOLD entries only when actionable.
 Each decision needs: action, ticker, size_pct, confidence, rationale, invalidation, competitive_note.
