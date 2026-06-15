@@ -55,12 +55,21 @@ class RiskAgent(BaseAgent):
 
         if self.system == "internal":
             cfg = config.INTERNAL_CONFIG
+            risk_cfg = config.INTERNAL_RISK_CONFIG
         else:
             cfg = config.BASELINE_CONFIG
+            risk_cfg = config.BASELINE_RISK_CONFIG
 
         self.max_position_weight = cfg.get("position_size_pct", 0.10)
         self.max_total_exposure = 1.25
         self.max_positions = cfg.get("max_positions", 8)
+        self.overnight_risk_mode = risk_cfg.get(
+            "overnight_risk_mode", "llm" if system == "baseline" else "hybrid"
+        )
+        self._overnight_planner = None
+        if risk_cfg.get("llm_overnight_risk_planner", True):
+            from src.risk.overnight_risk_planner import OvernightRiskPlanner
+            self._overnight_planner = OvernightRiskPlanner(system=system)
         self._alpaca = AlpacaClient(system=system)
 
     @staticmethod
@@ -149,6 +158,59 @@ class RiskAgent(BaseAgent):
             for t in tickers
         )
 
+    def _portfolio_context(
+        self,
+        *,
+        running_long: Mapping[str, float],
+        running_short: Mapping[str, float],
+        running_gross: float,
+        held_long: Mapping[str, float],
+        held_short: Mapping[str, float],
+        pending_long: Mapping[str, float],
+        pending_short: Mapping[str, float],
+        accepted_tickers: set,
+        baseline_gross: float,
+    ) -> Dict[str, Any]:
+        return {
+            "running_gross_exposure": round(running_gross, 4),
+            "baseline_gross_exposure": round(baseline_gross, 4),
+            "max_gross_exposure": self.max_total_exposure,
+            "position_count": len(accepted_tickers),
+            "max_positions": self.max_positions,
+            "max_position_weight": self.max_position_weight,
+            "held_long": {k: round(v, 4) for k, v in held_long.items()},
+            "held_short": {k: round(v, 4) for k, v in held_short.items()},
+            "pending_long": {k: round(v, 4) for k, v in pending_long.items()},
+            "pending_short": {k: round(v, 4) for k, v in pending_short.items()},
+            "running_long": {k: round(v, 4) for k, v in running_long.items()},
+            "running_short": {k: round(v, 4) for k, v in running_short.items()},
+        }
+
+    def _overnight_llm_approve(
+        self,
+        ticker: str,
+        side: str,
+        weight: float,
+        portfolio_context: Dict[str, Any],
+        *,
+        scripted_passed: bool,
+    ) -> bool:
+        if not self._overnight_planner:
+            return scripted_passed if self.overnight_risk_mode == "hybrid" else True
+        plan = self._overnight_planner.plan_entry(
+            ticker,
+            side,
+            weight,
+            portfolio_context,
+            scripted_passed=scripted_passed,
+        )
+        if not plan.get("approved"):
+            self.log_risk_rejection(
+                f"{ticker}: LLM rejected overnight {side} — {plan.get('rationale', '')}"
+            )
+            return False
+        return True
+
     async def validate_positions(
         self,
         proposed_positions: Dict[str, float],
@@ -212,6 +274,25 @@ class RiskAgent(BaseAgent):
             if side not in ("long", "short"):
                 side = "long"
 
+            portfolio_context = self._portfolio_context(
+                running_long=running_long,
+                running_short=running_short,
+                running_gross=running_gross,
+                held_long=held_long,
+                held_short=held_short,
+                pending_long=pending_long,
+                pending_short=pending_short,
+                accepted_tickers=accepted_tickers,
+                baseline_gross=baseline_gross,
+            )
+
+            if self.overnight_risk_mode == "llm":
+                if not self._overnight_llm_approve(
+                    ticker, side, weight, portfolio_context, scripted_passed=True
+                ):
+                    validation_results[ticker] = False
+                    continue
+
             if side == "long":
                 if running_short.get(ticker, 0.0) > 0:
                     self.log_risk_rejection(
@@ -266,6 +347,13 @@ class RiskAgent(BaseAgent):
                 )
                 validation_results[ticker] = False
                 continue
+
+            if self.overnight_risk_mode == "hybrid":
+                if not self._overnight_llm_approve(
+                    ticker, side, weight, portfolio_context, scripted_passed=True
+                ):
+                    validation_results[ticker] = False
+                    continue
 
             validation_results[ticker] = True
             if side == "long":

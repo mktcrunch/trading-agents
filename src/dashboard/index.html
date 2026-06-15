@@ -1723,6 +1723,13 @@
       color: var(--subtle);
       margin-bottom: 0.65rem;
     }
+    .activity-session-hint {
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: lowercase;
+      color: var(--accent);
+      opacity: 0.85;
+    }
     .decision-feed { display: flex; flex-direction: column; gap: 0.55rem; }
     .decision-card {
       background: var(--bg);
@@ -3214,6 +3221,23 @@
         };
       }
 
+      if (et === "base_stop_planned") {
+        const rationale = String(p.rationale || e.action || "").trim();
+        if (!rationale) return null;
+        const thr = p.stop_loss_threshold != null
+          ? `${(p.stop_loss_threshold * 100).toFixed(1)}% stop`
+          : "";
+        const ret = p.return_pct != null ? `${Number(p.return_pct).toFixed(2)}% now` : "";
+        return {
+          ...e,
+          _kind: "risk",
+          _action: "STOP",
+          _ticker: String(p.ticker || "").toUpperCase(),
+          _rationale: rationale,
+          _meta: [ret, thr].filter(Boolean).join(" · "),
+        };
+      }
+
       return null;
     }
 
@@ -3282,6 +3306,40 @@
       items.splice(worstIdx, 1);
     }
 
+    const ACTIVITY_RISK_TYPES = [
+      "risk_stop_exit",
+      "risk_eod_exit",
+      "risk_held",
+      "trailing_stop_planned",
+      "base_stop_planned",
+    ];
+    const ACTIVITY_ALL_TYPES = ["ledger_decision", "order_placed", ...ACTIVITY_RISK_TYPES];
+
+    function activityDedupKey(e) {
+      return `${e.event_type}|${e._action}|${e._ticker}|${e._rationale.slice(0, 80)}`;
+    }
+
+    function pickRiskOnlyActivity(events, limit = 5) {
+      const sorted = [...(events || [])]
+        .filter(e => e._kind === "risk")
+        .sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+      const seen = new Set();
+      const out = [];
+      let trailCount = 0;
+      for (const e of sorted) {
+        if (e.event_type === "trailing_stop_planned") {
+          if (trailCount >= 1) continue;
+          trailCount += 1;
+        }
+        const key = activityDedupKey(e);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(e);
+        if (out.length >= limit) break;
+      }
+      return out;
+    }
+
     function pickRecentActivity(events, limit = 5) {
       const seen = new Set();
       const sorted = [...(events || [])].sort((a, b) =>
@@ -3294,7 +3352,7 @@
           if (trailCount >= 1) continue;
           trailCount += 1;
         }
-        const key = `${e.event_type}|${e._action}|${e._ticker}|${e._rationale.slice(0, 80)}`;
+        const key = activityDedupKey(e);
         if (seen.has(key)) continue;
         seen.add(key);
         out.push(e);
@@ -3303,8 +3361,8 @@
       if (!out.some(e => e._kind === "risk")) {
         for (const e of sorted) {
           if (e._kind !== "risk") continue;
-          const key = `${e.event_type}|${e._action}|${e._ticker}|${e._rationale.slice(0, 80)}`;
-          if (out.some(x => `${x.event_type}|${x._action}|${x._ticker}|${x._rationale.slice(0, 80)}` === key)) continue;
+          const key = activityDedupKey(e);
+          if (out.some(x => activityDedupKey(x) === key)) continue;
           if (out.length >= limit) dropLowestActivityPriority(out);
           out.push(e);
           break;
@@ -3313,15 +3371,17 @@
       return out.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || "")).slice(0, limit);
     }
 
-    async function fetchRecentActivity(system, limit = 5) {
-      const types = [
-        "ledger_decision",
-        "order_placed",
-        "risk_stop_exit",
-        "risk_eod_exit",
-        "risk_held",
-        "trailing_stop_planned",
-      ];
+    async function fetchMarketOpen() {
+      try {
+        const data = await fetchJSON("/api/market-clock");
+        return Boolean(data?.is_open);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function fetchRecentActivity(system, limit = 5, marketOpen = false) {
+      const types = marketOpen ? ACTIVITY_RISK_TYPES : ACTIVITY_ALL_TYPES;
       try {
         const batches = await Promise.all(types.map(t =>
           fetchJSON(
@@ -3330,16 +3390,23 @@
         ));
         const rawEvents = batches.flat();
         const normalized = rawEvents.map(normalizeActivityEvent).filter(Boolean);
-        const annotated = annotatePlacementStatus(normalized, rawEvents, system);
-        return pickRecentActivity(annotated, limit);
+        const annotated = marketOpen
+          ? normalized
+          : annotatePlacementStatus(normalized, rawEvents, system);
+        return marketOpen
+          ? pickRiskOnlyActivity(annotated, limit)
+          : pickRecentActivity(annotated, limit);
       } catch (_) {
         return [];
       }
     }
 
-    function renderActivityFeed(items) {
+    function renderActivityFeed(items, marketOpen = false) {
       if (!items.length) {
-        return `<div class="decision-empty"><span class="holdings-empty-title">No recent activity</span><span class="holdings-empty-sub">Signal proposals and risk actions from the last 7 days appear here. Placement status shows what actually reached Alpaca.</span></div>`;
+        const sub = marketOpen
+          ? "Intraday risk actions (stops, trailing, holds) appear here while the market is open."
+          : "Signal proposals and risk actions from the last 7 days appear here. Placement status shows what actually reached Alpaca.";
+        return `<div class="decision-empty"><span class="holdings-empty-title">No recent activity</span><span class="holdings-empty-sub">${sub}</span></div>`;
       }
       return `<div class="decision-feed">${items.map(e => {
         const traceAttr = e.trace_id
@@ -3391,7 +3458,7 @@
         </table>`;
     }
 
-    function renderTraderPanel(system, portfolio, activity, leader) {
+    function renderTraderPanel(system, portfolio, activity, leader, marketOpen = false) {
       const isBaseline = system === "baseline";
       const name = isBaseline ? "Baseline" : "Internal";
       const tagline = isBaseline
@@ -3413,8 +3480,8 @@
             <div class="trader-meta">${escHtml(tagline)} · Cash ${fmtUsd(portfolio.cash)} · ${portfolio.position_count || 0} positions</div>
           </div>
           <div class="trader-section">
-            <h3>Recent activity</h3>
-            ${renderActivityFeed(activity)}
+            <h3>Recent activity${marketOpen ? " <span class=\"activity-session-hint\">market open · risk only</span>" : ""}</h3>
+            ${renderActivityFeed(activity, marketOpen)}
           </div>
           <div class="trader-section">
             <h3>Open positions</h3>
@@ -3423,7 +3490,7 @@
         </article>`;
     }
 
-    function renderPerformance(data, recentActivity = {}) {
+    function renderPerformance(data, recentActivity = {}, marketOpen = false) {
       if (!data || !data.live) {
         showPerfError("Performance data unavailable. Restart the server: python main.py --serve");
         return;
@@ -3448,8 +3515,8 @@
         <div class="rank-values">#${lb.baseline_rank} Baseline · #${lb.internal_rank} Internal</div>`;
 
       document.getElementById("perf-dual").innerHTML =
-        renderTraderPanel("baseline", baseline, recentActivity.baseline || [], leaderKey) +
-        renderTraderPanel("internal", internal, recentActivity.internal || [], leaderKey);
+        renderTraderPanel("baseline", baseline, recentActivity.baseline || [], leaderKey, marketOpen) +
+        renderTraderPanel("internal", internal, recentActivity.internal || [], leaderKey, marketOpen);
 
       drawChart(data.history || {}, data.since_hours || 168);
       const pts = data.history_points || {};
@@ -3567,15 +3634,7 @@
       const hours = document.getElementById("perf-hours").value;
       let data = null;
       try {
-        const [perf, baselineActivity, internalActivity] = await Promise.all([
-          fetchJSON(`/api/performance?hours=${hours}`),
-          fetchRecentActivity("baseline", 5),
-          fetchRecentActivity("internal", 5),
-        ]);
-        data = perf;
-        renderPerformance(data, { baseline: baselineActivity, internal: internalActivity });
-        markPerfRefreshed();
-        return;
+        data = await fetchJSON(`/api/performance?hours=${hours}`);
       } catch (e) {
         // Fallback: older servers expose performance via /api/summary
         try {
@@ -3592,11 +3651,12 @@
           return;
         }
       }
+      const marketOpen = await fetchMarketOpen();
       const [baselineActivity, internalActivity] = await Promise.all([
-        fetchRecentActivity("baseline", 5),
-        fetchRecentActivity("internal", 5),
+        fetchRecentActivity("baseline", 5, marketOpen),
+        fetchRecentActivity("internal", 5, marketOpen),
       ]);
-      renderPerformance(data, { baseline: baselineActivity, internal: internalActivity });
+      renderPerformance(data, { baseline: baselineActivity, internal: internalActivity }, marketOpen);
       markPerfRefreshed();
     }
 
@@ -3962,6 +4022,14 @@
         if (payload.activation_threshold != null) add("Activation Threshold", `${(payload.activation_threshold * 100).toFixed(2)}%`);
         if (payload.profit_lock_fraction != null) add("Profit Lock Fraction", `${(payload.profit_lock_fraction * 100).toFixed(2)}%`);
         if (payload.current_return != null) add("Current Return", `${(payload.current_return * 100).toFixed(2)}%`);
+        add("Policy", payload.policy);
+        add("LLM Rationale", payload.rationale);
+      } else if (eventType === "base_stop_planned") {
+        add("Ticker", payload.ticker);
+        if (payload.stop_loss_threshold != null) {
+          add("Stop Threshold", `${(payload.stop_loss_threshold * 100).toFixed(2)}%`);
+        }
+        if (payload.return_pct != null) add("Current Return", `${payload.return_pct}%`);
         add("Policy", payload.policy);
         add("LLM Rationale", payload.rationale);
       } else if (eventType === "risk_positions_checked") {

@@ -1,8 +1,8 @@
 """
 Intraday risk monitor for baseline and internal Alpaca accounts.
 
-Internal: ATR base stops, hybrid trailing (scripted 1%/70% + LLM), 15-min prediction, EOD.
-Baseline: fixed base stop, pure LLM trailing, EOD — no prediction deferral.
+Internal: hybrid base stop (scripted -1%/ATR + LLM), hybrid trailing, 15-min prediction, EOD.
+Baseline: pure LLM base stop + trailing, EOD — no prediction deferral.
 """
 from __future__ import annotations
 
@@ -19,7 +19,8 @@ from src.apis.alpaca_client import AlpacaClient
 from src.logger import setup_logger
 from src.models.position import Position
 from src.risk.risk_state import RiskStateStore
-from src.risk.trailing_planner import TrailingPlanner, merge_hybrid_trailing
+from src.risk.base_stop_planner import BaseStopPlanner, merge_hybrid_base_stop
+from src.risk.trailing_planner import TrailingPlanner, merge_hybrid_trailing, position_side_label
 
 logger = setup_logger(__name__)
 
@@ -59,6 +60,9 @@ class RiskMonitor:
         self._trailing_planner = None
         if self.cfg.get("llm_trailing_planner") or self.cfg.get("trailing_mode") in ("llm", "hybrid"):
             self._trailing_planner = TrailingPlanner(system=system)
+        self._base_stop_planner = None
+        if self.cfg.get("llm_base_stop_planner") or self.cfg.get("base_stop_mode") in ("llm", "hybrid"):
+            self._base_stop_planner = BaseStopPlanner(system=system)
         self._mc_client = None
         if system == "internal":
             from src.apis.marketcrunch_client import MarketCrunchClient
@@ -171,6 +175,7 @@ class RiskMonitor:
             entry=pos.avg_entry_price,
             current_price=pos.current_price,
             current_return=current_return,
+            qty=pos.qty,
             atr_pct=atr_pct,
             momentum_5d=self._momentum_5d(ticker),
             mc_context=self._mc_context(ticker) if self.system == "internal" else None,
@@ -178,6 +183,30 @@ class RiskMonitor:
         )
         llm_cache[ticker] = plan
         return plan
+
+    @staticmethod
+    def _trailing_audit_payload(
+        pos: Position,
+        current_return: float,
+        *,
+        activation: float,
+        lock_frac: float,
+        policy: str,
+        rationale: str,
+    ) -> Dict[str, Any]:
+        return {
+            "ticker": pos.ticker,
+            "side": position_side_label(pos.qty),
+            "qty": pos.qty,
+            "entry_price": round(pos.avg_entry_price, 4),
+            "current_price": round(pos.current_price, 4),
+            "activation_threshold": activation,
+            "profit_lock_fraction": lock_frac,
+            "current_return": current_return,
+            "return_pct": round(current_return * 100, 4),
+            "policy": policy,
+            "rationale": rationale,
+        }
 
     def _resolve_trailing_params(
         self,
@@ -201,18 +230,24 @@ class RiskMonitor:
             policy = f"llm:{plan.get('rationale', '')[:80]}"
             
             # Log audit event for trailing stop planning
+            rationale = str(plan.get("rationale") or "").strip()
             _audit(
                 event_type="trailing_stop_planned",
-                action=f"Planned trailing stop for {ticker}: activation={activation*100:.1f}%, lock={lock_frac*100:.1f}%",
+                action=(
+                    f"Trailing plan for {ticker} ({position_side_label(pos.qty)}): {rationale}"
+                    if rationale
+                    else f"Planned trailing stop for {ticker}: "
+                    f"activation={activation*100:.1f}%, lock={lock_frac*100:.1f}%"
+                ),
                 system=self.system,
-                payload={
-                    "ticker": ticker,
-                    "activation_threshold": activation,
-                    "profit_lock_fraction": lock_frac,
-                    "current_return": current_return,
-                    "policy": "llm",
-                    "rationale": plan.get("rationale")
-                }
+                payload=self._trailing_audit_payload(
+                    pos,
+                    current_return,
+                    activation=activation,
+                    lock_frac=lock_frac,
+                    policy="llm",
+                    rationale=rationale,
+                ),
             )
             return (
                 activation,
@@ -232,18 +267,24 @@ class RiskMonitor:
             )
             
             # Log audit event for trailing stop planning
+            rationale = str(plan.get("rationale") or "").strip()
             _audit(
                 event_type="trailing_stop_planned",
-                action=f"Planned trailing stop for {ticker}: activation={activation*100:.1f}%, lock={lock_frac*100:.1f}%",
+                action=(
+                    f"Trailing plan for {ticker} ({position_side_label(pos.qty)}): {rationale}"
+                    if rationale
+                    else f"Planned trailing stop for {ticker}: "
+                    f"activation={activation*100:.1f}%, lock={lock_frac*100:.1f}%"
+                ),
                 system=self.system,
-                payload={
-                    "ticker": ticker,
-                    "activation_threshold": activation,
-                    "profit_lock_fraction": lock_frac,
-                    "current_return": current_return,
-                    "policy": policy,
-                    "rationale": plan.get("rationale")
-                }
+                payload=self._trailing_audit_payload(
+                    pos,
+                    current_return,
+                    activation=activation,
+                    lock_frac=lock_frac,
+                    policy=policy,
+                    rationale=rationale,
+                ),
             )
             return activation, lock_frac, policy
 
@@ -338,17 +379,142 @@ class RiskMonitor:
         for t in stale_llm:
             del llm_params[t]
 
+        base_params = state.get("llm_base_stop_params", {})
+        stale_base = [t for t in base_params if t not in positions]
+        for t in stale_base:
+            del base_params[t]
+
     # ------------------------------------------------------------------
     # Stop identification
     # ------------------------------------------------------------------
 
-    def _base_stop_hit(
-        self, ticker: str, pos: Position, current_return: float
-    ) -> Tuple[bool, str]:
-        threshold = self.cfg["base_stop_loss_threshold"]
+    def _scripted_base_stop_threshold(
+        self, ticker: str, pos: Position
+    ) -> Tuple[float, str]:
+        fixed = float(self.cfg["base_stop_loss_threshold"])
+        if not self.cfg.get("use_atr_base_stop", False) or pos.avg_entry_price <= 0:
+            return fixed, f"fixed_{fixed * 100:.1f}%"
 
+        atr = self._get_atr(ticker)
+        if not atr or atr <= 0:
+            return fixed, f"fixed_{fixed * 100:.1f}%"
+
+        mult = self.cfg.get("atr_stop_multiplier", 1.5)
+        dist = atr * mult
+        if pos.qty >= 0:
+            stop_px = pos.avg_entry_price - dist
+            atr_return = (stop_px - pos.avg_entry_price) / pos.avg_entry_price
+        else:
+            stop_px = pos.avg_entry_price + dist
+            atr_return = (pos.avg_entry_price - stop_px) / pos.avg_entry_price
+        effective = max(fixed, atr_return)
+        return effective, f"scripted_fixed+atr({effective * 100:.1f}%)"
+
+    def _llm_base_stop_plan(
+        self,
+        state: Dict,
+        ticker: str,
+        pos: Position,
+        current_return: float,
+        scripted_threshold: Optional[float] = None,
+    ) -> Dict:
+        atr = self._get_atr(ticker)
+        atr_pct = (atr / pos.current_price) if atr and pos.current_price else None
+        cache = state.setdefault("llm_base_stop_params", {})
+        cached = cache.get(ticker)
+        plan = self._base_stop_planner.plan(
+            ticker=ticker,
+            entry=pos.avg_entry_price,
+            current_price=pos.current_price,
+            current_return=current_return,
+            qty=pos.qty,
+            atr_pct=atr_pct,
+            momentum_5d=self._momentum_5d(ticker),
+            mc_context=self._mc_context(ticker) if self.system == "internal" else None,
+            scripted_threshold=scripted_threshold,
+            cached=cached,
+        )
+        cache[ticker] = plan
+        return plan
+
+    def _resolve_base_stop_threshold(
+        self,
+        state: Dict,
+        ticker: str,
+        pos: Position,
+        current_return: float,
+    ) -> Tuple[float, str]:
+        mode = self.cfg.get("base_stop_mode", "llm")
+
+        if mode == "llm":
+            if not self._base_stop_planner:
+                thr = float(self.cfg["base_stop_loss_threshold"])
+                return thr, f"fixed_{thr * 100:.1f}%"
+            plan = self._llm_base_stop_plan(state, ticker, pos, current_return)
+            threshold = float(plan["stop_loss_threshold"])
+            rationale = str(plan.get("rationale") or "").strip()
+            _audit(
+                event_type="base_stop_planned",
+                action=(
+                    f"Base stop plan for {ticker} ({position_side_label(pos.qty)}): {rationale}"
+                    if rationale
+                    else f"Planned base stop for {ticker}: {threshold * 100:.1f}%"
+                ),
+                system=self.system,
+                payload={
+                    "ticker": ticker,
+                    "side": position_side_label(pos.qty),
+                    "stop_loss_threshold": threshold,
+                    "current_return": current_return,
+                    "return_pct": round(current_return * 100, 4),
+                    "policy": "llm",
+                    "rationale": rationale,
+                },
+            )
+            return threshold, f"llm:{rationale[:80]}"
+
+        if mode == "hybrid":
+            scripted, scripted_policy = self._scripted_base_stop_threshold(ticker, pos)
+            if not self._base_stop_planner:
+                return scripted, scripted_policy
+            plan = self._llm_base_stop_plan(
+                state, ticker, pos, current_return, scripted_threshold=scripted
+            )
+            threshold, policy = merge_hybrid_base_stop(scripted, plan)
+            rationale = str(plan.get("rationale") or "").strip()
+            _audit(
+                event_type="base_stop_planned",
+                action=(
+                    f"Base stop plan for {ticker} ({position_side_label(pos.qty)}): {rationale}"
+                    if rationale
+                    else f"Planned base stop for {ticker}: {threshold * 100:.1f}%"
+                ),
+                system=self.system,
+                payload={
+                    "ticker": ticker,
+                    "side": position_side_label(pos.qty),
+                    "stop_loss_threshold": threshold,
+                    "scripted_threshold": scripted,
+                    "current_return": current_return,
+                    "return_pct": round(current_return * 100, 4),
+                    "policy": policy,
+                    "rationale": rationale,
+                },
+            )
+            return threshold, policy
+
+        thr = float(self.cfg["base_stop_loss_threshold"])
+        return thr, f"fixed_{thr * 100:.1f}%"
+
+    def _base_stop_hit(
+        self,
+        state: Dict,
+        ticker: str,
+        pos: Position,
+        current_return: float,
+    ) -> Tuple[bool, str]:
         if current_return >= 0:
-            return current_return <= threshold, "fixed_positive"
+            return False, "not_losing"
 
         if self.cfg.get("use_atr_base_stop", False):
             atr = self._get_atr(ticker)
@@ -357,15 +523,18 @@ class RiskMonitor:
                 dist = atr * mult
                 if pos.qty >= 0:
                     stop_px = pos.avg_entry_price - dist
-                    hit = pos.current_price <= stop_px
+                    if pos.current_price <= stop_px:
+                        return True, f"atr_stop@${stop_px:.2f}"
                 else:
                     stop_px = pos.avg_entry_price + dist
-                    hit = pos.current_price >= stop_px
-                if hit:
-                    return True, f"atr_stop@${stop_px:.2f}"
-                return False, f"atr_active@${stop_px:.2f}"
+                    if pos.current_price >= stop_px:
+                        return True, f"atr_stop@${stop_px:.2f}"
 
-        return current_return <= threshold, f"fixed_{threshold*100:.1f}%"
+        threshold, policy = self._resolve_base_stop_threshold(
+            state, ticker, pos, current_return
+        )
+        hit = current_return <= threshold
+        return hit, (policy if hit else f"active:{policy}")
 
     def _identify_stop_candidates(
         self, positions: Dict[str, Position], state: Dict
@@ -376,7 +545,7 @@ class RiskMonitor:
             self._update_trailing_stop(state, ticker, pos, ret)
 
             trailing = self._trailing_triggered(state, ticker, pos.current_price)
-            base_hit, base_reason = self._base_stop_hit(ticker, pos, ret)
+            base_hit, base_reason = self._base_stop_hit(state, ticker, pos, ret)
 
             if trailing:
                 candidates.append((ticker, pos, ret, "trailing_stop"))
@@ -516,9 +685,11 @@ class RiskMonitor:
         for ticker, pos in positions.items():
             ret = self._position_return(pos)
             position_returns[ticker] = {
+                "side": position_side_label(pos.qty),
+                "qty": pos.qty,
                 "current_price": pos.current_price,
                 "entry_price": pos.avg_entry_price,
-                "return_pct": round(ret * 100, 4)
+                "return_pct": round(ret * 100, 4),
             }
         _audit(
             event_type="risk_positions_checked",

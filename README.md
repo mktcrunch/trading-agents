@@ -23,7 +23,7 @@ Licensed under the [Apache License 2.0](LICENSE).
 | **Sizing** | `size_pct` from LLM (max 10%/position) | Ledger decisions + Kelly on BUY and SHORT entries |
 | **Discovery** | — | Agentic DataBento catalog scan, LLM feature formulas |
 | **Overnight orders** | OPG limit ±0.5% from close | Same |
-| **Intraday risk** | Fixed -1% stop, pure LLM trailing | ATR stops, hybrid trailing, 15-min prediction gate, EOD exit |
+| **Intraday risk** | Pure LLM base stop + trailing | Hybrid base stop (scripted + LLM), hybrid trailing, 15-min gate, EOD |
 
 Both agents see a live leaderboard (portfolio value vs competitor) in every Twin Ledger prompt.
 
@@ -121,8 +121,9 @@ Overnight internal: try discovery → on failure use GCS cache → else continue
 
 | Feature | Baseline | Internal |
 |---------|----------|----------|
-| Base stop | Fixed -1% | ATR × 1.5 (fallback -1%) |
+| Base stop | Pure LLM return threshold | Scripted -1%/ATR floor merged with LLM tightening |
 | Trailing | Pure LLM activation + profit lock | Scripted 1%/70% floor merged with LLM tightening |
+| Overnight risk | Pure LLM entry approval + hard caps | Scripted caps + LLM reject gate |
 | Prediction gate | No | 15-min MC API can defer exits |
 | EOD exit | -0.95% losers ~3:54 PM ET | ATR-implied or -0.95% |
 
@@ -134,7 +135,7 @@ Before placing overnight orders:
 - **Delta placement** — only buy the gap vs pending open orders  
 - **Exact duplicate skip** — same symbol/side/qty/price/TIF  
 - **Buying power** — skip or scale buys when cash is insufficient  
-- **Risk caps** — per-ticker and gross exposure include held + pending + proposed weights  
+- **Risk caps** — per-ticker and gross exposure include held + pending + proposed weights (internal: scripted first, then LLM; baseline: LLM then hard caps)
 
 **Re-triggering overnight runs:** by default the pipeline skips non-market days (weekends, Alpaca holidays). Pass **`skip_calendar=true`** (or **`force=true`**) to bypass — safe to re-run because dedup + risk caps prevent duplicate orders. Ways to force:
 
@@ -183,7 +184,7 @@ Every action is logged to `data/audit_events.jsonl` with trace IDs linking full 
 - `signal_gemini_query` — exact Gemini input for the signal step (`query_text`, `coverage` counts)  
 - `discovery_probe`, `risk_rejected`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
 
-API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
+API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/market-clock`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
 
 `order_placed` rows returned by `/api/events`, `/api/trace/{id}`, and `get_recent_trading_activity` are annotated with live Alpaca fields (`alpaca_status`, `alpaca_is_active`, …) so manual cancels show as `canceled` even though the audit only records placement.
 

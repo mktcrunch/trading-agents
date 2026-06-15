@@ -123,6 +123,26 @@ class JobHandler(BaseHTTPRequestHandler):
             _json_response(self, 200, query_agent_activity(system, agent_role, hours, limit))
             return
 
+        if path == "/api/market-clock":
+            from src.apis.alpaca_client import AlpacaClient
+
+            clock = AlpacaClient(system="baseline").get_clock()
+            if not clock:
+                _json_response(self, 200, {"is_open": False, "source": "unavailable"})
+                return
+            _json_response(
+                self,
+                200,
+                {
+                    "is_open": bool(clock.get("is_open")),
+                    "timestamp": str(clock.get("timestamp") or ""),
+                    "next_open": str(clock.get("next_open") or ""),
+                    "next_close": str(clock.get("next_close") or ""),
+                    "source": "alpaca",
+                },
+            )
+            return
+
         if path == "/api/learning":
             from src.adk.tools.dashboard_tools import get_agent_learning
 

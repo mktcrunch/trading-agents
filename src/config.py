@@ -289,9 +289,17 @@ PREDICT_15MIN_URL = os.getenv(
     "https://mktcrunch-prediction-min-api-fall-52245432644.us-central1.run.app/predict15min",
 )
 
-# Baseline: fixed base stop + LLM-generated trailing (NOT internal's 1%/70%)
+# Baseline: pure LLM base stop + trailing (NOT internal's scripted 1%/70%)
 BASELINE_RISK_CONFIG = {
     "base_stop_loss_threshold": -0.01,
+    "base_stop_mode": "llm",
+    "llm_base_stop_planner": True,
+    "llm_base_stop_bounds": {
+        "threshold_min": -0.05,
+        "threshold_max": -0.003,
+    },
+    "overnight_risk_mode": "llm",
+    "llm_overnight_risk_planner": True,
     "trailing_mode": "llm",
     "use_trailing_stop": True,
     "llm_trailing_planner": True,
@@ -310,9 +318,17 @@ BASELINE_RISK_CONFIG = {
     "atr_stop_multiplier": 1.5,
 }
 
-# Internal: scripted floor (1%/70%) merged with LLM tightening
+# Internal: scripted floor (1%/70%, ATR) merged with LLM tightening
 INTERNAL_RISK_CONFIG = {
     "base_stop_loss_threshold": -0.01,
+    "base_stop_mode": "hybrid",
+    "llm_base_stop_planner": True,
+    "llm_base_stop_bounds": {
+        "threshold_min": -0.05,
+        "threshold_max": -0.003,
+    },
+    "overnight_risk_mode": "hybrid",
+    "llm_overnight_risk_planner": True,
     "trailing_mode": "hybrid",
     "trailing_activation_threshold": 0.01,
     "profit_lock_fraction": 0.70,

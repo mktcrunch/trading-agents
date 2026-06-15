@@ -27,6 +27,7 @@ class _RiskAgentNoFetch(RiskAgent):
     def __init__(self):
         super().__init__(system="baseline")
         self._alpaca = None
+        self._overnight_planner = None
 
 
 def test_cancelled_orders_are_not_actionable():

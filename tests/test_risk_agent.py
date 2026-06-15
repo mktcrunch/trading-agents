@@ -31,11 +31,12 @@ def _open_sell(symbol: str, qty: float, price: float, filled: float = 0.0):
 
 
 class _RiskAgentNoFetch(RiskAgent):
-    """RiskAgent that does not call Alpaca when open_orders_raw is omitted."""
+    """RiskAgent that does not call Alpaca or LLM when open_orders_raw is omitted."""
 
     def __init__(self):
         super().__init__(system="baseline")
         self._alpaca = None
+        self._overnight_planner = None
 
 
 def test_rejects_short_when_long_held():
