@@ -250,6 +250,7 @@ DISCOVERY_CONFIG = {
     "min_history_years": 5,
     "min_universe_coverage_pct": 20.0,
     "max_sample_cost_usd": 1.00,
+    "max_probe_download_mb": 10,
     "gate_1_mi_threshold": 0.02,
     "gate_2_ic_threshold": 0.02,
     "gate_2_t_stat_threshold": 1.25,

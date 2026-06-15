@@ -59,6 +59,36 @@ def load_approved_sources() -> Dict:
         return {}
 
 
+def has_usable_cached_sources(data: Optional[Dict] = None) -> bool:
+    """True when GCS/local approved sources have sources or per-ticker features."""
+    payload = load_approved_sources() if data is None else data
+    if not payload:
+        return False
+    return bool(payload.get("sources") or payload.get("ticker_features"))
+
+
+def discovery_run_meta(
+    data: Dict,
+    *,
+    mode: str,
+    error: str = "",
+) -> Dict:
+    """Normalized discovery summary for overnight workflow state/audit."""
+    summary = data.get("summary") or {}
+    sources = data.get("sources") or []
+    features = data.get("ticker_features") or {}
+    return {
+        "success": mode in ("cached", "refreshed", "cache_fallback"),
+        "mode": mode,
+        "refreshed": False,
+        "approved_count": summary.get("approved_count") or len(sources),
+        "tickers_with_features": summary.get("tickers_with_features") or len(features),
+        "probes_run": 0,
+        "generated_at": data.get("generated_at"),
+        "error": error or None,
+    }
+
+
 def is_stale(max_age_hours: Optional[float] = None) -> bool:
     data = load_approved_sources()
     if not data or not data.get("generated_at"):

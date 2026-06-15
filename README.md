@@ -58,7 +58,7 @@ Cloud Run
 | `{system}_data` | `LlmAgent` task | Fetch account, OHLCV, news, MC/discovery context |
 | `{system}_signal` | `LlmAgent` task | Structured BUY/SELL/HOLD/CLOSE (+ Google Search grounding on both) |
 | Risk / Execution / Monitor | Deterministic Python | Invoked via `FunctionTool` on scheduler path |
-| Discovery | Internal only | DataBento catalog probes before overnight if stale |
+| Discovery | Internal only | DataBento probes when stale; GCS cache fallback on failure |
 
 ### A2A & Agent Engine
 
@@ -106,13 +106,16 @@ MarketCrunch’s production ensemble is trained at scale — **50M+ parameters**
 
 ### Agentic discovery
 
-Runs daily (or when stale >24h):
+Runs daily (or when stale >24h), or on overnight internal with cache fallback if discovery fails:
 
 1. Scan DataBento catalog for equity OHLCV datasets (bar period under 15m excluded; lookback: 90d daily, 45d hourly)  
 2. LLM planner picks probe targets; LLM proposes feature formulas per schema  
-3. Three-gate evaluation (MI, IC+t-stat, incremental alpha)  
-4. Merge approved sources into `data/approved_datasources.json`  
-5. Registry memory in `data/discovery_registry.json`  
+3. Pre-flight each probe with DataBento `get_billable_size` / `get_cost` — skip downloads **>10 MB** or **>$1** and continue to the next dataset  
+4. Three-gate evaluation (MI, IC+t-stat, incremental alpha)  
+5. Merge approved sources into `data/approved_datasources.json`  
+6. Registry memory in `data/discovery_registry.json`  
+
+Overnight internal: try discovery → on failure use GCS cache → else continue without DataBento enrichment.
 
 ### Intraday risk
 

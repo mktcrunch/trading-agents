@@ -3262,6 +3262,26 @@
       });
     }
 
+    function activityFeedPriority(e) {
+      if (e._placementStatus === "Placed") return 0;
+      if (e._kind === "risk") return 1;
+      return 2;
+    }
+
+    function dropLowestActivityPriority(items) {
+      if (!items.length) return;
+      let worstIdx = 0;
+      let worstScore = -1;
+      items.forEach((item, idx) => {
+        const score = activityFeedPriority(item);
+        if (score > worstScore) {
+          worstScore = score;
+          worstIdx = idx;
+        }
+      });
+      items.splice(worstIdx, 1);
+    }
+
     function pickRecentActivity(events, limit = 5) {
       const seen = new Set();
       const sorted = [...(events || [])].sort((a, b) =>
@@ -3285,7 +3305,7 @@
           if (e._kind !== "risk") continue;
           const key = `${e.event_type}|${e._action}|${e._ticker}|${e._rationale.slice(0, 80)}`;
           if (out.some(x => `${x.event_type}|${x._action}|${x._ticker}|${x._rationale.slice(0, 80)}` === key)) continue;
-          if (out.length >= limit) out.pop();
+          if (out.length >= limit) dropLowestActivityPriority(out);
           out.push(e);
           break;
         }

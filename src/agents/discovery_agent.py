@@ -51,6 +51,28 @@ class DiscoveryAgent(BaseAgent):
     def _feature_prefix(self, dataset: str, schema: str) -> str:
         return f"{dataset}_{schema}".replace(".", "_").replace("|", "_")
 
+    def _probe_failure_result(
+        self,
+        target: ProbeTarget,
+        error: str,
+        *,
+        status: str = "error",
+    ) -> Dict:
+        return {
+            "dataset": target.dataset,
+            "schema": target.schema,
+            "status": status,
+            "error": error,
+            "approved_count": 0,
+            "rejected_count": 0,
+            "best_ic": 0.0,
+            "sample_rows": 0,
+            "sources": [],
+            "ticker_features": {},
+            "rationale": target.rationale,
+            "action": target.action,
+        }
+
     async def _probe_target(
         self,
         client: DataBentoClient,
@@ -60,18 +82,11 @@ class DiscoveryAgent(BaseAgent):
         """Fetch, engineer, and evaluate one dataset/schema probe."""
         registry = registry or {}
         if not supports_probe_schema(target.schema):
-            return {
-                "dataset": target.dataset,
-                "schema": target.schema,
-                "status": "skipped",
-                "error": f"unsupported schema: {target.schema}",
-                "approved_count": 0,
-                "best_ic": 0.0,
-                "sample_rows": 0,
-                "sources": [],
-                "ticker_features": {},
-                "rationale": target.rationale,
-            }
+            return self._probe_failure_result(
+                target,
+                f"unsupported schema: {target.schema}",
+                status="skipped",
+            )
 
         lookback_days = probe_lookback_days(target.schema)
         bars = client.fetch_range(
@@ -81,18 +96,13 @@ class DiscoveryAgent(BaseAgent):
             lookback_days=lookback_days,
         )
         if bars is None or bars.empty:
-            return {
-                "dataset": target.dataset,
-                "schema": target.schema,
-                "status": "error",
-                "error": "empty_fetch",
-                "approved_count": 0,
-                "best_ic": 0.0,
-                "sample_rows": 0,
-                "sources": [],
-                "ticker_features": {},
-                "rationale": target.rationale,
-            }
+            if client.last_fetch_skip_reason:
+                return self._probe_failure_result(
+                    target,
+                    client.last_fetch_skip_reason,
+                    status="skipped",
+                )
+            return self._probe_failure_result(target, "empty_fetch")
 
         feature_planner = FeaturePlanner()
         feature_specs, feature_strategy = await feature_planner.propose_features(
@@ -109,18 +119,7 @@ class DiscoveryAgent(BaseAgent):
         daily = normalize_bars(bars, target.schema)
         panel = build_feature_panel(daily, feature_specs=feature_specs)
         if panel.empty:
-            return {
-                "dataset": target.dataset,
-                "schema": target.schema,
-                "status": "error",
-                "error": "empty_feature_panel",
-                "approved_count": 0,
-                "best_ic": 0.0,
-                "sample_rows": 0,
-                "sources": [],
-                "ticker_features": {},
-                "rationale": target.rationale,
-            }
+            return self._probe_failure_result(target, "empty_feature_panel")
 
         prefix = self._feature_prefix(target.dataset, target.schema)
         definitions = build_feature_definitions(
@@ -233,7 +232,13 @@ class DiscoveryAgent(BaseAgent):
                 f"Probing {target.dataset}/{target.schema} "
                 f"({target.action}, {lookback_days}d lookback)"
             )
-            result = await self._probe_target(client, target, registry=registry)
+            try:
+                result = await self._probe_target(client, target, registry=registry)
+            except Exception as e:
+                self.log_error(
+                    f"Probe failed for {target.dataset}/{target.schema}: {e}"
+                )
+                result = self._probe_failure_result(target, str(e))
             probe_summaries.append({
                 k: result[k]
                 for k in (
@@ -339,7 +344,8 @@ class DiscoveryAgent(BaseAgent):
         """
         Run discovery if output is missing or stale.
 
-        Called before internal trading workflow.
+        Overnight workflows call this via ``_ensure_discovery_fresh()`` (try discovery,
+        fall back to GCS cache on failure, then continue without enrichment).
         """
         if force or is_stale():
             reason = "forced refresh" if force else "missing or stale approved sources"

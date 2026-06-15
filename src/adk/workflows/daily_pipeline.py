@@ -25,33 +25,46 @@ logger = setup_logger(__name__)
 
 
 async def _ensure_discovery_fresh() -> Dict[str, Any]:
-    """Run agentic discovery if approved sources are missing or stale (>24h)."""
-    from src.agents.discovery_agent import DiscoveryAgent
-    from src.discovery.approved_sources import is_stale, load_approved_sources
+    """Attempt DataBento discovery for overnight internal; never block trading on failure.
 
-    stale = is_stale()
+    Order: run discovery (as before, when stale/missing) → on failure use GCS cache → else skip.
+    Same behavior for scheduled and force overnight runs.
+    """
+    from src.agents.discovery_agent import DiscoveryAgent
+    from src.discovery.approved_sources import (
+        discovery_run_meta,
+        has_usable_cached_sources,
+        is_stale,
+        load_approved_sources,
+    )
+
+    was_stale = is_stale()
     agent = DiscoveryAgent()
     try:
         result = await agent.ensure_fresh_sources(force=False)
         summary = result.get("summary") or {}
-        return {
-            "success": True,
-            "refreshed": stale,
-            "approved_count": summary.get("approved_count", 0),
-            "tickers_with_features": summary.get("tickers_with_features", 0),
-            "probes_run": summary.get("probes_run"),
-            "generated_at": result.get("generated_at"),
-        }
+        mode = "refreshed" if was_stale else "cached"
+        meta = discovery_run_meta(result, mode=mode)
+        meta["refreshed"] = was_stale
+        meta["probes_run"] = summary.get("probes_run", 0)
+        return meta
     except Exception as e:
-        logger.warning(f"[daily_pipeline] Discovery failed: {e}")
+        logger.warning(f"[daily_pipeline] Discovery failed, trying cache fallback: {e}")
         cached = load_approved_sources()
-        return {
-            "success": False,
-            "refreshed": False,
-            "error": str(e),
-            "approved_count": (cached.get("summary") or {}).get("approved_count", 0),
-            "generated_at": cached.get("generated_at"),
-        }
+        if has_usable_cached_sources(cached):
+            logger.info(
+                "[daily_pipeline] Using cached discovery fallback from %s (%s sources)",
+                cached.get("generated_at", "unknown"),
+                len(cached.get("sources") or []),
+            )
+            meta = discovery_run_meta(cached, mode="cache_fallback", error=str(e))
+            meta["success"] = True
+            return meta
+        logger.info(
+            "[daily_pipeline] No cached discovery available; "
+            "continuing without DataBento enrichment"
+        )
+        return discovery_run_meta({}, mode="skipped", error=str(e))
 
 
 async def run_daily_trading_pipeline(
@@ -75,7 +88,11 @@ async def run_daily_trading_pipeline(
     return await _run_deterministic_daily_pipeline(system, skip_calendar=skip_calendar)
 
 
-async def _run_deterministic_daily_pipeline(system: str) -> Dict[str, Any]:
+async def _run_deterministic_daily_pipeline(
+    system: str,
+    *,
+    skip_calendar: bool = False,
+) -> Dict[str, Any]:
     """Deterministic Python pipeline (legacy fallback when USE_ADK_WORKFLOW=false)."""
     try:
         get_gcs_store().hydrate_audit_log()

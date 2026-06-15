@@ -2,7 +2,7 @@
 DataBento historical data client for discovery pipeline.
 """
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -20,6 +20,7 @@ logger = setup_logger(__name__)
 
 DEFAULT_DATASET = "EQUS.MINI"
 DEFAULT_SCHEMA = "ohlcv-1d"
+_NON_OHLCV_SCHEMAS = frozenset({"statistics", "status", "definition"})
 
 
 class DataBentoClient:
@@ -32,6 +33,7 @@ class DataBentoClient:
         self.client = db.Historical(self.api_key)
         self.dataset = config.DISCOVERY_CONFIG.get("dataset", DEFAULT_DATASET)
         self.schema = config.DISCOVERY_CONFIG.get("schema", DEFAULT_SCHEMA)
+        self.last_fetch_skip_reason: Optional[str] = None
 
     def list_datasets(self) -> List[str]:
         try:
@@ -54,6 +56,84 @@ class DataBentoClient:
         start = end - timedelta(days=lookback_days)
         return start.date().isoformat(), end.date().isoformat()
 
+    def _probe_limits(self) -> Tuple[int, float]:
+        cfg = config.DISCOVERY_CONFIG
+        max_bytes = int(float(cfg.get("max_probe_download_mb", 10)) * 1024 * 1024)
+        max_cost = float(cfg.get("max_sample_cost_usd", 1.0))
+        return max_bytes, max_cost
+
+    @staticmethod
+    def _is_high_risk_probe(dataset: str, schema: str) -> bool:
+        if "SUMMARY" in (dataset or "").upper():
+            return True
+        return (schema or "").lower() in _NON_OHLCV_SCHEMAS
+
+    def check_probe_download_allowed(
+        self,
+        symbols: List[str],
+        dataset: str,
+        schema: str,
+        lookback_days: int,
+    ) -> Tuple[bool, str, Optional[int]]:
+        """Pre-flight billable size + cost checks before streaming a probe."""
+        if not symbols:
+            return False, "no_symbols", None
+
+        max_bytes, max_cost = self._probe_limits()
+        start, end = self._date_range(lookback_days)
+        estimated: Optional[int] = None
+
+        try:
+            estimated = int(
+                self.client.metadata.get_billable_size(
+                    dataset=dataset,
+                    symbols=symbols,
+                    schema=schema,
+                    stype_in="raw_symbol",
+                    start=start,
+                    end=end,
+                )
+            )
+        except Exception as e:
+            logger.warning(
+                f"DataBento billable size estimate failed for {dataset}/{schema}: {e}"
+            )
+            if self._is_high_risk_probe(dataset, schema):
+                return False, f"size_estimate_failed:{schema}", None
+
+        if estimated is not None and estimated > max_bytes:
+            cap_mb = max_bytes / (1024 * 1024)
+            est_mb = estimated / (1024 * 1024)
+            return (
+                False,
+                f"download_size_exceeded:{est_mb:.1f}MB>{cap_mb:.0f}MB",
+                estimated,
+            )
+
+        try:
+            cost = float(
+                self.client.metadata.get_cost(
+                    dataset=dataset,
+                    symbols=symbols,
+                    schema=schema,
+                    stype_in="raw_symbol",
+                    start=start,
+                    end=end,
+                )
+            )
+            if cost > max_cost:
+                return (
+                    False,
+                    f"download_cost_exceeded:${cost:.2f}>${max_cost:.2f}",
+                    estimated,
+                )
+        except Exception as e:
+            logger.warning(
+                f"DataBento cost estimate failed for {dataset}/{schema}: {e}"
+            )
+
+        return True, "", estimated
+
     def fetch_range(
         self,
         symbols: List[str],
@@ -67,12 +147,27 @@ class DataBentoClient:
         Returns:
             DataFrame with symbol column and OHLCV fields when applicable
         """
+        self.last_fetch_skip_reason = None
         if not symbols:
             return pd.DataFrame()
 
         dataset = dataset or self.dataset
         schema = schema or self.schema
         lookback_days = lookback_days or probe_lookback_days(schema or DEFAULT_SCHEMA)
+        allowed, reason, estimated = self.check_probe_download_allowed(
+            symbols=symbols,
+            dataset=dataset,
+            schema=schema,
+            lookback_days=lookback_days,
+        )
+        if not allowed:
+            self.last_fetch_skip_reason = reason
+            est_note = f" (estimated {estimated} bytes)" if estimated else ""
+            logger.warning(
+                f"Skipping DataBento download for {dataset}/{schema}: {reason}{est_note}"
+            )
+            return pd.DataFrame()
+
         start, end = self._date_range(lookback_days)
 
         try:

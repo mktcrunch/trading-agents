@@ -1,6 +1,7 @@
 """Shared helpers for ADK Workflow daily pipelines."""
 from __future__ import annotations
 
+import contextvars
 import json
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,15 @@ from src.logger import setup_logger
 from src.models.trading_decision import TradingDecision
 
 logger = setup_logger(__name__)
+
+_workflow_skip_calendar: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "workflow_skip_calendar", default=False
+)
+
+
+def workflow_skip_calendar() -> bool:
+    """True when the current ADK workflow bypassed the overnight calendar gate."""
+    return _workflow_skip_calendar.get()
 
 
 def parse_adk_signal_output(output: Any) -> SignalLedgerResult:
@@ -137,6 +147,7 @@ async def workflow_daily_setup(
 
     from src.audit import start_trace
 
+    _workflow_skip_calendar.set(skip_calendar)
     dry = config.is_dry_run()
     start_trace(
         "daily",
