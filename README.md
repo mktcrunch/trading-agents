@@ -43,7 +43,7 @@ ADK (agents/)
 └── src/adk/mcp/server.py ─── MCP tools (Alpaca, MC, DataBento, leaderboard)
 
 Cloud Scheduler (production)
-├── 6 jobs → Vertex Agent Engine :streamQuery (overnight, risk, chase × 2 traders)
+├── 8 jobs → Vertex Agent Engine :streamQuery (overnight, risk, chase-open, chase-midday × 2 traders)
 
 Cloud Run
 ├── /dashboard  → audit UI, read-only chat, learning panel

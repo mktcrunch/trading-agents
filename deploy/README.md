@@ -86,10 +86,15 @@ Cloud Scheduler (4:10 PM ET)  ──POST──►  /jobs/overnight
                                               ├─ baseline → OPG limit orders
                                               └─ internal → OPG limit orders + Kelly
 
-Cloud Scheduler (*/5 9-15 ET) ──POST──►  /jobs/risk
+Cloud Scheduler (*/15 9-15 ET) ──POST──►  Agent Engine :streamQuery (risk)
                                               │
                                               ├─ baseline risk (fixed stops, trailing)
                                               └─ internal risk (ATR, trailing, 15m pred, EOD)
+
+Cloud Scheduler (9:35 open · 12:55/2:55 midday ET) ──POST──►  Agent Engine :streamQuery (chase)
+                                              │
+                                              ├─ cancel unfilled overnight limits → market
+                                              └─ volatility gate before chase
 ```
 
 ## Risk agent differences

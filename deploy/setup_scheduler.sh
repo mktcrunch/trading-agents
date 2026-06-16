@@ -83,9 +83,14 @@ create_or_update_job "internal-overnight-direct" "10 16 * * 1-5" "${INTERNAL_ID}
 create_or_update_job "baseline-risk-direct" "*/15 9-15 * * 1-5" "${BASELINE_ID}" "Run intraday risk check."
 create_or_update_job "internal-risk-direct" "*/15 9-15 * * 1-5" "${INTERNAL_ID}" "Run intraday risk check."
 
-# 3. Post-Market-Open Chase (9:45 AM, 12:45 PM, and 2:45 PM ET Mon-Fri)
-create_or_update_job "baseline-chase-direct" "45 9,12,14 * * 1-5" "${BASELINE_ID}" "Run post-open chase."
-create_or_update_job "internal-chase-direct" "45 9,12,14 * * 1-5" "${INTERNAL_ID}" "Run post-open chase."
+# 3. Post-open chase — open at 9:35 AM ET (finishes before 9:45 risk), midday at 12:55 & 2:55 PM ET
+for legacy in baseline-chase-direct internal-chase-direct; do
+  gcloud scheduler jobs delete "${legacy}" --location="${REGION}" --quiet 2>/dev/null || true
+done
+create_or_update_job "baseline-chase-open-direct" "35 9 * * 1-5" "${BASELINE_ID}" "Run post-open chase."
+create_or_update_job "internal-chase-open-direct" "35 9 * * 1-5" "${INTERNAL_ID}" "Run post-open chase."
+create_or_update_job "baseline-chase-midday-direct" "55 12,14 * * 1-5" "${BASELINE_ID}" "Run post-open chase."
+create_or_update_job "internal-chase-midday-direct" "55 12,14 * * 1-5" "${INTERNAL_ID}" "Run post-open chase."
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Scheduler setup complete                                    ║"

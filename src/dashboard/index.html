@@ -2358,9 +2358,12 @@
             <div class="tag">Every 15m · 9-3:45 PM ET</div>
           </div>
           <div class="arch-node scheduler">
-            <div class="name">*-chase-direct</div>
-            <div class="desc">Adaptive order chase</div>
-            <div class="tag">9:45 · 12:45 · 2:45 PM ET</div>
+            <div class="name">*-chase-open-direct</div>
+            <div class="desc">Open chase (before risk)</div>
+            <div class="tag">9:35 AM ET</div>
+            <div class="name">*-chase-midday-direct</div>
+            <div class="desc">Midday chase</div>
+            <div class="tag">12:55 · 2:55 PM ET</div>
           </div>
         </div>
       </div>
@@ -2492,15 +2495,29 @@
             <td><code>run_intraday_risk_check</code></td>
           </tr>
           <tr>
-            <td><code>baseline-chase-direct</code></td>
-            <td>9:45 · 12:45 · 2:45 PM</td>
+            <td><code>baseline-chase-open-direct</code></td>
+            <td>9:35 AM</td>
             <td>Baseline Engine</td>
-            <td>Run post-open chase.</td>
+            <td>Run post-open chase (before 9:45 risk).</td>
             <td><code>run_post_open_chase</code></td>
           </tr>
           <tr>
-            <td><code>internal-chase-direct</code></td>
-            <td>9:45 · 12:45 · 2:45 PM</td>
+            <td><code>internal-chase-open-direct</code></td>
+            <td>9:35 AM</td>
+            <td>Internal Engine</td>
+            <td>Run post-open chase (before 9:45 risk).</td>
+            <td><code>run_post_open_chase</code></td>
+          </tr>
+          <tr>
+            <td><code>baseline-chase-midday-direct</code></td>
+            <td>12:55 · 2:55 PM</td>
+            <td>Baseline Engine</td>
+            <td>Run post-open chase (before :00 risk).</td>
+            <td><code>run_post_open_chase</code></td>
+          </tr>
+          <tr>
+            <td><code>internal-chase-midday-direct</code></td>
+            <td>12:55 · 2:55 PM</td>
             <td>Internal Engine</td>
             <td>Run post-open chase.</td>
             <td><code>run_post_open_chase</code></td>
