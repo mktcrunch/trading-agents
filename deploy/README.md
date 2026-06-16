@@ -95,6 +95,8 @@ Cloud Scheduler (9:35 open · 12:55/2:55 midday ET) ──POST──►  Agent E
                                               │
                                               ├─ cancel unfilled overnight limits → market
                                               └─ volatility gate before chase
+
+Intraday risk exits cancel any open **limit** orders on the same symbol before placing the market close (avoids double cover/fill with overnight limits).
 ```
 
 ## Risk agent differences

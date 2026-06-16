@@ -648,10 +648,58 @@ class RiskMonitor:
     # Execution
     # ------------------------------------------------------------------
 
+    def _cancel_open_limit_orders(self, ticker: str) -> List[Dict[str, Any]]:
+        """Cancel actionable open limit orders on ``ticker`` before a risk exit."""
+        from src.strategies.order_dedup import filter_actionable_open_orders, normalize_open_order
+
+        symbol = ticker.upper()
+        open_orders = filter_actionable_open_orders(self.alpaca.get_orders(status="open"))
+        cancelled: List[Dict[str, Any]] = []
+
+        for order in open_orders:
+            norm = normalize_open_order(order)
+            if norm["symbol"].upper() != symbol:
+                continue
+            if norm["limit_price"] is None:
+                continue
+            if not self.alpaca.cancel_order(norm["order_id"]):
+                logger.warning(
+                    f"[{self.system}] Failed to cancel limit order {norm['order_id']} "
+                    f"for {symbol} before risk exit"
+                )
+                continue
+            cancelled.append(norm)
+            logger.info(
+                f"[{self.system}] Cancelled open limit {norm['side']} "
+                f"{norm['remaining_qty']:.0f} {symbol} @ ${norm['limit_price']:.2f} "
+                f"before risk exit"
+            )
+
+        if cancelled:
+            _audit(
+                event_type="order_cancelled_risk_exit",
+                action=f"Cancelled {len(cancelled)} open limit order(s) for {ticker} before risk exit",
+                system=self.system,
+                payload={
+                    "ticker": ticker,
+                    "orders": [
+                        {
+                            "order_id": o["order_id"],
+                            "side": o["side"],
+                            "remaining_qty": o["remaining_qty"],
+                            "limit_price": o["limit_price"],
+                        }
+                        for o in cancelled
+                    ],
+                },
+            )
+        return cancelled
+
     def _close_position(self, ticker: str, pos: Position, dry_run: bool) -> Dict:
         if dry_run or config.DRY_RUN or not config.TRADING_ENABLED:
             return {"status": "simulated", "ticker": ticker, "qty": abs(pos.qty)}
 
+        cancelled_limits = self._cancel_open_limit_orders(ticker)
         side = "sell" if pos.qty > 0 else "buy"
         order_id = self.alpaca.place_market_order(
             ticker=ticker,
@@ -660,7 +708,22 @@ class RiskMonitor:
             time_in_force="day",
         )
         if order_id:
-            return {"status": "submitted", "order_id": order_id, "ticker": ticker}
+            result: Dict[str, Any] = {
+                "status": "submitted",
+                "order_id": order_id,
+                "ticker": ticker,
+            }
+            if cancelled_limits:
+                result["cancelled_limit_orders"] = [
+                    {
+                        "order_id": o["order_id"],
+                        "side": o["side"],
+                        "remaining_qty": o["remaining_qty"],
+                        "limit_price": o["limit_price"],
+                    }
+                    for o in cancelled_limits
+                ]
+            return result
         return {"status": "failed", "ticker": ticker}
 
     # ------------------------------------------------------------------
