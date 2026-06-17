@@ -381,17 +381,17 @@ class AlpacaClient:
             logger.error(f"Failed to get historical bars from Alpaca: {e}")
             return {}
 
-    def get_portfolio_history_series(self, since_hours: int = 168) -> List[Dict[str, Any]]:
+    def get_portfolio_history_series(self, since_hours: int = 720) -> List[Dict[str, Any]]:
         """Return equity history for the dashboard chart (sourced from Alpaca)."""
         from alpaca.trading.requests import GetPortfolioHistoryRequest
         from src.agents.competition_context import STARTING_EQUITY
 
-        if since_hours <= 168:
-            period, timeframe = "1W", "1H"
-        elif since_hours <= 720:
+        if since_hours <= 720:
             period, timeframe = "1M", "1D"
-        else:
+        elif since_hours <= 2160:
             period, timeframe = "3M", "1D"
+        else:
+            period, timeframe = "6M", "1D"
 
         try:
             hist = self.client.get_portfolio_history(

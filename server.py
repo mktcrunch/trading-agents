@@ -75,7 +75,7 @@ class JobHandler(BaseHTTPRequestHandler):
 
         if path == "/api/performance":
             q = self._query()
-            hours = int(q.get("hours", 168))
+            hours = int(q.get("hours", 720))
             try:
                 _json_response(self, 200, get_performance(since_hours=hours))
             except Exception as e:

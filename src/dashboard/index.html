@@ -351,6 +351,39 @@
     .close-btn { float: right; background: transparent; border: 1px solid var(--border); cursor: pointer; color: var(--text); padding: 0.35rem 0.65rem; border-radius: 6px; }
     .chart-wrap { height: 180px; position: relative; margin-top: 0.5rem; }
     canvas { width: 100%; height: 100%; }
+    #perf-chart { cursor: crosshair; }
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      z-index: 2;
+      min-width: 9.5rem;
+      padding: 0.55rem 0.7rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: var(--shadow-md);
+      font-size: 0.72rem;
+      line-height: 1.45;
+      opacity: 0;
+      transform: translate(-50%, -110%);
+      transition: opacity 0.08s ease;
+    }
+    .chart-tooltip.visible { opacity: 1; }
+    .chart-tooltip-date {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+      font-size: 0.74rem;
+    }
+    .chart-tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .chart-tooltip-label { color: var(--subtle); }
+    .chart-tooltip-label.baseline { color: var(--baseline); }
+    .chart-tooltip-label.internal { color: var(--internal); }
     .sys-tag { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
     .error-banner {
       display: none;
@@ -2115,9 +2148,12 @@
       <p class="meta" id="chart-experiment-note" style="padding:0 1rem 0;margin-top:-0.25rem">Equity history from first trade date, June 9, 2026.</p>
       <div class="panel-body padded">
         <div class="filters">
-          <label>Range <select id="perf-hours"><option value="168">7d</option><option value="720">30d</option><option value="2160">90d</option></select></label>
+          <label>Range <select id="perf-hours"><option value="720" selected>30d</option><option value="2160">90d</option><option value="4320">180d</option></select></label>
         </div>
-        <div class="chart-wrap"><canvas id="perf-chart"></canvas></div>
+        <div class="chart-wrap">
+          <canvas id="perf-chart"></canvas>
+          <div id="perf-chart-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+        </div>
         <p class="meta" style="margin-top:0.75rem" id="perf-updated"></p>
       </div>
     </div>
@@ -2923,7 +2959,7 @@
     <div class="filters">
       <label>System <select id="f-system"><option value="">All</option><option>baseline</option><option>internal</option><option>discovery</option><option>both</option></select></label>
       <label>Type <select id="f-type"><option value="">All</option></select></label>
-      <label>Hours <select id="f-hours"><option value="24">24h</option><option value="72">72h</option><option value="168">7d</option></select></label>
+      <label>Range <select id="f-hours"><option value="720" selected>30d</option><option value="2160">90d</option><option value="4320">180d</option></select></label>
     </div>
 
     <div class="panel">
@@ -3012,6 +3048,15 @@
     };
     const fmtUsd = (n) => n == null ? "n/a" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     const fmtPct = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
+    const DEFAULT_RANGE_HOURS = 720;
+    const formatRangeLabel = (hours) => {
+      const h = Number(hours);
+      if (h === 720) return "30d";
+      if (h === 2160) return "90d";
+      if (h === 4320) return "180d";
+      if (h >= 24 && h % 24 === 0) return `${h / 24}d`;
+      return `${h}h`;
+    };
     const pctClass = (n) => Number(n) >= 0 ? "pos" : "neg";
 
     async function fetchJSON(url) {
@@ -3402,7 +3447,7 @@
       try {
         const batches = await Promise.all(types.map(t =>
           fetchJSON(
-            `/api/events?hours=168&limit=80&system=${encodeURIComponent(system)}&event_type=${t}`
+            `/api/events?hours=${DEFAULT_RANGE_HOURS}&limit=80&system=${encodeURIComponent(system)}&event_type=${t}`
           ).then(d => d.events || []).catch(() => [])
         ));
         const rawEvents = batches.flat();
@@ -3535,7 +3580,7 @@
         renderTraderPanel("baseline", baseline, recentActivity.baseline || [], leaderKey, marketOpen) +
         renderTraderPanel("internal", internal, recentActivity.internal || [], leaderKey, marketOpen);
 
-      drawChart(data.history || {}, data.since_hours || 168);
+      drawChart(data.history || {}, data.since_hours || DEFAULT_RANGE_HOURS);
       const pts = data.history_points || {};
       const bPts = pts.baseline ?? (data.history?.baseline || []).length;
       const iPts = pts.internal ?? (data.history?.internal || []).length;
@@ -3543,7 +3588,81 @@
         `Equity history from Alpaca: ${bPts} baseline, ${iPts} internal points`;
     }
 
-    function drawChart(history, sinceHours) {
+    let perfChartState = null;
+
+    function nearestSeriesPoint(points, targetMs, parseTs) {
+      if (!points.length) return null;
+      let best = points[0];
+      let bestDist = Math.abs(parseTs(best.timestamp) - targetMs);
+      for (let i = 1; i < points.length; i++) {
+        const dist = Math.abs(parseTs(points[i].timestamp) - targetMs);
+        if (dist < bestDist) {
+          best = points[i];
+          bestDist = dist;
+        }
+      }
+      return best;
+    }
+
+    function hideChartTooltip() {
+      const tooltip = document.getElementById("perf-chart-tooltip");
+      if (!tooltip) return;
+      tooltip.classList.remove("visible");
+      tooltip.setAttribute("aria-hidden", "true");
+    }
+
+    function positionChartTooltip(tooltip, canvas, hoverX, hover) {
+      const wrap = canvas.parentElement;
+      const wrapRect = wrap.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      const left = canvasRect.left - wrapRect.left + hoverX;
+      const top = canvasRect.top - wrapRect.top + Math.min(...hover.yValues) - 8;
+      tooltip.style.left = `${Math.max(56, Math.min(left, wrapRect.width - 56))}px`;
+      tooltip.style.top = `${Math.max(8, top)}px`;
+      tooltip.style.transform = top < 48 ? "translate(-50%, 12px)" : "translate(-50%, -110%)";
+    }
+
+    function renderChartTooltip(hover) {
+      const tooltip = document.getElementById("perf-chart-tooltip");
+      if (!tooltip || !hover) return;
+      const anchor = hover.series.find(s => s.key === "baseline")?.point || hover.series[0].point;
+      const dateLabel = new Date(anchor.timestamp).toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const rows = hover.series
+        .filter(s => s.point)
+        .map(s => `
+          <div class="chart-tooltip-row">
+            <span class="chart-tooltip-label ${s.key}">${s.key === "baseline" ? "Baseline" : "Internal"}</span>
+            <span>${fmtUsd(s.point.portfolio_value)}</span>
+          </div>`)
+        .join("");
+      tooltip.innerHTML = `<div class="chart-tooltip-date">${dateLabel}</div>${rows}`;
+      tooltip.classList.add("visible");
+      tooltip.setAttribute("aria-hidden", "false");
+    }
+
+    function findChartHover(mx, state) {
+      const { pad, W, plotW, xMin, xMax, series, parseTs, yScale, xScale } = state;
+      if (mx < pad.l || mx > W - pad.r) return null;
+      const targetMs = xMin + ((mx - pad.l) / (plotW || 1)) * (xMax - xMin);
+      const hoverSeries = series.map(s => {
+        const pts = s.points
+          .filter(p => p.portfolio_value != null)
+          .sort((a, b) => parseTs(a.timestamp) - parseTs(b.timestamp));
+        const point = nearestSeriesPoint(pts, targetMs, parseTs);
+        return { ...s, point, pts };
+      }).filter(s => s.point);
+      if (!hoverSeries.length) return null;
+      const hoverX = xScale(new Date(targetMs).toISOString());
+      const yValues = hoverSeries.map(s => yScale(s.point.portfolio_value));
+      return { targetMs, hoverX, series: hoverSeries, yValues };
+    }
+
+    function drawChart(history, sinceHours, hover = null) {
       const canvas = document.getElementById("perf-chart");
       const ctx = canvas.getContext("2d");
       const dpr = window.devicePixelRatio || 1;
@@ -3560,6 +3679,8 @@
       ];
       const all = series.flatMap(s => s.points.map(p => p.portfolio_value).filter(v => v != null));
       if (!all.length) {
+        perfChartState = null;
+        hideChartTooltip();
         ctx.fillStyle = "#7d9a8f";
         ctx.font = "13px Inter, sans-serif";
         ctx.fillText("No equity history from Alpaca yet for this range", 12, H / 2);
@@ -3567,7 +3688,7 @@
       }
 
       const now = Date.now();
-      const rangeMs = (sinceHours || 168) * 3600 * 1000;
+      const rangeMs = (sinceHours || DEFAULT_RANGE_HOURS) * 3600 * 1000;
       const xMin = now - rangeMs;
       const xMax = now;
       const parseTs = (ts) => {
@@ -3589,6 +3710,24 @@
       const xScale = (ts) => {
         const t = Math.min(Math.max(parseTs(ts), xMin), xMax);
         return pad.l + ((t - xMin) / (xMax - xMin || 1)) * plotW;
+      };
+
+      perfChartState = {
+        history,
+        sinceHours,
+        series,
+        W,
+        H,
+        pad,
+        plotW,
+        plotH,
+        xMin,
+        xMax,
+        minV,
+        maxV,
+        parseTs,
+        xScale,
+        yScale,
       };
 
       ctx.strokeStyle = "rgba(13, 74, 58, 0.1)";
@@ -3642,9 +3781,66 @@
         }
       });
 
+      if (hover) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(13, 74, 58, 0.22)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(hover.hoverX, pad.t);
+        ctx.lineTo(hover.hoverX, H - pad.b);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        hover.series.forEach(s => {
+          const x = xScale(s.point.timestamp);
+          const y = yScale(s.point.portfolio_value);
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
       ctx.font = "11px JetBrains Mono, monospace";
       ctx.fillStyle = "#0d5c48"; ctx.fillText("● Baseline", pad.l, H - 22);
       ctx.fillStyle = "#2f9e72"; ctx.fillText("● Internal", pad.l + 90, H - 22);
+    }
+
+    function setupPerfChartHover() {
+      const canvas = document.getElementById("perf-chart");
+      if (!canvas || canvas.dataset.hoverBound) return;
+      canvas.dataset.hoverBound = "1";
+
+      canvas.addEventListener("mousemove", (e) => {
+        if (!perfChartState) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const hover = findChartHover(mx, perfChartState);
+        if (!hover) {
+          hideChartTooltip();
+          drawChart(perfChartState.history, perfChartState.sinceHours);
+          return;
+        }
+        drawChart(perfChartState.history, perfChartState.sinceHours, hover);
+        renderChartTooltip(hover);
+        positionChartTooltip(
+          document.getElementById("perf-chart-tooltip"),
+          canvas,
+          hover.hoverX,
+          hover
+        );
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        hideChartTooltip();
+        if (perfChartState) {
+          drawChart(perfChartState.history, perfChartState.sinceHours);
+        }
+      });
     }
 
     async function refreshPerformance() {
@@ -3798,12 +3994,12 @@
 
     async function queryAgentActivity(agentRole, label) {
       const system = document.getElementById("chat-system").value;
-      const hours = document.getElementById("f-hours")?.value || 24;
+      const hours = document.getElementById("f-hours")?.value || DEFAULT_RANGE_HOURS;
       const roleLabel = label || agentRole;
       if (chatBusy) return;
       chatBusy = true;
       document.getElementById("chat-send").disabled = true;
-      appendChatMessage("user", `${roleLabel}, audit log (last ${hours}h)`);
+      appendChatMessage("user", `${roleLabel}, audit log (last ${formatRangeLabel(hours)})`);
 
       try {
         const data = await fetchJSON(
@@ -3948,7 +4144,7 @@
 
       const cards = document.getElementById("summary-cards");
       cards.innerHTML = `
-        <div class="card"><div class="label">Events (${hours}h)</div><div class="value">${summary.total_events}</div></div>
+        <div class="card"><div class="label">Events (${formatRangeLabel(hours)})</div><div class="value">${summary.total_events}</div></div>
         <div class="card"><div class="label">Orders</div><div class="value">${summary.orders_placed}</div></div>
         <div class="card"><div class="label">Ledger Decisions</div><div class="value">${summary.ledger_decisions ?? summary.arena_decisions ?? 0}</div></div>
         <div class="card"><div class="label">Risk Exits</div><div class="value">${summary.risk_exits}</div></div>
@@ -4126,6 +4322,7 @@
       document.getElementById(id).addEventListener("change", refreshDecisions);
     });
     document.getElementById("perf-hours").addEventListener("change", refreshPerformance);
+    setupPerfChartHover();
 
     let chartResizeTimer;
     window.addEventListener("resize", () => {

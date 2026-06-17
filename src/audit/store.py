@@ -140,7 +140,7 @@ def get_trace(trace_id: str) -> Dict[str, Any]:
     return {"trace_id": trace_id, "events": events, "count": len(events)}
 
 
-def get_performance(since_hours: int = 168) -> Dict[str, Any]:
+def get_performance(since_hours: int = 720) -> Dict[str, Any]:
     """Live competition snapshot plus equity history from Alpaca portfolio API."""
     from src.agents.competition_context import get_competition_snapshot
     from src.apis.alpaca_client import AlpacaClient
