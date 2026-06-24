@@ -143,6 +143,8 @@ Before placing overnight orders:
 - Coordinator tool: `run_daily_trading_workflow(system="internal", skip_calendar=true)`
 - Message keyword: include `force` or `retry` in the text
 
+**Post-open chase** (9:35 AM ET): same calendar gate — no chase on weekends/holidays. Overnight limit lookback uses the **last equity session close** (Alpaca calendar), not calendar Friday. Volatility is checked **before** cancelling open limits; limits stay live if the gate fails.
+
 ---
 
 ## Quick start
@@ -181,6 +183,7 @@ Dashboard: `http://localhost:8080/dashboard`
 Every action is logged to `data/audit_events.jsonl` with trace IDs linking full job sessions:
 
 - `ledger_decision`, `order_placed`, `order_skipped`, `order_cancelled_duplicate`
+- `ledger_decision` on no-trade nights includes `no_action_rationale` (ADK structured output) plus optional per-ticker `hold_decisions`
 - `signal_gemini_query` — exact Gemini input for the signal step (`query_text`, `coverage` counts)  
 - `discovery_probe`, `risk_rejected`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
 

@@ -51,6 +51,46 @@ def test_parse_adk_signal_output_from_dict():
     )
     assert len(ledger.decisions) == 1
     assert ledger.decisions[0].ticker == ticker
+    assert ledger.no_action_rationale == "none"
+
+
+def test_parse_adk_signal_output_pydantic_no_action():
+    from src.adk.schemas import TradingDecisionsResponse, TradingDecisionSchema
+
+    ticker = config.TICKER_UNIVERSE[0]
+    ledger = parse_adk_signal_output(
+        TradingDecisionsResponse(
+            decisions=[],
+            no_action_rationale="Fed day; no ticker clears hurdle.",
+        )
+    )
+    assert ledger.decisions == []
+    assert "Fed day" in ledger.no_action_rationale
+
+
+def test_parse_adk_signal_output_synthesizes_from_hold_rationales():
+    ticker_a, ticker_b = config.TICKER_UNIVERSE[:2]
+    ledger = parse_adk_signal_output(
+        {
+            "decisions": [
+                {
+                    "ticker": ticker_a,
+                    "action": "HOLD",
+                    "confidence": 0.5,
+                    "rationale": "RSI neutral",
+                },
+                {
+                    "ticker": ticker_b,
+                    "action": "HOLD",
+                    "confidence": 0.5,
+                    "rationale": "No edge",
+                },
+            ],
+            "no_action_rationale": "",
+        }
+    )
+    assert "Per-ticker HOLD" in ledger.no_action_rationale
+    assert ticker_a in ledger.no_action_rationale
 
 
 def test_ledger_to_state_roundtrip():

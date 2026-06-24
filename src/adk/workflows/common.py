@@ -11,6 +11,7 @@ from google.adk.workflow.utils._workflow_graph_utils import build_node
 from src.agents.ledger_utils import (
     SIGNAL_JSON_PARSE_ATTEMPTS,
     SignalLedgerResult,
+    finalize_signal_ledger,
     is_malformed_json_error,
     record_signal_gemini_query,
 )
@@ -44,7 +45,12 @@ def parse_adk_signal_output(output: Any) -> SignalLedgerResult:
             for d in output.decisions
             if TradingDecision.from_dict(d.model_dump())
         ]
-        return SignalLedgerResult(decisions=decisions, no_action_rationale="")
+        return finalize_signal_ledger(
+            SignalLedgerResult(
+                decisions=decisions,
+                no_action_rationale=str(output.no_action_rationale or "").strip(),
+            )
+        )
 
     if isinstance(output, dict):
         if "output" in output and len(output) == 1:
@@ -63,12 +69,16 @@ def parse_adk_signal_output(output: Any) -> SignalLedgerResult:
             decision = TradingDecision.from_dict(item)
             if decision and decision.ticker in valid:
                 decisions.append(decision)
-        return SignalLedgerResult(decisions=decisions, no_action_rationale=no_action)
+        return finalize_signal_ledger(
+            SignalLedgerResult(decisions=decisions, no_action_rationale=no_action)
+        )
 
     if isinstance(output, str):
         from src.agents.ledger_utils import parse_signal_ledger_response
 
-        return parse_signal_ledger_response(output, list(config.TICKER_UNIVERSE))
+        return finalize_signal_ledger(
+            parse_signal_ledger_response(output, list(config.TICKER_UNIVERSE))
+        )
 
     return SignalLedgerResult(
         decisions=[],

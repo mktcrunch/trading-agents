@@ -94,8 +94,23 @@ echo "==> Bundling src/ for Agent Engine"
 chmod +x deploy/sync_agent_src.sh
 ./deploy/sync_agent_src.sh
 
+# Prefer project venv / common local venv paths (adk is not on system PATH by default)
+for _venv_bin in \
+  "${ROOT}/venv/bin" \
+  "${ROOT}/.venv/bin" \
+  "${HOME}/mktcrunch_venv/bin"; do
+  if [[ -x "${_venv_bin}/adk" ]]; then
+    export PATH="${_venv_bin}:${PATH}"
+    break
+  fi
+done
+
 if ! command -v adk &>/dev/null; then
-  echo "ERROR: adk CLI not found. Activate venv: source venv/bin/activate"
+  echo "ERROR: adk CLI not found."
+  echo "  Create venv and install deps:"
+  echo "    python3 -m venv venv && source venv/bin/activate"
+  echo "    pip install -r requirements.txt"
+  echo "  Or link an existing env: ln -sf ~/mktcrunch_venv venv"
   exit 1
 fi
 ADK_CMD="$(command -v adk)"

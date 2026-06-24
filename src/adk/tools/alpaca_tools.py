@@ -502,12 +502,31 @@ async def run_post_open_chase(system: str) -> Dict[str, Any]:
     from src.audit import start_trace, end_trace
     from src.gcs.store import get_gcs_store
     from src.agents.execution_agent import ExecutionAgent
+    from src.market.calendar import check_chase_trading_session
 
     # 1. Hydrate audit log from GCS to avoid overwriting history
     try:
         get_gcs_store().hydrate_audit_log()
     except Exception as e:
         logger.warning(f"GCS audit hydrate failed before chase: {e}")
+
+    session_ok, session_reason = check_chase_trading_session(system=system)
+    if not session_ok:
+        start_trace("chase", system=system, meta={"skipped": True, "reason": session_reason})
+        end_trace(
+            "chase",
+            system=system,
+            success=True,
+            summary={"skipped": True, "skip_reason": session_reason},
+        )
+        return {
+            "success": True,
+            "system": system,
+            "skipped": True,
+            "reason": session_reason,
+            "chased_orders": {},
+            "count": 0,
+        }
 
     # 2. Start trace
     start_trace("chase", system=system)

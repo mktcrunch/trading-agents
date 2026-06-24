@@ -1,10 +1,13 @@
 """Post-open chase eligibility: open limits, expired OPG, never cancelled."""
 from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 import pytz
 
 from src.agents.execution_agent import (
+    ExecutionAgent,
     _overnight_limit_chase_mode,
     collect_overnight_chase_candidates,
     overnight_order_already_chased,
@@ -128,3 +131,63 @@ def test_overnight_order_already_chased_detects_later_market():
         ),
     ]
     assert overnight_order_already_chased(history, "limit-1", base, "buy") is True
+
+
+@pytest.mark.asyncio
+@patch("src.market.calendar.check_chase_trading_session", return_value=(True, "ok"))
+@patch("src.market.calendar.prior_session_close_cutoff_et")
+async def test_chase_checks_volatility_before_cancel(mock_cutoff, _mock_session):
+    """Open limits stay live when the volatility gate fails."""
+    mock_cutoff.return_value = ET.localize(datetime(2026, 6, 18, 16, 0))
+    created = ET.localize(datetime(2026, 6, 18, 17, 0))
+    open_order = _limit_order(
+        "SPY",
+        order_id="limit-spy",
+        status="accepted",
+        side="buy",
+        created_at=created,
+    )
+
+    agent = ExecutionAgent(system="baseline")
+    agent.alpaca_client = MagicMock()
+    agent.alpaca_client.get_orders.return_value = [open_order]
+    agent.alpaca_client.get_recent_volatility.return_value = None
+    agent.alpaca_client.cancel_order = MagicMock()
+    agent.alpaca_client.place_market_order = MagicMock()
+
+    with patch("src.agents.execution_agent._await_calm_market_for_chase", new_callable=AsyncMock) as mock_calm:
+        mock_calm.return_value = False
+        result = await agent.chase_unfilled_orders()
+
+    assert result == {}
+    agent.alpaca_client.cancel_order.assert_not_called()
+    agent.alpaca_client.place_market_order.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("src.market.calendar.check_chase_trading_session", return_value=(True, "ok"))
+@patch("src.market.calendar.prior_session_close_cutoff_et")
+async def test_chase_cancels_only_after_calm_gate(mock_cutoff, _mock_session):
+    mock_cutoff.return_value = ET.localize(datetime(2026, 6, 18, 16, 0))
+    created = ET.localize(datetime(2026, 6, 18, 17, 0))
+    open_order = _limit_order(
+        "SPY",
+        order_id="limit-spy",
+        status="accepted",
+        side="buy",
+        created_at=created,
+    )
+
+    agent = ExecutionAgent(system="baseline")
+    agent.alpaca_client = MagicMock()
+    agent.alpaca_client.get_orders.return_value = [open_order]
+    agent.alpaca_client.cancel_order.return_value = True
+    agent.alpaca_client.place_market_order.return_value = "mkt-1"
+
+    with patch("src.agents.execution_agent._await_calm_market_for_chase", new_callable=AsyncMock) as mock_calm:
+        mock_calm.return_value = True
+        result = await agent.chase_unfilled_orders()
+
+    assert result == {"SPY": "mkt-1"}
+    agent.alpaca_client.cancel_order.assert_called_once_with("limit-spy")
+    agent.alpaca_client.place_market_order.assert_called_once()

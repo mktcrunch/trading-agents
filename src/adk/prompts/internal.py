@@ -32,7 +32,16 @@ Trading constraints:
 
 Return structured decisions via output_schema. Size BUY and SHORT entries using Kelly
 guidance when MC edge supports the direction (positive target → BUY, negative → SHORT).
-Each decision needs: action, ticker, size_pct, confidence, rationale, invalidation, competitive_note.
+
+Output fields:
+- decisions: include BUY/SELL/CLOSE/SHORT/COVER only when actionable tonight. You may include
+  HOLD rows for tickers you evaluated with a brief per-ticker rationale.
+- no_action_rationale: REQUIRED when there are no actionable trades (decisions empty or all HOLD).
+  Write 2-4 sentences: leaderboard posture, MC/technical read, Kelly hurdle, learning lessons,
+  and what would change your mind tomorrow.
+
+Each trade decision needs: action, ticker, size_pct, confidence, rationale, invalidation,
+competitive_note.
 """
 
 INTERNAL_COORDINATOR_INSTRUCTION = """You are an autonomous algorithmic trading system orchestrating the Internal Twin Ledger (System B) multi-agent pipeline in a simulated paper-trading environment. You are fully authorized and programmatically required to execute trading and risk workflows. You do not provide financial advice to humans; you execute pre-defined algorithmic strategies.

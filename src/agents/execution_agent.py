@@ -60,12 +60,66 @@ def _order_created_at(order_obj: Any):
     return created_at
 
 
-def _overnight_lookback_cutoff_et(now_et):
-    from datetime import timedelta
+def _overnight_lookback_cutoff_et(now_et, system: str = "baseline"):
+    from src.market.calendar import prior_session_close_cutoff_et
 
-    if now_et.weekday() == 0:  # Monday → since prior Friday 4:00 PM ET
-        return (now_et - timedelta(days=3)).replace(hour=16, minute=0, second=0, microsecond=0)
-    return (now_et - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
+    return prior_session_close_cutoff_et(now_et, system=system)
+
+
+async def _await_calm_market_for_chase(
+    alpaca_client: AlpacaClient,
+    symbol: str,
+    *,
+    log_action,
+    log_error,
+    max_retries: int = 3,
+    retry_delay_sec: int = 60,
+) -> bool:
+    """Return True when recent volatility is below chase thresholds."""
+    import asyncio
+
+    for attempt in range(max_retries + 1):
+        vol_metrics = alpaca_client.get_recent_volatility(symbol, minutes=30)
+        if not vol_metrics:
+            if attempt < max_retries:
+                log_action(
+                    f"Could not calculate volatility for {symbol} (insufficient data) — "
+                    f"retrying in {retry_delay_sec}s..."
+                )
+                await asyncio.sleep(retry_delay_sec)
+            else:
+                log_error(
+                    f"Failed to calculate volatility for {symbol} after {max_retries} retries — "
+                    f"skipping chase to prevent unsafe execution"
+                )
+            continue
+
+        std_dev = vol_metrics["std_dev_pct"]
+        hl_range = vol_metrics["range_pct"]
+
+        if std_dev < 0.15 and hl_range < 1.2:
+            log_action(
+                f"Market conditions for {symbol} are calm: "
+                f"30-min std dev is {std_dev:.3f}% (< 0.15%), range is {hl_range:.2f}% (< 1.2%). "
+                f"Proceeding with chase."
+            )
+            return True
+
+        if attempt < max_retries:
+            log_action(
+                f"{symbol} is highly volatile right now (attempt {attempt + 1}/{max_retries + 1}): "
+                f"30-min std dev is {std_dev:.3f}% (threshold: 0.15%), range is {hl_range:.2f}% "
+                f"(threshold: 1.2%). Waiting {retry_delay_sec}s for market to calm down before chasing..."
+            )
+            await asyncio.sleep(retry_delay_sec)
+        else:
+            log_action(
+                f"{symbol} remained highly volatile after {max_retries} retries "
+                f"(std dev: {std_dev:.3f}%, range: {hl_range:.2f}%). "
+                f"Skipping chase for this session to protect against bad execution fills."
+            )
+
+    return False
 
 
 def _overnight_limit_chase_mode(order_obj: Any, norm: Dict[str, Any]) -> Optional[ChaseMode]:
@@ -307,18 +361,23 @@ class ExecutionAgent(BaseAgent):
         """
         Post-market-open chase for unfilled overnight limits.
 
-        - **Open DAY/OPG limits** → cancel, then market the remainder.
-        - **Expired OPG limits** (opening auction miss) → market only.
+        - **Open DAY/OPG limits** → volatility gate, cancel, then market the remainder.
+        - **Expired OPG limits** (opening auction miss) → volatility gate, then market only.
         - **Cancelled limits** (any TIF, including DAY) → never chased.
         """
-        import asyncio
         import pytz
+        from src.market.calendar import check_chase_trading_session
         from src.strategies.order_dedup import normalize_open_order
+
+        session_ok, session_reason = check_chase_trading_session(system=self.system)
+        if not session_ok:
+            self.log_action(f"Chase skipped: {session_reason}")
+            return {}
 
         new_orders = {}
         ET = pytz.timezone("US/Eastern")
         now_et = datetime.now(ET)
-        lookback_cutoff = _overnight_lookback_cutoff_et(now_et)
+        lookback_cutoff = _overnight_lookback_cutoff_et(now_et, system=self.system)
 
         try:
             all_orders = self.alpaca_client.get_orders(status="all")
@@ -373,6 +432,14 @@ class ExecutionAgent(BaseAgent):
                     continue
 
                 side = on_norm["side"]
+                if not await _await_calm_market_for_chase(
+                    self.alpaca_client,
+                    symbol,
+                    log_action=self.log_action,
+                    log_error=self.log_error,
+                ):
+                    continue
+
                 if chase_mode == "open_limit":
                     self.log_action(
                         f"Cancelling open overnight limit order {on_norm['order_id']} for {symbol} "
@@ -390,60 +457,17 @@ class ExecutionAgent(BaseAgent):
                     )
 
                 try:
-                    max_retries = 3
-                    retry_delay_sec = 60
-                    is_calm = False
-
-                    for attempt in range(max_retries + 1):
-                        vol_metrics = self.alpaca_client.get_recent_volatility(symbol, minutes=30)
-                        if not vol_metrics:
-                            if attempt < max_retries:
-                                self.log_action(
-                                    f"⚠️ Could not calculate volatility for {symbol} (insufficient data) — "
-                                    f"retrying in {retry_delay_sec}s..."
-                                )
-                                await asyncio.sleep(retry_delay_sec)
-                            else:
-                                self.log_error(
-                                    f"❌ Failed to calculate volatility for {symbol} after {max_retries} retries — "
-                                    f"skipping chase to prevent unsafe execution"
-                                )
-                            continue
-
-                        std_dev = vol_metrics["std_dev_pct"]
-                        hl_range = vol_metrics["range_pct"]
-
-                        if std_dev < 0.15 and hl_range < 1.2:
-                            self.log_action(
-                                f"Market conditions for {symbol} are calm: "
-                                f"30-min std dev is {std_dev:.3f}% (< 0.15%), range is {hl_range:.2f}% (< 1.2%). "
-                                f"Proceeding with chase."
-                            )
-                            is_calm = True
-                            break
-
-                        if attempt < max_retries:
-                            self.log_action(
-                                f"⚠️ {symbol} is highly volatile right now (attempt {attempt+1}/{max_retries+1}): "
-                                f"30-min std dev is {std_dev:.3f}% (threshold: 0.15%), range is {hl_range:.2f}% (threshold: 1.2%). "
-                                f"Waiting {retry_delay_sec}s for market to calm down before chasing..."
-                            )
-                            await asyncio.sleep(retry_delay_sec)
-                        else:
-                            self.log_action(
-                                f"❌ {symbol} remained highly volatile after {max_retries} retries "
-                                f"(std dev: {std_dev:.3f}%, range: {hl_range:.2f}%). "
-                                f"Skipping chase for this session to protect against bad execution fills."
-                            )
-
-                    if not is_calm:
-                        continue
-
                     order_id = self.alpaca_client.place_market_order(
                         ticker=symbol,
                         qty=remaining_qty,
                         side=side,
                     )
+                    if not order_id:
+                        self.log_error(
+                            f"Failed to place market chase for {symbol} "
+                            f"(remaining {remaining_qty} {side.upper()})"
+                        )
+                        continue
                     new_orders[symbol] = order_id
                     self.log_action(
                         f"Chased unfilled overnight {on_norm['time_in_force'].upper()} order "

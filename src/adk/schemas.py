@@ -15,4 +15,11 @@ class TradingDecisionSchema(BaseModel):
 
 
 class TradingDecisionsResponse(BaseModel):
-    decisions: List[TradingDecisionSchema]
+    decisions: List[TradingDecisionSchema] = Field(default_factory=list)
+    no_action_rationale: str = Field(
+        default="",
+        description=(
+            "Required when there are no BUY/SELL/CLOSE/SHORT/COVER decisions: "
+            "2-4 sentences on leaderboard posture, market read, and why no trades tonight."
+        ),
+    )

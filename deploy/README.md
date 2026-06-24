@@ -93,8 +93,10 @@ Cloud Scheduler (*/15 9-15 ET) ──POST──►  Agent Engine :streamQuery (r
 
 Cloud Scheduler (9:35 open · 12:55/2:55 midday ET) ──POST──►  Agent Engine :streamQuery (chase)
                                               │
-                                              ├─ cancel unfilled overnight limits → market
-                                              └─ volatility gate before chase
+                                              ├─ skip weekends/holidays (Alpaca calendar)
+                                              ├─ overnight lookback from last equity session close
+                                              ├─ volatility gate before cancel/market
+                                              └─ cancel unfilled overnight limits → market (after calm gate)
 
 Intraday risk exits cancel any open **limit** orders on the same symbol before placing the market close (avoids double cover/fill with overnight limits).
 ```

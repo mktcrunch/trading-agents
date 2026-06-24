@@ -36,6 +36,35 @@ class SignalLedgerResult:
     no_action_rationale: str = ""
 
 
+def is_actionable_decision(decision: TradingDecision) -> bool:
+    return decision.action != "HOLD"
+
+
+def finalize_signal_ledger(result: SignalLedgerResult) -> SignalLedgerResult:
+    """Ensure no-action nights have an auditable portfolio-level rationale."""
+    actionable = [d for d in result.decisions if is_actionable_decision(d)]
+    if actionable:
+        return result
+
+    rationale = (result.no_action_rationale or "").strip()
+    if rationale:
+        return result
+
+    hold_notes = [
+        f"{d.ticker}: {(d.rationale or '').strip()}"
+        for d in result.decisions
+        if d.action == "HOLD" and (d.rationale or "").strip()
+    ]
+    if hold_notes:
+        summary = "; ".join(hold_notes[:8])
+        if len(hold_notes) > 8:
+            summary += f" (+{len(hold_notes) - 8} more)"
+        rationale = f"No overnight trades. Per-ticker HOLD — {summary}"
+        return SignalLedgerResult(decisions=result.decisions, no_action_rationale=rationale)
+
+    return result
+
+
 def _clean_json_text(text: str) -> str:
     cleaned = (text or "").strip()
     if cleaned.startswith("```"):
@@ -95,7 +124,9 @@ def emit_signal_ledger_audit(
     competition: Dict[str, Any],
 ) -> None:
     """Log actionable decisions and portfolio-level no-action rationale to audit."""
-    actionable = [d for d in result.decisions if d.action != "HOLD"]
+    result = finalize_signal_ledger(result)
+    actionable = [d for d in result.decisions if is_actionable_decision(d)]
+    hold_decisions = [d for d in result.decisions if d.action == "HOLD"]
     leaderboard = competition.get("leaderboard") or {}
 
     agent.log_action(
@@ -106,6 +137,7 @@ def emit_signal_ledger_audit(
         data={
             "leaderboard": leaderboard,
             "decisions": [d.to_dict() for d in actionable],
+            "hold_decisions": [d.to_dict() for d in hold_decisions],
             "no_action_rationale": result.no_action_rationale or None,
         },
     )
@@ -118,12 +150,22 @@ def emit_signal_ledger_audit(
             event_type="ledger_decision",
         )
 
+    for d in hold_decisions:
+        note = (d.rationale or "").strip()
+        if not note:
+            continue
+        agent.log_action(
+            f"  HOLD {d.ticker} — {note[:80]}",
+            data={**d.to_dict(), "leaderboard": leaderboard, "no_action": True},
+            event_type="ledger_decision",
+        )
+
     if not actionable:
         rationale = (result.no_action_rationale or "").strip()
         if not rationale:
             rationale = (
-                "No actionable trades suggested; model returned an empty decision set "
-                "without an explicit no_action_rationale."
+                "No actionable trades suggested; model returned no portfolio "
+                "no_action_rationale and no per-ticker HOLD rationales."
             )
         agent.log_action(
             f"No overnight action: {rationale[:120]}",

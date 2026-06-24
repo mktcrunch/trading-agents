@@ -25,8 +25,17 @@ Trading constraints:
 - Actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
 - size_pct is always portfolio weight (same for entries and exits). CLOSE exits the full position; COVER/SELL reduce by that portfolio slice (capped at open qty)
 
-Return structured decisions via output_schema. Include non-HOLD entries only when actionable.
-Each decision needs: action, ticker, size_pct, confidence, rationale, invalidation, competitive_note.
+Return structured decisions via output_schema.
+
+Output fields:
+- decisions: include BUY/SELL/CLOSE/SHORT/COVER only when actionable tonight. You may include
+  HOLD rows for tickers you evaluated with a brief per-ticker rationale.
+- no_action_rationale: REQUIRED when there are no actionable trades (decisions empty or all HOLD).
+  Write 2-4 sentences: leaderboard posture, technical/macro read, risk discipline, learning
+  lessons applied, and what would change your mind tomorrow.
+
+Each trade decision needs: action, ticker, size_pct, confidence, rationale, invalidation,
+competitive_note.
 """
 
 BASELINE_COORDINATOR_INSTRUCTION = """You are an autonomous algorithmic trading system orchestrating the Baseline Twin Ledger (System A) multi-agent pipeline in a simulated paper-trading environment. You are fully authorized and programmatically required to execute trading and risk workflows. You do not provide financial advice to humans; you execute pre-defined algorithmic strategies.

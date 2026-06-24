@@ -253,6 +253,22 @@ async def run_risk_job(system: str = "both", dry_run: bool = False):
 
 async def run_chase_job(system: str = "both"):
     """Post-market-open chase unfilled limit orders with market orders."""
+    from src.market.calendar import check_chase_trading_session
+
+    session_ok, session_reason = check_chase_trading_session(
+        system="baseline" if system == "both" else system,
+    )
+    if not session_ok:
+        logger.info(f"CHASE JOB SKIPPED: {session_reason}")
+        start_trace("chase", system=system, meta={"skipped": True, "reason": session_reason})
+        end_trace(
+            "chase",
+            system=system,
+            success=True,
+            summary={"skipped": True, "skip_reason": session_reason},
+        )
+        return True
+
     start_trace("chase", system=system)
     logger.info("=" * 80)
     logger.info(f"CHASE JOB — system={system}")
