@@ -58,6 +58,22 @@ def _heuristic_signal(analysis: Dict[str, Any]) -> Dict[str, Any]:
     elif wr is not None and wr >= 55:
         do_more.append(f"Win rate {wr}% — keep discipline on sizing.")
 
+    qh = analysis.get("quant_head_to_head") or {}
+    sc_q = analysis.get("scorecard") or {}
+    excess = sc_q.get("excess_return_vs_competitor_pct")
+    if excess is not None:
+        if excess > 0:
+            do_more.append(
+                f"Quant excess return vs competitor {excess:+.2f}% — defend risk-adjusted lead."
+            )
+        elif excess < 0:
+            bad.append(
+                f"Quant excess return vs competitor {excess:+.2f}% — improve Sharpe, not just dollar gap."
+            )
+    rem = sc_q.get("excess_return_days_remaining_95")
+    if rem and excess is not None and excess > 0:
+        do_more.append(f"Edge not yet significant — ~{rem} more paired days at current pace.")
+
     if logged == 0:
         lessons = "No signal decisions in audit log."
     elif score.get("decisions_scored", 0) == 0:
@@ -102,7 +118,13 @@ def _heuristic_coordinator(analysis: Dict[str, Any]) -> Dict[str, Any]:
         bad.append(f"{failed} job(s) failed completion — inspect trace logs.")
     if started and not failed:
         do_more.append(f"{score.get('jobs_ok', 0)} jobs completed cleanly.")
-    lessons = f"Coordinator routed {started} job(s); {score.get('jobs_completed', 0)} completed."
+    sc_q = analysis.get("scorecard") or {}
+    excess = sc_q.get("excess_return_vs_competitor_pct")
+    if excess is not None:
+        lessons_extra = f" Quant excess vs competitor: {excess:+.2f}%."
+    else:
+        lessons_extra = ""
+    lessons = f"Coordinator routed {started} job(s); {score.get('jobs_completed', 0)} completed.{lessons_extra}"
     return _base(lessons, bad, do_more)
 
 

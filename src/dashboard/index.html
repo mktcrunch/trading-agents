@@ -3266,7 +3266,7 @@
     const fmtDrawdown = (n) => n == null ? "—" : `-${Math.abs(Number(n)).toFixed(2)}%`;
     const fmtPvalMeta = (sig) => {
       if (!sig || sig.insufficient_data || sig.p_value == null) {
-        return { text: "Need ≥5 paired days", cls: "na", significant: false };
+        return { text: "n < 5 paired days", cls: "na", significant: false };
       }
       const p = Number(sig.p_value);
       const text = p < 0.001 ? "p < 0.001" : `p = ${p.toFixed(3)}`;
@@ -3284,7 +3284,7 @@
     const metricFormulaMinus = () => `
       <div class="perf-metric-formula">
         <span class="desk internal">Internal</span>
-        <span class="op">minus</span>
+        <span class="op">−</span>
         <span class="desk baseline">Baseline</span>
       </div>`;
     const splitDesk = (desk, label, value, valueCls = "") =>
@@ -3292,16 +3292,22 @@
     const renderPowerHint = (sig) => {
       if (!sig) return "";
       if (sig.significant_95) {
-        return `<div class="perf-metric-power">Reached 95% significance</div>`;
+        return `<div class="perf-metric-power">Significant at α = 0.05</div>`;
+      }
+      if (sig.zero_effect) {
+        return `<div class="perf-metric-power muted">No effect</div>`;
+      }
+      if (sig.insufficient_data || sig.p_value == null) {
+        return `<div class="perf-metric-power muted">n &lt; 5 paired days</div>`;
       }
       if (sig.days_remaining_95 != null && sig.days_remaining_95 > 0) {
         const total = sig.days_required_95;
-        return `<div class="perf-metric-power">~${sig.days_remaining_95} more paired day${sig.days_remaining_95 === 1 ? "" : "s"} at current pace (${total} total needed)</div>`;
+        return `<div class="perf-metric-power">~${sig.days_remaining_95} more paired days (n ≈ ${total}) at current effect</div>`;
       }
       if (sig.days_required_95 != null) {
-        return `<div class="perf-metric-power">~${sig.days_required_95} paired days at current effect size</div>`;
+        return `<div class="perf-metric-power">n ≈ ${sig.days_required_95} paired days at current effect</div>`;
       }
-      return `<div class="perf-metric-power muted">Effect too flat to project sample size</div>`;
+      return `<div class="perf-metric-power muted">n not estimable</div>`;
     };
     const renderSigFoot = (sig) => `
       <div class="perf-metric-foot">
@@ -3814,22 +3820,22 @@
       el.innerHTML = `
         <div class="perf-metrics-head">
           <h2>Quant head-to-head</h2>
-          <span class="meta">${days} paired trading day${days === 1 ? "" : "s"}${latest} · stats need ≥${minDays} days</span>
+          <span class="meta">${days} paired day${days === 1 ? "" : "s"}${latest} · n ≥ ${minDays} for tests</span>
         </div>
         <div class="perf-metrics-grid">
           <article class="perf-metric-card">
-            <div class="perf-metric-title">Total return spread</div>
+            <div class="perf-metric-title">Excess return</div>
             ${metricFormulaMinus()}
             <div class="perf-metric-value ${pctClass(totalReturnDiff)}">${fmtPct(totalReturnDiff)}</div>
             <div class="perf-metric-split">
               ${splitDesk("baseline", "Baseline", fmtPct(b.total_return_pct), pctClass(b.total_return_pct))}
               ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct))}
             </div>
-            <div class="perf-metric-sub">$100k start · aligned cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)}</div>
+            <div class="perf-metric-sub">$100k start · cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)}</div>
             ${renderSigFoot(sig.total_return_diff)}
           </article>
           <article class="perf-metric-card">
-            <div class="perf-metric-title">Daily return spread</div>
+            <div class="perf-metric-title">Daily delta</div>
             ${metricFormulaMinus()}
             <div class="perf-metric-value ${pctClass(dailyDelta)}">${fmtPct(dailyDelta)}</div>
             <div class="perf-metric-split">
@@ -3840,7 +3846,7 @@
             ${renderSigFoot(sig.daily_alpha)}
           </article>
           <article class="perf-metric-card">
-            <div class="perf-metric-title">Sharpe ratio spread</div>
+            <div class="perf-metric-title">Sharpe difference</div>
             ${metricFormulaMinus()}
             <div class="perf-metric-value ${pctClass(sharpeDiff)}">${sharpeDiff == null ? "—" : (sharpeDiff >= 0 ? "+" : "") + fmtSharpe(sharpeDiff)}</div>
             <div class="perf-metric-split">
@@ -3851,7 +3857,7 @@
             ${renderSigFoot(sig.sharpe_diff)}
           </article>
           <article class="perf-metric-card">
-            <div class="perf-metric-title">Max drawdown spread</div>
+            <div class="perf-metric-title">Drawdown difference</div>
             ${metricFormulaMinus()}
             <div class="perf-metric-value ${ddDiff == null ? "" : (ddDiff <= 0 ? "pos" : "neg")}">${ddDiff == null ? "—" : (ddDiff >= 0 ? "+" : "") + ddDiff.toFixed(2) + " pp"}</div>
             <div class="perf-metric-split">
@@ -3916,11 +3922,11 @@
       const metrics = data.metrics || {};
       const cmp = metrics.comparison || {};
       const alphaHint = cmp.daily_delta_pct != null
-        ? ` · today ${fmtPct(cmp.daily_delta_pct)} Internal edge`
+        ? ` · daily delta ${fmtPct(cmp.daily_delta_pct)}`
         : "";
       const alphaSig = cmp.significance?.daily_alpha;
       const sigHint = alphaSig && !alphaSig.insufficient_data && alphaSig.p_value != null
-        ? (alphaSig.significant_95 ? " · alpha significant at 95%" : " · alpha not yet significant")
+        ? (alphaSig.significant_95 ? " · α = 0.05" : ` · p = ${Number(alphaSig.p_value).toFixed(3)}`)
         : "";
 
       document.getElementById("perf-hero-title").innerHTML =

@@ -77,6 +77,8 @@ You are shown:
 3. Google Search grounding for macro/sector drivers when it would improve ETF decisions.
 4. The leaderboard: Internal Trader's account value, filled positions, and P&L.
 5. competition.leaderboard.information_boundary — what you can and cannot see about the competitor.
+6. competition.quant_head_to_head — read `for_you` (positive favors you). Raw comparison.*
+   is Internal − Baseline; never invert that sign when you are Baseline.
 
 Portfolio discipline (rank-aware, not cash-hoarding):
 - Primary objective: risk-adjusted alpha — deploy into high-conviction ideas with favorable

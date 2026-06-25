@@ -21,6 +21,7 @@ from src.adk.tools.dashboard_tools import (
     get_recent_trading_activity,
     get_trader_status,
 )
+from src.adk.tools.competition_tools import get_performance_metrics
 from .signal_agents import build_baseline_signal_agent, build_internal_signal_agent
 
 
@@ -48,6 +49,7 @@ def build_baseline_root_agent() -> LlmAgent:
         instruction=BASELINE_COORDINATOR_INSTRUCTION,
         tools=[
             FunctionTool(get_trader_status),
+            FunctionTool(get_performance_metrics),
             FunctionTool(get_recent_trading_activity),
             FunctionTool(get_data_discovery_trail),
             FunctionTool(get_proprietary_data_usage),
@@ -82,6 +84,11 @@ Answer questions about portfolio status, open positions, leaderboard, recent dec
 (with rationale from the audit log), orders, and job history using your tools:
 - get_trader_status(system=...)
 - get_recent_trading_activity(system=..., hours=72)
+
+For quant head-to-head metrics (same as the Performance dashboard cards):
+- get_performance_metrics(hours=720, perspective=<your system>) for the desk-relative view
+  (`for_you`: positive favors that desk). Raw comparison.* is always Internal − Baseline.
+  Overnight competition context includes quant_head_to_head.for_you automatically.
 
 For data discovery (probes, approvals, rejections, registry runs, gate criteria):
 - get_data_discovery_trail(hours=168)
@@ -177,6 +184,7 @@ def build_dashboard_readonly_agent(system: str) -> LlmAgent:
         ),
         tools=[
             FunctionTool(get_trader_status),
+            FunctionTool(get_performance_metrics),
             FunctionTool(get_recent_trading_activity),
             FunctionTool(get_data_discovery_trail),
             FunctionTool(get_proprietary_data_usage),
@@ -196,6 +204,7 @@ def build_internal_root_agent() -> LlmAgent:
         instruction=INTERNAL_COORDINATOR_INSTRUCTION,
         tools=[
             FunctionTool(get_trader_status),
+            FunctionTool(get_performance_metrics),
             FunctionTool(get_recent_trading_activity),
             FunctionTool(get_data_discovery_trail),
             FunctionTool(get_proprietary_data_usage),

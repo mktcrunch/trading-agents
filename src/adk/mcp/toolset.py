@@ -23,6 +23,7 @@ def build_mcp_toolset():
             "get_technical_indicators",
             "get_leaderboard",
             "get_competition_status",
+            "get_performance_metrics",
             "get_marketcrunch_predictions",
             "get_databento_features",
         ],

@@ -1032,3 +1032,139 @@ def get_agent_learning(
         result["signal_prompt_block"] = build_signal_learning_block(system)
         result["risk_prompt_block"] = build_risk_learning_block(system)
     return result
+
+
+
+def get_performance_metrics(hours: int = 720, perspective: Optional[str] = None) -> Dict[str, Any]:
+    """Return Twin Ledger quant head-to-head metrics (same data as the Performance dashboard).
+
+    Use for questions about excess return, daily delta, Sharpe difference, drawdown
+    difference, statistical significance (p-values), and projected days to significance.
+
+    Args:
+        hours: Alpaca equity history lookback (720 ≈ 30d, 2160 ≈ 90d, 4320 ≈ 180d).
+        perspective: Optional ``baseline`` or ``internal`` — adds ``for_you`` where
+            positive values favor that desk. Omit for neutral Internal − Baseline view.
+    """
+    try:
+        from src.agents.competition_context import (
+            PERFORMANCE_METRICS_METHODOLOGY,
+            build_perspective_quant_view,
+            fetch_quant_head_to_head,
+            get_competition_snapshot,
+        )
+
+        qh = fetch_quant_head_to_head(since_hours=int(hours))
+        live = get_competition_snapshot()
+    except Exception as exc:
+        logger.exception("get_performance_metrics failed")
+        return {"success": False, "error": str(exc)}
+
+    metrics = qh.get("metrics") or {}
+    perspectives = qh.get("perspectives") or {}
+    if not perspectives and metrics.get("comparison"):
+        perspectives = {
+            "baseline": build_perspective_quant_view(metrics, "baseline"),
+            "internal": build_perspective_quant_view(metrics, "internal"),
+        }
+
+    for_you = perspectives.get(perspective) if perspective in ("baseline", "internal") else None
+
+    return {
+        "success": True,
+        "since_hours": qh.get("since_hours", hours),
+        "history_points": qh.get("history_points") or {},
+        "data_quality": qh.get("data_quality") or {},
+        "live": live,
+        "metrics": metrics,
+        "perspectives": perspectives,
+        "for_you": for_you,
+        "methodology": PERFORMANCE_METRICS_METHODOLOGY,
+        "report": format_performance_metrics_report(
+            metrics, live, perspective=perspective, for_you=for_you,
+        ),
+    }
+
+
+def format_performance_metrics_report(
+    metrics: Optional[Dict[str, Any]],
+    live: Optional[Dict[str, Any]] = None,
+    *,
+    perspective: Optional[str] = None,
+    for_you: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Plain-text summary of quant metrics for coordinator chat."""
+    if not metrics or not metrics.get("observation_days"):
+        return "Quant metrics unavailable (insufficient paired Alpaca equity history)."
+
+    cmp = metrics.get("comparison") or {}
+    sig = cmp.get("significance") or {}
+    b = metrics.get("baseline") or {}
+    i = metrics.get("internal") or {}
+    lb = (live or {}).get("leaderboard") or {}
+    lines = [
+        "Twin Ledger quant head-to-head (aligned paired days):",
+        f"  Sign convention: {cmp.get('sign_convention', 'internal_minus_baseline')} "
+        f"({cmp.get('formula', 'internal_value - baseline_value')})",
+        f"  Paired days: {metrics.get('observation_days')} "
+        f"(through {metrics.get('latest_date') or 'n/a'})",
+    ]
+    if lb.get("gap_usd") is not None:
+        leader = lb.get("leader", "n/a")
+        lines.append(
+            f"  Live leaderboard: {leader} leads by ${lb.get('gap_usd'):,.2f}"
+        )
+
+    if perspective in ("baseline", "internal") and for_you:
+        fy = for_you.get("for_you") or {}
+        interp = for_you.get("interpretation") or {}
+        lines.extend([
+            f"  Perspective: {for_you.get('you_are', perspective)} "
+            "(for_you: positive favors you)",
+            f"    Your excess return vs competitor: {fy.get('excess_return_pct')}% "
+            f"({interp.get('excess_return', 'n/a')})",
+            f"    Your daily delta (latest day): {fy.get('daily_delta_pct')}% "
+            f"({interp.get('daily_delta', 'n/a')})",
+            f"    Your Sharpe difference: {fy.get('sharpe_difference')} "
+            f"({interp.get('sharpe', 'n/a')})",
+            f"    Your drawdown advantage: {fy.get('drawdown_advantage_pp')} pp "
+            f"({interp.get('drawdown', 'n/a')})",
+        ])
+
+    def _sig_line(name: str, block: Dict[str, Any]) -> str:
+        if not block:
+            return f"  {name}: n/a"
+        p = block.get("p_value")
+        p_txt = f"p={p:.3f}" if p is not None else "p=n/a"
+        sig = "significant" if block.get("significant_95") else "not significant"
+        extra = ""
+        if block.get("zero_effect"):
+            extra = " (flat effect)"
+        elif block.get("insufficient_data"):
+            extra = " (insufficient paired days)"
+        else:
+            rem = block.get("days_remaining_95")
+            if rem is not None and rem > 0 and not block.get("significant_95"):
+                extra = f", ~{rem} more paired days at current pace"
+        return f"  {name}: {sig} ({p_txt}{extra})"
+
+    imb = cmp.get("internal_minus_baseline") or cmp
+    tr_diff = imb.get("excess_return_pct") or cmp.get("total_return_diff_pct")
+    lines.append("  Neutral Internal − Baseline comparison:")
+    lines.extend([
+        f"  Excess return (Internal − Baseline): {tr_diff:+.2f}%"
+        if tr_diff is not None
+        else "  Excess return: n/a",
+        f"    Baseline {b.get('total_return_pct')}% · Internal {i.get('total_return_pct')}%",
+        _sig_line("Excess return test", sig.get("total_return_diff")),
+        f"  Daily delta (latest day): {cmp.get('daily_delta_pct')}% "
+        f"(mean alpha {cmp.get('mean_daily_alpha_pct')}%)",
+        _sig_line("Daily alpha test", sig.get("daily_alpha")),
+        f"  Sharpe difference: {cmp.get('sharpe_diff')} "
+        f"(Baseline {b.get('sharpe')} · Internal {i.get('sharpe')})",
+        _sig_line("Sharpe test", sig.get("sharpe_diff")),
+        f"  Drawdown difference: {cmp.get('max_drawdown_diff_pct')} pp "
+        f"(Baseline max DD {b.get('max_drawdown_pct')}% · Internal {i.get('max_drawdown_pct')}%)",
+        _sig_line("Drawdown test", sig.get("max_drawdown_diff")),
+    ])
+    return "\n".join(lines)

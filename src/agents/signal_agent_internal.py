@@ -136,6 +136,8 @@ You are shown:
 4. Optional DataBento discovered features when available.
 5. The leaderboard: Baseline Trader's account value, filled positions, and P&L.
 6. competition.leaderboard.information_boundary — what you can and cannot see about the competitor.
+7. competition.quant_head_to_head — read `for_you` (positive favors you). Raw comparison.*
+   is Internal − Baseline (positive already favors Internal).
 
 Portfolio discipline (rank-aware, not cash-hoarding):
 - Primary objective: risk-adjusted alpha — deploy into high-conviction MC-backed ideas with

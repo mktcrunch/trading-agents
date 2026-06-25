@@ -61,6 +61,12 @@ Ticker performance:
 Recent scored decisions:
 {_format_decision_lines(state.get('recent_decisions') or [])}"""
 
+    from src.agents.competition_context import format_quant_learning_block
+
+    quant_block = format_quant_learning_block(system)
+    if quant_block:
+        block += f"\n\n{quant_block}"
+
     if no_action_sessions:
         lines = []
         for s in no_action_sessions[-3:]:

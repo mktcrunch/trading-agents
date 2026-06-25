@@ -25,7 +25,7 @@ Licensed under the [Apache License 2.0](LICENSE).
 | **Overnight orders** | OPG limit ±0.5% from close | Same |
 | **Intraday risk** | Pure LLM base stop + trailing | Hybrid base stop (scripted + LLM), hybrid trailing, 15-min gate, EOD |
 
-Both agents see a live leaderboard (portfolio value vs competitor) in every Twin Ledger prompt.
+Both agents see a live leaderboard (portfolio value vs competitor) and aligned quant head-to-head metrics (excess return, Sharpe, drawdown, significance) in every competition context and overnight signal payload.
 
 ---
 
@@ -189,7 +189,7 @@ Every action is logged to `data/audit_events.jsonl` with trace IDs linking full 
 
 API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/performance`, `GET /api/market-clock`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
 
-`GET /api/performance` returns live Alpaca equity, portfolio history, and aligned quant metrics (daily delta, Sharpe, max drawdown, total-return bootstrap significance).
+`GET /api/performance` returns live Alpaca equity, portfolio history, and aligned quant metrics (daily delta, Sharpe, max drawdown, total-return bootstrap significance). All comparison metrics are stored as **Internal − Baseline**; agents read `for_you` / `perspectives.*` (positive = favorable to that desk). Dashboard chat exposes the same via `get_performance_metrics(hours=720, perspective="baseline"|"internal")`.
 
 `order_placed` rows returned by `/api/events`, `/api/trace/{id}`, and `get_recent_trading_activity` are annotated with live Alpaca fields (`alpaca_status`, `alpaca_is_active`, …) so manual cancels show as `canceled` even though the audit only records placement.
 

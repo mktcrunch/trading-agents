@@ -44,6 +44,15 @@ chmod +x deploy/setup_vertex.sh deploy/sync_agent_src.sh deploy/setup_scheduler.
 ./deploy/setup_vertex.sh --cloud-run  # also redeploy Cloud Run with Vertex (no API key)
 ```
 
+After code changes under `src/` (e.g. quant metrics, tools, prompts), re-sync and redeploy engines:
+
+```bash
+./deploy/sync_agent_src.sh
+./deploy/setup_vertex.sh              # re-deploy twin_ledger_baseline + twin_ledger_internal
+```
+
+Overnight signal payloads and coordinator tools then include `competition.quant_head_to_head` (with `for_you` per desk) and `get_performance_metrics(perspective=...)`. Re-run `./deploy/sync_agent_src.sh` after `src/` changes so Vertex agents pick up sign-convention handling.
+
 ### Local Vertex (ADC)
 
 ```bash

@@ -15,6 +15,8 @@ from scipy import stats
 TRADING_DAYS_PER_YEAR = 252
 MIN_OBS_FOR_STATS = 5
 BOOTSTRAP_SAMPLES = 4000
+SIGN_CONVENTION = "internal_minus_baseline"
+COMPARISON_FORMULA = "internal_value - baseline_value"
 
 
 def _date_key(ts: str) -> str:
@@ -206,6 +208,8 @@ def _enrich_significance(
     if n_req is not None:
         out["days_required_95"] = n_req
         out["days_remaining_95"] = remaining
+    elif not out.get("insufficient_data") and out.get("significant_95") is False:
+        out["zero_effect"] = True
     return out
 
 
@@ -429,6 +433,15 @@ def compute_head_to_head_metrics(
     if b_total["total_return_pct"] is not None and i_total["total_return_pct"] is not None:
         total_return_diff = round(i_total["total_return_pct"] - b_total["total_return_pct"], 3)
 
+    internal_minus_baseline = {
+        "daily_delta_pct": daily_delta,
+        "excess_return_pct": total_return_diff,
+        "mean_daily_alpha_pct": mean_alpha,
+        "cumulative_alpha_pct": cum_alpha,
+        "sharpe_diff": sharpe_diff,
+        "max_drawdown_diff_pct": dd_diff,
+    }
+
     return {
         "observation_days": len(b_rets),
         "min_days_for_stats": MIN_OBS_FOR_STATS,
@@ -436,12 +449,36 @@ def compute_head_to_head_metrics(
         "baseline": b_total,
         "internal": i_total,
         "comparison": {
+            "sign_convention": SIGN_CONVENTION,
+            "formula": COMPARISON_FORMULA,
+            "internal_minus_baseline": internal_minus_baseline,
+            # Flat aliases kept for dashboard backward compatibility.
             "daily_delta_pct": daily_delta,
             "mean_daily_alpha_pct": mean_alpha,
             "cumulative_alpha_pct": cum_alpha,
             "total_return_diff_pct": total_return_diff,
             "sharpe_diff": sharpe_diff,
             "max_drawdown_diff_pct": dd_diff,
+            "field_glossary": {
+                "daily_delta_pct": (
+                    "Internal − Baseline return on the latest paired trading day. "
+                    "Positive favors Internal, not Baseline."
+                ),
+                "total_return_diff_pct": (
+                    "Internal − Baseline total return vs starting equity. "
+                    "Positive favors Internal, not Baseline."
+                ),
+                "sharpe_diff": (
+                    "Internal Sharpe − Baseline Sharpe. Positive favors Internal."
+                ),
+                "max_drawdown_diff_pct": (
+                    "Internal max drawdown − Baseline max drawdown (pp). "
+                    "Negative means Internal had a shallower drawdown."
+                ),
+                "mean_daily_alpha_pct": (
+                    "Mean daily Internal − Baseline return over paired days."
+                ),
+            },
             "significance": {
                 "total_return_diff": _bootstrap_total_return_diff(b_rets, i_rets),
                 "daily_alpha": _significance_ttest(excess),

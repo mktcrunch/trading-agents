@@ -168,7 +168,8 @@ def analyze_signal_outcomes(
     losses = sum(1 for s in scored if s.get("outcome") == "loss")
     total = wins + losses
 
-    return {
+    return _attach_quant_head_to_head_analysis(
+        {
         "lookback_days": lookback_days,
         "decisions_logged": len(actionable) + len(no_action_events),
         "scored_decisions": scored,
@@ -185,7 +186,9 @@ def analyze_signal_outcomes(
             "losses": losses,
             "win_rate_pct": round(100 * wins / total, 1) if total else None,
         },
-    }
+    },
+        system,
+    )
 
 
 def analyze_risk_outcomes(
@@ -247,6 +250,43 @@ def _hours(lookback_days: int) -> int:
     return max(24, lookback_days * 24)
 
 
+def _attach_quant_head_to_head_analysis(
+    analysis: Dict[str, Any],
+    system: str,
+) -> Dict[str, Any]:
+    from src.agents.competition_context import (
+        build_perspective_quant_view,
+        fetch_quant_head_to_head,
+    )
+
+    try:
+        qh = fetch_quant_head_to_head()
+        metrics = qh.get("metrics") or {}
+        view = build_perspective_quant_view(metrics, system)
+        if view.get("status") == "unavailable":
+            return analysis
+        fy = view.get("for_you") or {}
+        cmp = metrics.get("comparison") or {}
+        out = dict(analysis)
+        out["quant_head_to_head"] = qh
+        sc = dict(out.get("scorecard") or {})
+        sc["excess_return_vs_competitor_pct"] = fy.get("excess_return_pct")
+        sc["daily_delta_vs_competitor_pct"] = fy.get("daily_delta_pct")
+        sc["sharpe_difference_vs_competitor"] = fy.get("sharpe_difference")
+        sc["drawdown_advantage_vs_competitor_pp"] = fy.get("drawdown_advantage_pp")
+        sc["quant_interpretation"] = view.get("interpretation") or {}
+        tr_sig = (cmp.get("significance") or {}).get("total_return_diff") or {}
+        if tr_sig.get("significant_95"):
+            sc["excess_return_significant_95"] = True
+        elif tr_sig.get("days_remaining_95"):
+            sc["excess_return_days_remaining_95"] = tr_sig.get("days_remaining_95")
+        out["scorecard"] = sc
+        return out
+    except Exception as exc:
+        logger.debug(f"quant head-to-head attach skipped: {exc}")
+        return analysis
+
+
 def analyze_coordinator_outcomes(system: str, lookback_days: int = 7) -> Dict[str, Any]:
     hours = _hours(lookback_days)
     started = load_events(limit=2000, system=system, event_type="job_started", since_hours=hours)
@@ -262,7 +302,8 @@ def analyze_coordinator_outcomes(system: str, lookback_days: int = 7) -> Dict[st
         }
         for e in completed[-10:]
     ]
-    return {
+    return _attach_quant_head_to_head_analysis(
+        {
         "lookback_days": lookback_days,
         "recent_events": recent,
         "scorecard": {
@@ -271,7 +312,9 @@ def analyze_coordinator_outcomes(system: str, lookback_days: int = 7) -> Dict[st
             "jobs_ok": len(ok),
             "jobs_failed": len(failed),
         },
-    }
+    },
+        system,
+    )
 
 
 def analyze_data_outcomes(system: str, lookback_days: int = 7) -> Dict[str, Any]:
@@ -348,14 +391,17 @@ def analyze_monitor_outcomes(system: str, lookback_days: int = 7) -> Dict[str, A
     delta = None
     if len(values) >= 2:
         delta = round((values[-1] - values[0]) / values[0] * 100, 3) if values[0] else None
-    return {
+    return _attach_quant_head_to_head_analysis(
+        {
         "lookback_days": lookback_days,
         "recent_events": recent,
         "scorecard": {
             "snapshots": len(snaps),
             "portfolio_delta_pct": delta,
         },
-    }
+    },
+        system,
+    )
 
 
 def analyze_discovery_outcomes(lookback_days: int = 7) -> Dict[str, Any]:

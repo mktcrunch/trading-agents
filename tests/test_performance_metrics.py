@@ -18,6 +18,8 @@ def test_head_to_head_metrics_aligns_and_computes_sharpe():
     assert out["baseline"]["sharpe"] is not None
     assert out["internal"]["sharpe"] is not None
     assert out["comparison"]["daily_delta_pct"] is not None
+    assert out["comparison"]["sign_convention"] == "internal_minus_baseline"
+    assert "internal_minus_baseline" in out["comparison"]
     assert out["comparison"]["mean_daily_alpha_pct"] is not None
     assert out["baseline"]["max_drawdown_pct"] is not None
     assert out["internal"]["max_drawdown_pct"] is not None
@@ -56,6 +58,16 @@ def test_days_to_significance_projected():
     assert sig["days_required_95"] >= 5
     if not sig["significant_95"]:
         assert sig.get("days_remaining_95", 0) >= 0
+
+
+def test_zero_effect_marks_significance_na():
+    values = [100_000, 100_100, 100_200, 100_150, 100_300, 100_250]
+    baseline = _series(values)
+    internal = _series(values)
+    out = compute_head_to_head_metrics(baseline, internal)
+    sig = out["comparison"]["significance"]["daily_alpha"]
+    assert sig.get("zero_effect") is True
+    assert sig.get("days_remaining_95") is None
 
 
 def test_internal_outperforms_has_positive_alpha():

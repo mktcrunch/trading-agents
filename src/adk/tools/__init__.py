@@ -14,6 +14,7 @@ def _data_read_tools() -> list[FunctionTool]:
         FunctionTool(alpaca_tools.get_recent_news),
         FunctionTool(competition_tools.get_leaderboard),
         FunctionTool(competition_tools.get_competition_status),
+        FunctionTool(competition_tools.get_performance_metrics),
     ]
 
 

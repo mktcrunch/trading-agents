@@ -47,6 +47,12 @@ def get_competition_status() -> dict:
 
 
 @mcp.tool()
+def get_performance_metrics(hours: int = 720) -> dict:
+    """Quant head-to-head metrics: excess return, Sharpe, drawdown, significance."""
+    return competition_tools.get_performance_metrics(hours=hours)
+
+
+@mcp.tool()
 def get_marketcrunch_predictions(tickers: str = "") -> dict:
     """MarketCrunch AI estimates + Kelly weights (comma-separated tickers, empty = universe)."""
     return marketcrunch_tools.get_marketcrunch_predictions(tickers=tickers or None)
