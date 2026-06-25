@@ -187,7 +187,9 @@ Every action is logged to `data/audit_events.jsonl` with trace IDs linking full 
 - `signal_gemini_query` — exact Gemini input for the signal step (`query_text`, `coverage` counts)  
 - `discovery_probe`, `risk_rejected`, `risk_stop_exit`, `risk_eod_exit`, `job_started` / `job_completed`  
 
-API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/market-clock`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
+API: `GET /api/summary`, `GET /api/events`, `GET /api/trace/{id}`, `GET /api/performance`, `GET /api/market-clock`, `GET /api/agent-activity`, `GET /api/learning`, `POST /api/chat`
+
+`GET /api/performance` returns live Alpaca equity, portfolio history, and aligned quant metrics (daily delta, Sharpe, max drawdown, total-return bootstrap significance).
 
 `order_placed` rows returned by `/api/events`, `/api/trace/{id}`, and `get_recent_trading_activity` are annotated with live Alpaca fields (`alpaca_status`, `alpaca_is_active`, …) so manual cancels show as `canceled` even though the audit only records placement.
 
@@ -210,6 +212,7 @@ trading-agents/
 │   ├── discovery/          # Catalog, planner, evaluator, feature formulas
 │   ├── risk/               # Intraday monitor, trailing planner
 │   ├── audit/              # Event tracer + dashboard store
+│   ├── analytics/          # Twin Ledger quant metrics (Sharpe, drawdown, significance)
 │   ├── dashboard/          # Audit UI
 │   ├── models/             # TradingDecision, Position, Order, Signal
 │   ├── config.py

@@ -160,7 +160,14 @@ def get_performance(since_hours: int = 720) -> Dict[str, Any]:
             history[system] = []
             history_points[system] = 0
 
+    from src.analytics.performance_metrics import compute_head_to_head_metrics
     from src.config import TRADING_UNIVERSE, UNIVERSE_RATIONALE
+
+    metrics = compute_head_to_head_metrics(
+        history.get("baseline", []),
+        history.get("internal", []),
+        starting_equity=live.get("starting_equity", 100_000.0),
+    )
 
     return {
         "since_hours": since_hours,
@@ -168,6 +175,7 @@ def get_performance(since_hours: int = 720) -> Dict[str, Any]:
         "history": history,
         "history_source": "alpaca",
         "history_points": history_points,
+        "metrics": metrics,
         "experiment": {
             "first_trade_date": config.FIRST_TRADE_DATE,
             "first_trade_label": config.FIRST_TRADE_DATE_LABEL,

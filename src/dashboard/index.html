@@ -1601,7 +1601,7 @@
     .perf-stage {
       position: relative;
       z-index: 2;
-      margin-top: -1.35rem;
+      margin-top: 0.35rem;
       margin-bottom: 1.25rem;
       padding: 0 0.15rem;
     }
@@ -1873,6 +1873,207 @@
     }
     .pos-table-compact { font-size: 0.76rem; }
     .pos-table-compact th, .pos-table-compact td { padding: 0.45rem 0.5rem; }
+    .perf-metrics {
+      position: relative;
+      z-index: 2;
+      margin: 0.75rem 0.15rem 0.35rem;
+    }
+    .perf-metrics-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.7rem;
+      padding: 0 0.15rem;
+    }
+    .perf-metrics-head h2 {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-deep);
+      margin: 0;
+    }
+    .perf-metrics-head .meta {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      color: var(--subtle);
+    }
+    .perf-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+      padding: 0.9rem;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 16px 44px rgba(10, 46, 34, 0.08);
+    }
+    .perf-metric-card {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(180deg, #ffffff 0%, #f3faf6 100%);
+      border: 1px solid rgba(13, 74, 58, 0.12);
+      border-radius: 16px;
+      padding: 1rem 1.05rem 0.95rem;
+      color: var(--text);
+      box-shadow: 0 4px 18px rgba(13, 74, 58, 0.06);
+    }
+    .perf-metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--baseline) 0%, var(--internal) 100%);
+      opacity: 0.85;
+    }
+    .perf-metric-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--accent-deep);
+      line-height: 1.2;
+    }
+    .perf-metric-formula {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.35rem;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    .perf-metric-formula .desk {
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.6rem;
+    }
+    .perf-metric-formula .desk.baseline {
+      color: var(--baseline);
+      background: rgba(13, 92, 72, 0.08);
+      border: 1px solid rgba(13, 92, 72, 0.15);
+    }
+    .perf-metric-formula .desk.internal {
+      color: var(--internal);
+      background: rgba(47, 158, 114, 0.1);
+      border: 1px solid rgba(47, 158, 114, 0.18);
+    }
+    .perf-metric-formula .op {
+      color: var(--subtle);
+      font-weight: 600;
+    }
+    .perf-metric-value {
+      font-size: clamp(1.5rem, 3.5vw, 1.95rem);
+      font-weight: 700;
+      font-family: var(--mono);
+      margin-top: 0.55rem;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      color: var(--accent-deep);
+    }
+    .perf-metric-value.pos { color: var(--green); }
+    .perf-metric-value.neg { color: var(--red); }
+    .perf-metric-sub {
+      font-size: 0.74rem;
+      margin-top: 0.5rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .perf-metric-split {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.75rem;
+      margin-top: 0.55rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--subtle);
+    }
+    .perf-metric-split .split-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid var(--border);
+    }
+    .perf-metric-split .split-item strong { font-weight: 700; }
+    .perf-metric-split .split-item.baseline strong { color: var(--baseline); }
+    .perf-metric-split .split-item.internal strong { color: var(--internal); }
+    .perf-metric-foot {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-top: 0.6rem;
+    }
+    .perf-metric-power {
+      font-family: var(--mono);
+      font-size: 0.64rem;
+      color: var(--accent-deep);
+      line-height: 1.35;
+    }
+    .perf-metric-power.muted { color: var(--subtle); }
+    .sig-pill {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.45rem;
+      border-radius: 999px;
+      align-self: flex-start;
+    }
+    .sig-pill.yes {
+      background: rgba(21, 128, 61, 0.1);
+      color: var(--green);
+      border: 1px solid rgba(21, 128, 61, 0.22);
+    }
+    .sig-pill.no {
+      background: rgba(125, 154, 143, 0.12);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .sig-pill.na {
+      background: rgba(125, 154, 143, 0.08);
+      color: var(--subtle);
+      border: 1px solid var(--border);
+    }
+    .trader-quant-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--border);
+    }
+    .trader-quant-stat { text-align: center; min-width: 0; }
+    .trader-quant-stat .ql {
+      font-size: 0.56rem;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--subtle);
+      line-height: 1.2;
+    }
+    .trader-quant-stat .qv {
+      font-size: 0.86rem;
+      font-family: var(--mono);
+      font-weight: 700;
+      margin-top: 0.18rem;
+      letter-spacing: -0.02em;
+    }
     #view-performance .panel {
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.85);
@@ -1907,9 +2108,10 @@
       .arch-arena,
       .perf-dual,
       .perf-hero-agents { grid-template-columns: 1fr; }
+      .perf-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .perf-hero-inner { padding: 1.5rem 1.15rem 2rem; }
       .perf-hero-rank { text-align: left; width: 100%; }
-      .perf-stage { margin-top: -0.75rem; }
+      .perf-stage { margin-top: 0.25rem; }
     }
 
     @media (max-width: 640px) {
@@ -1957,6 +2159,7 @@
         text-align: center;
         line-height: 1.2;
       }
+      .perf-metrics-grid { grid-template-columns: 1fr; }
 
       .mission,
       .leader-banner,
@@ -2125,6 +2328,7 @@
         <div class="perf-hero-agents" id="perf-intro-bots"></div>
       </div>
     </section>
+    <section class="perf-metrics" id="perf-metrics" aria-label="Quant performance comparison"></section>
     <div id="perf-error" class="error-banner"></div>
     <div class="perf-stage">
       <div class="perf-dual" id="perf-dual"></div>
@@ -3058,6 +3262,52 @@
       return `${h}h`;
     };
     const pctClass = (n) => Number(n) >= 0 ? "pos" : "neg";
+    const fmtSharpe = (n) => n == null ? "—" : Number(n).toFixed(2);
+    const fmtDrawdown = (n) => n == null ? "—" : `-${Math.abs(Number(n)).toFixed(2)}%`;
+    const fmtPvalMeta = (sig) => {
+      if (!sig || sig.insufficient_data || sig.p_value == null) {
+        return { text: "Need ≥5 paired days", cls: "na", significant: false };
+      }
+      const p = Number(sig.p_value);
+      const text = p < 0.001 ? "p < 0.001" : `p = ${p.toFixed(3)}`;
+      return { text, cls: sig.significant_95 ? "yes" : "no", significant: Boolean(sig.significant_95) };
+    };
+    const renderSignificancePill = (sig) => {
+      const p = fmtPvalMeta(sig);
+      const label = p.cls === "yes"
+        ? `Significant · ${p.text}`
+        : p.cls === "no"
+          ? `Not significant · ${p.text}`
+          : p.text;
+      return `<span class="sig-pill ${p.cls}">${escHtml(label)}</span>`;
+    };
+    const metricFormulaMinus = () => `
+      <div class="perf-metric-formula">
+        <span class="desk internal">Internal</span>
+        <span class="op">minus</span>
+        <span class="desk baseline">Baseline</span>
+      </div>`;
+    const splitDesk = (desk, label, value, valueCls = "") =>
+      `<span class="split-item ${desk}">${label} <strong class="${valueCls}">${value}</strong></span>`;
+    const renderPowerHint = (sig) => {
+      if (!sig) return "";
+      if (sig.significant_95) {
+        return `<div class="perf-metric-power">Reached 95% significance</div>`;
+      }
+      if (sig.days_remaining_95 != null && sig.days_remaining_95 > 0) {
+        const total = sig.days_required_95;
+        return `<div class="perf-metric-power">~${sig.days_remaining_95} more paired day${sig.days_remaining_95 === 1 ? "" : "s"} at current pace (${total} total needed)</div>`;
+      }
+      if (sig.days_required_95 != null) {
+        return `<div class="perf-metric-power">~${sig.days_required_95} paired days at current effect size</div>`;
+      }
+      return `<div class="perf-metric-power muted">Effect too flat to project sample size</div>`;
+    };
+    const renderSigFoot = (sig) => `
+      <div class="perf-metric-foot">
+        ${renderSignificancePill(sig)}
+        ${renderPowerHint(sig)}
+      </div>`;
 
     async function fetchJSON(url) {
       const r = await fetch(url);
@@ -3520,7 +3770,101 @@
         </table>`;
     }
 
-    function renderTraderPanel(system, portfolio, activity, leader, marketOpen = false) {
+    function renderTraderQuantRow(agentMetrics) {
+      if (!agentMetrics) return "";
+      return `
+        <div class="trader-quant-row">
+          <div class="trader-quant-stat">
+            <div class="ql">Daily</div>
+            <div class="qv ${pctClass(agentMetrics.daily_return_pct)}">${fmtPct(agentMetrics.daily_return_pct)}</div>
+          </div>
+          <div class="trader-quant-stat">
+            <div class="ql">Sharpe</div>
+            <div class="qv">${fmtSharpe(agentMetrics.sharpe)}</div>
+          </div>
+          <div class="trader-quant-stat">
+            <div class="ql">Max DD</div>
+            <div class="qv neg">${fmtDrawdown(agentMetrics.max_drawdown_pct)}</div>
+          </div>
+        </div>`;
+    }
+
+    function renderPerfMetrics(metrics) {
+      const el = document.getElementById("perf-metrics");
+      if (!el) return;
+      if (!metrics || !metrics.observation_days) {
+        el.innerHTML = "";
+        return;
+      }
+
+      const cmp = metrics.comparison || {};
+      const sig = cmp.significance || {};
+      const b = metrics.baseline || {};
+      const i = metrics.internal || {};
+      const days = metrics.observation_days;
+      const minDays = metrics.min_days_for_stats || 5;
+      const latest = metrics.latest_date ? ` · through ${metrics.latest_date}` : "";
+
+      const dailyDelta = cmp.daily_delta_pct;
+      const meanAlpha = cmp.mean_daily_alpha_pct;
+      const sharpeDiff = cmp.sharpe_diff;
+      const ddDiff = cmp.max_drawdown_diff_pct;
+      const totalReturnDiff = cmp.total_return_diff_pct ?? ((i.total_return_pct || 0) - (b.total_return_pct || 0));
+
+      el.innerHTML = `
+        <div class="perf-metrics-head">
+          <h2>Quant head-to-head</h2>
+          <span class="meta">${days} paired trading day${days === 1 ? "" : "s"}${latest} · stats need ≥${minDays} days</span>
+        </div>
+        <div class="perf-metrics-grid">
+          <article class="perf-metric-card">
+            <div class="perf-metric-title">Total return spread</div>
+            ${metricFormulaMinus()}
+            <div class="perf-metric-value ${pctClass(totalReturnDiff)}">${fmtPct(totalReturnDiff)}</div>
+            <div class="perf-metric-split">
+              ${splitDesk("baseline", "Baseline", fmtPct(b.total_return_pct), pctClass(b.total_return_pct))}
+              ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct))}
+            </div>
+            <div class="perf-metric-sub">$100k start · aligned cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)}</div>
+            ${renderSigFoot(sig.total_return_diff)}
+          </article>
+          <article class="perf-metric-card">
+            <div class="perf-metric-title">Daily return spread</div>
+            ${metricFormulaMinus()}
+            <div class="perf-metric-value ${pctClass(dailyDelta)}">${fmtPct(dailyDelta)}</div>
+            <div class="perf-metric-split">
+              ${splitDesk("baseline", "Baseline", fmtPct(b.daily_return_pct), pctClass(b.daily_return_pct))}
+              ${splitDesk("internal", "Internal", fmtPct(i.daily_return_pct), pctClass(i.daily_return_pct))}
+            </div>
+            <div class="perf-metric-sub">Mean daily alpha ${fmtPct(meanAlpha)}</div>
+            ${renderSigFoot(sig.daily_alpha)}
+          </article>
+          <article class="perf-metric-card">
+            <div class="perf-metric-title">Sharpe ratio spread</div>
+            ${metricFormulaMinus()}
+            <div class="perf-metric-value ${pctClass(sharpeDiff)}">${sharpeDiff == null ? "—" : (sharpeDiff >= 0 ? "+" : "") + fmtSharpe(sharpeDiff)}</div>
+            <div class="perf-metric-split">
+              ${splitDesk("baseline", "Baseline", fmtSharpe(b.sharpe))}
+              ${splitDesk("internal", "Internal", fmtSharpe(i.sharpe))}
+            </div>
+            <div class="perf-metric-sub">Ann. vol ${b.volatility_ann_pct ?? "—"}% vs ${i.volatility_ann_pct ?? "—"}%</div>
+            ${renderSigFoot(sig.sharpe_diff)}
+          </article>
+          <article class="perf-metric-card">
+            <div class="perf-metric-title">Max drawdown spread</div>
+            ${metricFormulaMinus()}
+            <div class="perf-metric-value ${ddDiff == null ? "" : (ddDiff <= 0 ? "pos" : "neg")}">${ddDiff == null ? "—" : (ddDiff >= 0 ? "+" : "") + ddDiff.toFixed(2) + " pp"}</div>
+            <div class="perf-metric-split">
+              ${splitDesk("baseline", "Baseline", fmtDrawdown(b.max_drawdown_pct))}
+              ${splitDesk("internal", "Internal", fmtDrawdown(i.max_drawdown_pct))}
+            </div>
+            <div class="perf-metric-sub">Current DD ${fmtDrawdown(b.current_drawdown_pct)} vs ${fmtDrawdown(i.current_drawdown_pct)}</div>
+            ${renderSigFoot(sig.max_drawdown_diff)}
+          </article>
+        </div>`;
+    }
+
+    function renderTraderPanel(system, portfolio, activity, leader, marketOpen = false, agentMetrics = null) {
       const isBaseline = system === "baseline";
       const name = isBaseline ? "Baseline" : "Internal";
       const tagline = isBaseline
@@ -3540,6 +3884,7 @@
             <div class="trader-pv">${fmtUsd(portfolio.portfolio_value)}</div>
             <div class="trader-pnl ${pctClass(portfolio.pnl_pct)}">P&amp;L ${fmtPct(portfolio.pnl_pct)} (${fmtUsd(portfolio.pnl)})</div>
             <div class="trader-meta">${escHtml(tagline)} · Cash ${fmtUsd(portfolio.cash)} · ${portfolio.position_count || 0} positions</div>
+            ${renderTraderQuantRow(agentMetrics)}
           </div>
           <div class="trader-section">
             <h3>Recent activity${marketOpen ? " <span class=\"activity-session-hint\">market open · risk only</span>" : ""}</h3>
@@ -3568,17 +3913,29 @@
       const leaderName = leaderKey === "internal" ? "Internal" : "Baseline";
       const trailerName = leaderKey === "internal" ? "Baseline" : "Internal";
 
+      const metrics = data.metrics || {};
+      const cmp = metrics.comparison || {};
+      const alphaHint = cmp.daily_delta_pct != null
+        ? ` · today ${fmtPct(cmp.daily_delta_pct)} Internal edge`
+        : "";
+      const alphaSig = cmp.significance?.daily_alpha;
+      const sigHint = alphaSig && !alphaSig.insufficient_data && alphaSig.p_value != null
+        ? (alphaSig.significant_95 ? " · alpha significant at 95%" : " · alpha not yet significant")
+        : "";
+
       document.getElementById("perf-hero-title").innerHTML =
         `<strong>${leaderName}</strong> leads by <span class="gap">${fmtUsd(lb.gap_usd)}</span>`;
       document.getElementById("perf-hero-meta").textContent =
-        `${trailerName} is chasing · ${fmtUsd(live.starting_equity)} start`;
+        `${trailerName} is chasing · ${fmtUsd(live.starting_equity)} start${alphaHint}${sigHint}`;
       document.getElementById("perf-hero-rank").innerHTML = `
         <div class="rank-label">Rank</div>
         <div class="rank-values">#${lb.baseline_rank} Baseline · #${lb.internal_rank} Internal</div>`;
 
       document.getElementById("perf-dual").innerHTML =
-        renderTraderPanel("baseline", baseline, recentActivity.baseline || [], leaderKey, marketOpen) +
-        renderTraderPanel("internal", internal, recentActivity.internal || [], leaderKey, marketOpen);
+        renderTraderPanel("baseline", baseline, recentActivity.baseline || [], leaderKey, marketOpen, metrics.baseline) +
+        renderTraderPanel("internal", internal, recentActivity.internal || [], leaderKey, marketOpen, metrics.internal);
+
+      renderPerfMetrics(metrics);
 
       drawChart(data.history || {}, data.since_hours || DEFAULT_RANGE_HOURS);
       const pts = data.history_points || {};
