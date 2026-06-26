@@ -31,7 +31,8 @@ PERFORMANCE_METRICS_METHODOLOGY = {
             "Internal − Baseline total return vs $100k starting equity."
         ),
         "daily_delta": (
-            "Internal − Baseline return on the latest paired trading day."
+            "Internal − Baseline return today (live equity vs prior close). "
+            "Mean daily alpha uses completed paired days only."
         ),
         "sharpe_difference": (
             "Annualized Sharpe (mean/std × √252) per desk; card = Internal − Baseline."
@@ -121,7 +122,10 @@ def _account_snapshot(system: str, label: str) -> Dict:
 
 def fetch_quant_head_to_head(since_hours: int = DEFAULT_QUANT_LOOKBACK_HOURS) -> Dict[str, Any]:
     """Aligned quant metrics from Alpaca equity history (same engine as the dashboard)."""
-    from src.analytics.performance_metrics import compute_head_to_head_metrics
+    from src.analytics.performance_metrics import (
+        collect_live_daily_returns,
+        compute_head_to_head_metrics,
+    )
 
     history: Dict[str, List[Dict[str, Any]]] = {"baseline": [], "internal": []}
     for system in ("baseline", "internal"):
@@ -132,10 +136,12 @@ def fetch_quant_head_to_head(since_hours: int = DEFAULT_QUANT_LOOKBACK_HOURS) ->
         except Exception:
             history[system] = []
 
+    live_daily = collect_live_daily_returns(history)
     metrics = compute_head_to_head_metrics(
         history["baseline"],
         history["internal"],
         starting_equity=STARTING_EQUITY,
+        live_daily_returns=live_daily,
     )
     return {
         "since_hours": since_hours,

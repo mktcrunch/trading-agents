@@ -160,13 +160,18 @@ def get_performance(since_hours: int = 720) -> Dict[str, Any]:
             history[system] = []
             history_points[system] = 0
 
-    from src.analytics.performance_metrics import compute_head_to_head_metrics
+    from src.analytics.performance_metrics import (
+        collect_live_daily_returns,
+        compute_head_to_head_metrics,
+    )
     from src.config import TRADING_UNIVERSE, UNIVERSE_RATIONALE
 
+    live_daily = collect_live_daily_returns(history)
     metrics = compute_head_to_head_metrics(
         history.get("baseline", []),
         history.get("internal", []),
         starting_equity=live.get("starting_equity", 100_000.0),
+        live_daily_returns=live_daily,
     )
 
     return {

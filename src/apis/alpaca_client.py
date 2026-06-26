@@ -92,6 +92,7 @@ class AlpacaClient:
                 "cash": float(account.cash),
                 "portfolio_value": float(account.portfolio_value),
                 "equity": float(account.equity),
+                "last_equity": float(account.last_equity),
                 "status": getattr(account, 'account_status', getattr(account, 'status', 'unknown')),
             }
         except Exception as e:

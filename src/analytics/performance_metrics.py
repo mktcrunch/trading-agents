@@ -140,6 +140,73 @@ def _significance_ttest(diff: List[float]) -> Dict[str, Any]:
     return _enrich_significance(result, diff=diff)
 
 
+def _binomial_significance(wins: int, trials: int) -> Dict[str, Any]:
+    """Two-sided binomial test vs 50% (H0: neither desk leads more often)."""
+    if trials < MIN_OBS_FOR_STATS:
+        return _enrich_significance({
+            "p_value": None,
+            "significant_95": None,
+            "test": "binomial",
+            "n": trials,
+            "insufficient_data": True,
+        })
+
+    wins = max(0, min(int(wins), int(trials)))
+    p_f = float(stats.binomtest(wins, trials, p=0.5, alternative="two-sided").pvalue)
+    result = {
+        "p_value": round(p_f, 4),
+        "significant_95": p_f < 0.05,
+        "test": "binomial",
+        "n": trials,
+        "insufficient_data": False,
+    }
+    if wins == trials // 2 and trials % 2 == 0:
+        out = dict(result)
+        out["zero_effect"] = True
+        return out
+    return _enrich_significance(result)
+
+
+def _path_comparison_stats(
+    baseline_history: List[Dict[str, Any]],
+    internal_history: List[Dict[str, Any]],
+    b_rets: List[float],
+    i_rets: List[float],
+) -> Dict[str, Any]:
+    """Head-to-head path stats: days equity ahead and daily return win rate."""
+    b_eq = _equity_by_date(baseline_history)
+    i_eq = _equity_by_date(internal_history)
+    common = sorted(set(b_eq) & set(i_eq))
+
+    eq_ahead = sum(1 for d in common if i_eq[d] > b_eq[d])
+    eq_behind = sum(1 for d in common if i_eq[d] < b_eq[d])
+    eq_ties = len(common) - eq_ahead - eq_behind
+    eq_trials = eq_ahead + eq_behind
+
+    ret_wins = sum(1 for b, i in zip(b_rets, i_rets) if i > b)
+    ret_losses = sum(1 for b, i in zip(b_rets, i_rets) if i < b)
+    ret_ties = len(b_rets) - ret_wins - ret_losses
+    ret_trials = ret_wins + ret_losses
+
+    def _block(wins: int, trials: int, ties: int, paired_days: int) -> Dict[str, Any]:
+        losses = trials - wins if trials else 0
+        rate = round(wins / trials * 100, 1) if trials else None
+        return {
+            "internal_wins": wins,
+            "baseline_wins": losses,
+            "paired_days": paired_days,
+            "decisive_days": trials,
+            "ties": ties,
+            "rate_pct": rate,
+            "significance": _binomial_significance(wins, trials) if trials else _binomial_significance(0, 0),
+        }
+
+    return {
+        "days_equity_ahead": _block(eq_ahead, eq_trials, eq_ties, len(common)),
+        "daily_win_rate": _block(ret_wins, ret_trials, ret_ties, len(b_rets)),
+    }
+
+
 def _days_for_paired_mean(
     diff: List[float],
     alpha: float = 0.05,
@@ -369,6 +436,62 @@ def _terminal_return_pct(rets: List[float]) -> float:
     return (wealth - 1.0) * 100
 
 
+def live_daily_return_pct(
+    history_pts: List[Dict[str, Any]],
+    account: Optional[Dict[str, Any]],
+) -> Optional[float]:
+    """Today's return vs prior close: (equity − last_equity) / last_equity."""
+    if not account:
+        return None
+    equity = account.get("equity")
+    if equity is None:
+        return None
+    try:
+        equity_f = float(equity)
+    except (TypeError, ValueError):
+        return None
+    if equity_f <= 0:
+        return None
+
+    prior: Optional[float] = None
+    last_equity = account.get("last_equity")
+    if last_equity is not None:
+        try:
+            prior = float(last_equity)
+        except (TypeError, ValueError):
+            prior = None
+
+    if prior is None or prior <= 0:
+        by_date = _equity_by_date(history_pts)
+        dates = sorted(by_date.keys())
+        if dates:
+            prior = by_date[dates[-1]]
+
+    if prior is None or prior <= 0:
+        return None
+    return round((equity_f - prior) / prior * 100, 3)
+
+
+def collect_live_daily_returns(
+    history: Dict[str, List[Dict[str, Any]]],
+) -> Optional[Dict[str, Optional[float]]]:
+    """Today's live return for both desks from current account equity vs prior close."""
+    from src.apis.alpaca_client import AlpacaClient
+
+    out: Dict[str, Optional[float]] = {}
+    for system in ("baseline", "internal"):
+        try:
+            client = AlpacaClient(system=system)
+            account = client.get_account() or {}
+            out[system] = live_daily_return_pct(history.get(system) or [], account)
+        except Exception:
+            out[system] = None
+
+    if out.get("baseline") is None or out.get("internal") is None:
+        return None
+    return out
+
+
 def _agent_metrics(
     returns: List[float],
     equity_by_date: Dict[str, float],
@@ -391,6 +514,8 @@ def compute_head_to_head_metrics(
     baseline_history: List[Dict[str, Any]],
     internal_history: List[Dict[str, Any]],
     starting_equity: float = 100_000.0,
+    *,
+    live_daily_returns: Optional[Dict[str, Optional[float]]] = None,
 ) -> Dict[str, Any]:
     """Compute aligned quant metrics and head-to-head significance tests."""
     dates, b_rets, i_rets = _align_returns(baseline_history, internal_history)
@@ -399,6 +524,16 @@ def compute_head_to_head_metrics(
 
     latest_b = round(b_rets[-1] * 100, 3) if b_rets else None
     latest_i = round(i_rets[-1] * 100, 3) if i_rets else None
+    daily_delta_basis = "prior_close"
+
+    if live_daily_returns:
+        live_b = live_daily_returns.get("baseline")
+        live_i = live_daily_returns.get("internal")
+        if live_b is not None and live_i is not None:
+            latest_b = live_b
+            latest_i = live_i
+            daily_delta_basis = "live"
+
     daily_delta = (
         round(latest_i - latest_b, 3)
         if latest_b is not None and latest_i is not None
@@ -442,10 +577,15 @@ def compute_head_to_head_metrics(
         "max_drawdown_diff_pct": dd_diff,
     }
 
+    path_comparison = _path_comparison_stats(
+        baseline_history, internal_history, b_rets, i_rets,
+    )
+
     return {
         "observation_days": len(b_rets),
         "min_days_for_stats": MIN_OBS_FOR_STATS,
         "latest_date": dates[-1] if dates else None,
+        "path_comparison": path_comparison,
         "baseline": b_total,
         "internal": i_total,
         "comparison": {
@@ -454,6 +594,7 @@ def compute_head_to_head_metrics(
             "internal_minus_baseline": internal_minus_baseline,
             # Flat aliases kept for dashboard backward compatibility.
             "daily_delta_pct": daily_delta,
+            "daily_delta_basis": daily_delta_basis,
             "mean_daily_alpha_pct": mean_alpha,
             "cumulative_alpha_pct": cum_alpha,
             "total_return_diff_pct": total_return_diff,
@@ -461,7 +602,8 @@ def compute_head_to_head_metrics(
             "max_drawdown_diff_pct": dd_diff,
             "field_glossary": {
                 "daily_delta_pct": (
-                    "Internal − Baseline return on the latest paired trading day. "
+                    "Internal − Baseline return today (live equity vs prior close). "
+                    "Mean daily alpha uses completed paired close-to-close days only. "
                     "Positive favors Internal, not Baseline."
                 ),
                 "total_return_diff_pct": (

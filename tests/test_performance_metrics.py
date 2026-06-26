@@ -77,3 +77,40 @@ def test_internal_outperforms_has_positive_alpha():
 
     assert out["comparison"]["mean_daily_alpha_pct"] > 0
     assert out["comparison"]["sharpe_diff"] is not None
+
+
+def test_path_comparison_win_rates():
+    baseline = _series([100_000, 100_100, 100_050, 100_200, 100_150, 100_300])
+    internal = _series([100_000, 100_200, 100_180, 100_400, 100_350, 100_500])
+    out = compute_head_to_head_metrics(baseline, internal)
+    path = out["path_comparison"]
+
+    assert path["daily_win_rate"]["internal_wins"] > 0
+    assert path["days_equity_ahead"]["internal_wins"] > 0
+    assert path["daily_win_rate"]["significance"]["test"] == "binomial"
+    assert path["days_equity_ahead"]["rate_pct"] is not None
+
+
+def test_live_daily_return_uses_account_equity():
+    baseline = _series([100_000, 100_100, 100_200])
+    internal = _series([100_000, 100_150, 100_300])
+    out = compute_head_to_head_metrics(
+        baseline,
+        internal,
+        live_daily_returns={"baseline": 0.5, "internal": 1.2},
+    )
+    assert out["comparison"]["daily_delta_basis"] == "live"
+    assert out["comparison"]["daily_delta_pct"] == 0.7
+    assert out["baseline"]["daily_return_pct"] == 0.5
+    assert out["internal"]["daily_return_pct"] == 1.2
+
+
+def test_live_daily_return_from_account():
+    from src.analytics.performance_metrics import live_daily_return_pct
+
+    history = _series([100_000, 100_100])
+    ret = live_daily_return_pct(
+        history,
+        {"equity": 100_250, "last_equity": 100_200},
+    )
+    assert ret == round((100_250 - 100_200) / 100_200 * 100, 3)

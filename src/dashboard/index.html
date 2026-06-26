@@ -1913,6 +1913,47 @@
       border: 1px solid rgba(255, 255, 255, 0.85);
       box-shadow: 0 16px 44px rgba(10, 46, 34, 0.08);
     }
+    .perf-leadership-wrap {
+      margin-bottom: 0.75rem;
+    }
+    .perf-leadership-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+      padding: 0.9rem;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 16px 44px rgba(10, 46, 34, 0.08);
+    }
+    .perf-leadership-card {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(180deg, #ffffff 0%, #f3faf6 100%);
+      border: 1px solid rgba(13, 74, 58, 0.12);
+      border-radius: 16px;
+      padding: 1rem 1.05rem 0.95rem;
+      color: var(--text);
+      box-shadow: 0 4px 18px rgba(13, 74, 58, 0.06);
+    }
+    .perf-leadership-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--baseline) 0%, var(--internal) 100%);
+      opacity: 0.85;
+    }
+    .perf-leadership-denom {
+      font-size: 0.62em;
+      font-weight: 600;
+      color: var(--muted);
+      margin-left: 0.05em;
+    }
     .perf-metric-card {
       position: relative;
       overflow: hidden;
@@ -2109,6 +2150,7 @@
       .perf-dual,
       .perf-hero-agents { grid-template-columns: 1fr; }
       .perf-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .perf-leadership-grid { grid-template-columns: 1fr; }
       .perf-hero-inner { padding: 1.5rem 1.15rem 2rem; }
       .perf-hero-rank { text-align: left; width: 100%; }
       .perf-stage { margin-top: 0.25rem; }
@@ -3314,6 +3356,22 @@
         ${renderSignificancePill(sig)}
         ${renderPowerHint(sig)}
       </div>`;
+    const renderLeadershipCard = (block, title, hint) => {
+      if (!block) return "";
+      const sig = block.significance || {};
+      const wins = block.internal_wins ?? 0;
+      const n = block.decisive_days ?? 0;
+      const rate = block.rate_pct;
+      const ties = block.ties ? ` · ${block.ties} tied` : "";
+      const valueCls = n > 0 ? (wins > n / 2 ? "pos" : wins < n / 2 ? "neg" : "") : "";
+      return `
+        <article class="perf-leadership-card">
+          <div class="perf-metric-title">${title}</div>
+          <div class="perf-metric-value ${valueCls}">${n ? wins : "—"}<span class="perf-leadership-denom">/${n || "—"}</span></div>
+          <div class="perf-metric-sub">${rate != null ? `${rate}% Internal` : "—"}${ties} · ${hint}</div>
+          ${renderSigFoot(sig)}
+        </article>`;
+    };
 
     async function fetchJSON(url) {
       const r = await fetch(url);
@@ -3816,8 +3874,19 @@
       const sharpeDiff = cmp.sharpe_diff;
       const ddDiff = cmp.max_drawdown_diff_pct;
       const totalReturnDiff = cmp.total_return_diff_pct ?? ((i.total_return_pct || 0) - (b.total_return_pct || 0));
+      const path = metrics.path_comparison || {};
 
       el.innerHTML = `
+        <div class="perf-leadership-wrap">
+          <div class="perf-metrics-head">
+            <h2>Curve comparison</h2>
+            <span class="meta">Internal vs Baseline · binomial test vs 50%</span>
+          </div>
+          <div class="perf-leadership-grid">
+            ${renderLeadershipCard(path.days_equity_ahead, "Days equity ahead", "end-of-day equity")}
+            ${renderLeadershipCard(path.daily_win_rate, "Daily win rate", "close-to-close return")}
+          </div>
+        </div>
         <div class="perf-metrics-head">
           <h2>Quant head-to-head</h2>
           <span class="meta">${days} paired day${days === 1 ? "" : "s"}${latest} · n ≥ ${minDays} for tests</span>
@@ -3842,7 +3911,7 @@
               ${splitDesk("baseline", "Baseline", fmtPct(b.daily_return_pct), pctClass(b.daily_return_pct))}
               ${splitDesk("internal", "Internal", fmtPct(i.daily_return_pct), pctClass(i.daily_return_pct))}
             </div>
-            <div class="perf-metric-sub">Mean daily alpha ${fmtPct(meanAlpha)}</div>
+            <div class="perf-metric-sub">Today (live) · mean daily alpha ${fmtPct(meanAlpha)} (paired closes)</div>
             ${renderSigFoot(sig.daily_alpha)}
           </article>
           <article class="perf-metric-card">
@@ -3922,7 +3991,7 @@
       const metrics = data.metrics || {};
       const cmp = metrics.comparison || {};
       const alphaHint = cmp.daily_delta_pct != null
-        ? ` · daily delta ${fmtPct(cmp.daily_delta_pct)}`
+        ? ` · daily delta ${fmtPct(cmp.daily_delta_pct)} (live)`
         : "";
       const alphaSig = cmp.significance?.daily_alpha;
       const sigHint = alphaSig && !alphaSig.insufficient_data && alphaSig.p_value != null
