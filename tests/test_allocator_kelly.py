@@ -53,8 +53,8 @@ def test_internal_entry_target_weights_mixed_sides():
     weights = PositionAllocator.internal_entry_target_weights(signals, entry_sides)
     assert weights["XLF"] > 0
     assert weights["TLT"] > 0
-    assert weights["XLF"] <= 0.10
-    assert weights["TLT"] <= 0.10
+    assert weights["XLF"] <= 0.25
+    assert weights["TLT"] <= 0.25
 
 
 def test_allocate_internal_short_uses_kelly_not_size_pct():

@@ -23,7 +23,7 @@ class InternalSystem:
     System B (Internal) — Twin Ledger competitor
     - MarketCrunch predictions + Kelly Criterion sizing
     - Same structured BUY/SELL/HOLD/CLOSE decisions as baseline
-    - Goal: beat Baseline Trader on leaderboard
+    - Goal: compound returns and hold #1 on the Twin Ledger (not defensive cash when ahead)
     - Paper trades on Alpaca Account #2
     """
 

@@ -2688,7 +2688,7 @@
             <ul>
               <li><strong>internal_data</strong>: <span class="mc-ip-badge">MC Internal</span> prediction feed + gate-approved vendor features + technicals</li>
               <li><strong>internal_signal</strong>: <span class="mc-ip-badge">MC Internal</span> competitive ledger prompt enriched with prediction context</li>
-              <li><strong>Strategy allocator</strong>: <span class="mc-ip-badge">MC Internal</span> confidence-based position sizing from prediction snapshot (threshold ≥0.55)</li>
+              <li><strong>Strategy allocator</strong>: <span class="mc-ip-badge">MC Internal</span> confidence-based position sizing from prediction snapshot (threshold ≥0.50)</li>
               <li><strong>Discovery agent</strong>: <span class="mc-ip-badge">MC Internal IP</span> only; Baseline never runs catalog probes</li>
               <li><strong>Risk (intraday)</strong>: same deterministic path + Gemini trailing planner; adds <span class="mc-ip-badge">MC Internal</span> prediction gate on stop exits</li>
             </ul>
@@ -2839,7 +2839,7 @@
           <h4>Internal only</h4>
           <div class="arch-cmp-rows">
             <div class="arch-cmp-row wide-k"><span class="k">3a · Discovery</span><span class="v"><span class="mc-ip-badge">MC Internal</span> catalog probes if sources &gt;24h stale</span></div>
-            <div class="arch-cmp-row wide-k"><span class="k">5a · Enrich</span><span class="v">MC forecasts · gate-approved vendor features · confidence sizing ≥0.55</span></div>
+            <div class="arch-cmp-row wide-k"><span class="k">5a · Enrich</span><span class="v">MC forecasts · gate-approved vendor features · confidence sizing ≥0.50</span></div>
           </div>
         </div>
         <div class="arch-cmp-col">
@@ -2945,7 +2945,7 @@
           <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Data</strong>: 90d technicals; Internal adds <span class="mc-ip-badge">MC Internal</span> predictions + vendor features</span></div>
           <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Signal</strong>: Gemini direct JSON: action, ticker, size_pct, confidence, rationale per symbol</span></div>
           <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Risk</strong>: max 8 positions; reject BUYs failing weight / exposure checks</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Allocator</strong>: Baseline: size_pct cap 10% · Internal: <span class="mc-ip-badge">MC Internal</span> confidence-based sizing from prediction snapshot</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Allocator</strong>: Baseline: size_pct cap 25% · Internal: <span class="mc-ip-badge">MC Internal</span> confidence-based sizing from prediction snapshot</span></div>
           <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Execution</strong>: DAY limit at last close ±0.5%; delta vs pending orders; sells before buys (30s gap)</span></div>
           <div class="arch-step"><span class="arch-step-num">7</span><span class="arch-step-text"><strong>Audit</strong>: <code>job_started</code> → <code>ledger_decision</code> → <code>order_placed</code> → <code>portfolio_snapshot</code> → <code>job_completed</code></span></div>
         </div>
@@ -3022,7 +3022,7 @@
         <ul>
           <li><strong>Agents:</strong> Coordinator routes data → signal → risk → execution → monitor (no Discovery)</li>
           <li><strong>Signal:</strong> RSI, MACD, Bollinger, news, Google Search grounding, public data only</li>
-          <li><strong>Sizing:</strong> LLM size_pct → equal-weight allocation (max 10%)</li>
+          <li><strong>Sizing:</strong> LLM size_pct → equal-weight allocation (max 25%)</li>
           <li><strong>Overnight:</strong> DAY limit orders, chased if unfilled</li>
           <li><strong>Trailing stops:</strong> Pure LLM-planned activation &amp; profit lock</li>
           <li><strong>Base stop:</strong> Fixed −1% return threshold</li>
@@ -3036,7 +3036,7 @@
         <ul>
           <li><strong>Agents:</strong> Same 6-role crew + separate Discovery agent (<span class="mc-ip-badge">MC Internal IP</span> only)</li>
           <li><strong>Signal:</strong> Same public context as Baseline, plus MarketCrunch forecasts and vendor features</li>
-          <li><strong>Sizing:</strong> confidence-based allocation from the prediction snapshot (max 10% per position)</li>
+          <li><strong>Sizing:</strong> confidence-based allocation from the prediction snapshot (max 25% per position)</li>
           <li><strong>Overnight:</strong> Same execution path; prediction snapshot passed to sizing layer</li>
           <li><strong>Trailing stops:</strong> Scripted 1%/70% floor + LLM refinement (hybrid)</li>
           <li><strong>Base stop:</strong> ATR × 1.5 dynamic stop (fallback −1%)</li>

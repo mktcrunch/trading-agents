@@ -20,6 +20,7 @@ class TradingDecisionsResponse(BaseModel):
         default="",
         description=(
             "Required when there are no BUY/SELL/CLOSE/SHORT/COVER decisions: "
-            "2-4 sentences on leaderboard posture, market read, and why no trades tonight."
+            "2-4 sentences on why no edge tonight (not merely leaderboard rank), market read, "
+            "and why no trades tonight."
         ),
     )

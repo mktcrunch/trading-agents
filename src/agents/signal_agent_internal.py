@@ -18,9 +18,11 @@ from src.agents.ledger_utils import (
     parse_signal_ledger_response,
     record_signal_gemini_query,
 )
-from src.agents.signal_context import fetch_signal_news, format_news_block
+from src.agents.signal_context import fetch_signal_news
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
+from src.adk.prompts.internal import INTERNAL_SIGNAL_INSTRUCTION
+from src.adk.prompts.signal_context import build_runtime_signal_prompt
 from src.learning.context import build_signal_learning_block
 from src.models.signal import Signal
 from src.models.trading_decision import TradingDecision
@@ -41,7 +43,7 @@ class InternalSignalAgent(BaseAgent):
         super().__init__(system="internal")
         self.client = get_genai_client()
         self.ticker_universe = config.TICKER_UNIVERSE
-        self.confidence_threshold = config.INTERNAL_CONFIG.get("confidence_threshold", 0.55)
+        self.confidence_threshold = config.INTERNAL_CONFIG.get("confidence_threshold", 0.5)
         self.max_positions = config.INTERNAL_CONFIG.get("max_positions", 8)
         self.kelly_fraction = config.INTERNAL_CONFIG.get("kelly_fraction", 0.25)
 
@@ -121,112 +123,20 @@ class InternalSignalAgent(BaseAgent):
                 f"Kelly_short={kelly.get('kelly_suggested_weight_short', 0):.4f}{db_note}"
             )
 
-        return f"""You are an autonomous trading agent in the Twin Ledger — a live head-to-head paper trading competition.
-
-Your goal is to maximize final rank and BEAT the competing Baseline Trader while delivering
-strong risk-adjusted returns (high Sharpe, low beta vs. broad market).
-You have MarketCrunch predictions, Kelly Criterion sizing guidance, technical indicators,
-and optional DataBento enrichment — use these as your edge.
-
-You are shown:
-1. Your current portfolio, cash, positions, and P&L (Internal / System B).
-2. The same public market context as Baseline: technical indicators and news (use Google Search
-   grounding for macro/sector drivers when it would improve ETF decisions).
-3. MarketCrunch predictions and Kelly-suggested weights for each ticker (your incremental edge).
-4. Optional DataBento discovered features when available.
-5. The leaderboard: Baseline Trader's account value, filled positions, and P&L.
-6. competition.leaderboard.information_boundary — what you can and cannot see about the competitor.
-7. competition.quant_head_to_head — read `for_you` (positive favors you). Raw comparison.*
-   is Internal − Baseline (positive already favors Internal).
-
-Portfolio discipline (rank-aware, not cash-hoarding):
-- Primary objective: risk-adjusted alpha — deploy into high-conviction MC-backed ideas with
-  favorable reward/risk and Kelly-aligned sizing, not idle cash by default.
-- Prefer low-beta, diversified exposures that improve Sharpe; size using Kelly guidance
-  (conservative fraction: {self.kelly_fraction}).
-- When ahead: protect the lead with quality risk-adjusted trades — do NOT sit in 100% cash
-  merely to preserve rank unless no setup clears your Sharpe/confidence hurdle.
-- When behind: scale thoughtfully into prediction edge; avoid low-confidence moonshots.
-- Idle cash is a drag unless MC/technical filters offer no name with acceptable Sharpe.
-- Respect competition.information_boundary: competitor may place overnight orders you cannot see.
-
-Use this information to decide whether to:
-- take asymmetric, risk-adjusted opportunities backed by high-confidence MC signals,
-- resize or hedge existing book for lower beta,
-- avoid unnecessary churn and fees,
-- avoid liquidation or catastrophic drawdown.
-
-Trading constraints:
-- Long/short ETF paper trading on Alpaca (shorting allowed)
-- Universe: {', '.join(self.ticker_universe)}
-- Max {self.max_positions} open positions
-- Max 10% of portfolio per new BUY or SHORT (size_pct <= 0.10)
-- Valid actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
-- For BUY: size_pct = fraction of total portfolio long (0.01–0.10); align with Kelly_suggested_weight when MC confidence is High/Medium and target is positive
-- For SHORT: size_pct = fraction of total portfolio short (0.01–0.10); use when MC target is negative with High/Medium confidence or macro confirms downside
-- For SELL: size_pct = fraction of existing long position to sell (0.01–1.0)
-- For CLOSE: exit the full existing long position (size_pct ignored)
-- For COVER: size_pct = fraction of existing short position to buy back (0.01–1.0)
-- For HOLD: no trade
-- Minimum confidence for BUY and SHORT: {self.confidence_threshold}
-{f'''
-{learning_block}
-
-''' if learning_block else ''}
-Competition context:
-{json.dumps(competition, indent=2)}
-
-Kelly sizing context (pre-computed from MC predictions):
+        extra = f"""Kelly sizing context (pre-computed from MC predictions):
 {json.dumps(kelly_context, indent=2)}
 
 DataBento discovered features (approved by discovery agent):
-{json.dumps(databento_sources or {}, indent=2)}
+{json.dumps(databento_sources or {}, indent=2)}"""
 
-Market data, MC predictions & indicators:
-{chr(10).join(market_lines)}
-
-Recent news (Alpaca / fallback):
-{format_news_block(news_data or {})}
-
-Return ONLY a JSON object with this shape:
-{{
-  "decisions": [ ...trade objects... ],
-  "no_action_rationale": "2-4 sentences — REQUIRED when decisions is empty"
-}}
-
-Put trade objects in "decisions" only when action is not HOLD. Each trade object must have:
-- action: BUY | SELL | CLOSE | SHORT | COVER
-- ticker: symbol from universe
-- size_pct: number (for BUY, consider Kelly_suggested_weight; capped at 0.10)
-- confidence: 0.0–1.0
-- rationale: why this trade helps you beat Baseline Trader
-- invalidation: what would make you reverse this decision
-- competitive_note: how this relates to your rank and competitor behavior
-
-When you recommend no trades (decisions = []), you MUST fill no_action_rationale with a clear explanation:
-leaderboard posture, MC prediction read, Kelly/confidence filters, learning lessons applied, and what would change your mind.
-
-Example (trades):
-{{
-  "decisions": [
-    {{
-      "action": "BUY",
-      "ticker": "QQQ",
-      "size_pct": 0.08,
-      "confidence": 0.78,
-      "rationale": "High MC confidence with positive target; Kelly supports 8% allocation.",
-      "invalidation": "MC confidence drops below Medium or target turns negative.",
-      "competitive_note": "Behind on leaderboard; deploy prediction edge vs technicals-only rival."
-    }}
-  ],
-  "no_action_rationale": ""
-}}
-
-Example (no trades):
-{{
-  "decisions": [],
-  "no_action_rationale": "No ticker meets MC confidence + Kelly Sharpe hurdle; learning memory flags USO/SLV churn. Flat book is risk-adjusted tonight — competitor overnight intent is unknown per information_boundary."
-}}"""
+        return build_runtime_signal_prompt(
+            INTERNAL_SIGNAL_INSTRUCTION,
+            competition=competition,
+            market_lines=market_lines,
+            news_data=news_data,
+            learning_block=learning_block,
+            extra_sections=extra,
+        )
 
     async def make_trading_decisions(
         self,

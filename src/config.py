@@ -203,14 +203,16 @@ def dry_run_mode(enabled: bool = True) -> Iterator[None]:
 # SIGNAL & ALLOCATION CONFIG
 # ============================================================================
 
+MAX_POSITION_SIZE_PCT = 0.25  # Max portfolio weight per new BUY or SHORT (both desks)
+
 # System A (Baseline) - Simple allocation
 BASELINE_CONFIG = {
     "allocation_method": "twin_ledger",    # LLM structured decisions with size_pct
     "selection_method": "twin_ledger",     # Compete vs internal agent on leaderboard
     "competitor_system": "internal",
-    "confidence_threshold": 0.5,           # Min confidence for BUY execution
+    "confidence_threshold": 0.5,           # Min confidence for BUY/SHORT execution
     "max_positions": 8,                    # Max number of open positions
-    "position_size_pct": 0.10,             # Max 10% per position
+    "position_size_pct": MAX_POSITION_SIZE_PCT,
 }
 
 # System B (Internal) - Kelly-optimized with predictions
@@ -218,9 +220,10 @@ INTERNAL_CONFIG = {
     "allocation_method": "twin_ledger_kelly",  # Ledger decisions + Kelly BUY sizing
     "selection_method": "twin_ledger",           # Compete vs baseline on leaderboard
     "competitor_system": "baseline",
-    "confidence_threshold": 0.55,                # Higher bar for BUY execution
+    "confidence_threshold": 0.5,                 # Min confidence for BUY/SHORT execution
     "max_positions": 8,
     "kelly_fraction": 0.25,                      # Conservative Kelly (1/4 full Kelly)
+    "position_size_pct": MAX_POSITION_SIZE_PCT,
     "use_databento": True,                       # Enable DataBento data enrichment
 }
 

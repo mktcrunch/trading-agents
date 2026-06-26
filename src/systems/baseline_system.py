@@ -23,7 +23,7 @@ class BaselineSystem:
     System A (Baseline) — Twin Ledger competitor
     - Technical indicators from Alpaca only
     - LLM makes structured BUY/SELL/HOLD/CLOSE decisions
-    - Goal: beat Internal Trader (MarketCrunch + Kelly) on leaderboard
+    - Goal: compound returns and hold #1 on the Twin Ledger (not defensive cash when ahead)
     - Paper trades on Alpaca Account #1
     """
 

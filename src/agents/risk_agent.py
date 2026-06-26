@@ -60,7 +60,7 @@ class RiskAgent(BaseAgent):
             cfg = config.BASELINE_CONFIG
             risk_cfg = config.BASELINE_RISK_CONFIG
 
-        self.max_position_weight = cfg.get("position_size_pct", 0.10)
+        self.max_position_weight = cfg.get("position_size_pct", config.MAX_POSITION_SIZE_PCT)
         self.max_total_exposure = 1.25
         self.max_positions = cfg.get("max_positions", 8)
         self.overnight_risk_mode = risk_cfg.get(
@@ -223,7 +223,7 @@ class RiskAgent(BaseAgent):
         Validate proposed entry weights against book + pending orders.
 
         Args:
-            proposed_positions: ticker -> entry weight (0-0.10)
+            proposed_positions: ticker -> entry weight (0–max position weight)
             portfolio_value: total portfolio value
             current_positions: open Alpaca positions
             entry_sides: ticker -> 'long' | 'short' for proposed entries

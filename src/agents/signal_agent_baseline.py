@@ -1,6 +1,6 @@
 """
 Baseline Signal Agent (System A) — Twin Ledger style.
-Makes structured trading decisions to beat the Internal Trader.
+Makes structured trading decisions to grow equity and hold #1 on the Twin Ledger.
 Uses technical indicators + portfolio/competition context only (no MC predictions).
 """
 import json
@@ -18,9 +18,11 @@ from src.agents.ledger_utils import (
     parse_signal_ledger_response,
     record_signal_gemini_query,
 )
-from src.agents.signal_context import fetch_signal_news, format_news_block
+from src.agents.signal_context import fetch_signal_news
 from src.agents.base_agent import BaseAgent
 from src.agents.competition_context import build_competition_context
+from src.adk.prompts.baseline import BASELINE_SIGNAL_INSTRUCTION
+from src.adk.prompts.signal_context import build_runtime_signal_prompt
 from src.learning.context import build_signal_learning_block
 from src.models.signal import Signal
 from src.models.trading_decision import TradingDecision
@@ -64,103 +66,13 @@ class BaselineSignalAgent(BaseAgent):
                 f"BB_z={tech.get('bollinger_zscore', 0):.2f}"
             )
 
-        return f"""You are an autonomous trading agent in the Twin Ledger — a live head-to-head paper trading competition.
-
-Your goal is to maximize final rank and BEAT the competing Internal Trader while delivering
-strong risk-adjusted returns (high Sharpe, low beta vs. broad market).
-You do NOT have access to MarketCrunch predictions or proprietary signals.
-You must win using technical analysis, portfolio discipline, and relative-performance strategy.
-
-You are shown:
-1. Your current portfolio, cash, positions, and P&L (Baseline / System A).
-2. Current market data, technical indicators, and recent news for the tradable universe.
-3. Google Search grounding for macro/sector drivers when it would improve ETF decisions.
-4. The leaderboard: Internal Trader's account value, filled positions, and P&L.
-5. competition.leaderboard.information_boundary — what you can and cannot see about the competitor.
-6. competition.quant_head_to_head — read `for_you` (positive favors you). Raw comparison.*
-   is Internal − Baseline; never invert that sign when you are Baseline.
-
-Portfolio discipline (rank-aware, not cash-hoarding):
-- Primary objective: risk-adjusted alpha — deploy into high-conviction ideas with favorable
-  reward/risk, not idle cash by default.
-- Prefer low-beta, diversified exposures and sizes that improve Sharpe; avoid reckless
-  concentration and low-quality churn.
-- When ahead: protect the lead with quality risk-adjusted trades — do NOT sit in 100% cash
-  merely to preserve rank unless no setup clears your Sharpe/confidence hurdle.
-- When behind: scale thoughtfully into your edge; avoid low-confidence moonshots.
-- Idle cash is a drag unless macro/regime truly offers no name with acceptable Sharpe.
-- Respect competition.information_boundary: competitor may place overnight orders you cannot see.
-
-Use this information to decide whether to:
-- take asymmetric, risk-adjusted opportunities,
-- resize or hedge existing book for lower beta,
-- avoid unnecessary churn and fees,
-- avoid liquidation or catastrophic drawdown.
-
-Trading constraints:
-- Long/short ETF paper trading on Alpaca (shorting allowed)
-- Universe: {', '.join(self.ticker_universe)}
-- Max {self.max_positions} open positions
-- Max 10% of portfolio per new BUY or SHORT (size_pct <= 0.10)
-- Valid actions: BUY, SELL, HOLD, CLOSE, SHORT, COVER
-- For BUY: size_pct = fraction of total portfolio to allocate long (0.01–0.10)
-- For SHORT: size_pct = fraction of total portfolio to allocate short (0.01–0.10); use when bearish on a ticker
-- For SELL: size_pct = fraction of existing long position to sell (0.01–1.0)
-- For CLOSE: exit the full existing long position (size_pct ignored)
-- For COVER: size_pct = fraction of existing short position to buy back (0.01–1.0)
-- For HOLD: no trade
-{f'''
-{learning_block}
-
-''' if learning_block else ''}
-Competition context:
-{json.dumps(competition, indent=2)}
-
-Market data & indicators:
-{chr(10).join(market_lines)}
-
-Recent news (Alpaca / fallback):
-{format_news_block(news_data or {})}
-
-Return ONLY a JSON object with this shape:
-{{
-  "decisions": [ ...trade objects... ],
-  "no_action_rationale": "2-4 sentences — REQUIRED when decisions is empty"
-}}
-
-Put trade objects in "decisions" only when action is not HOLD. Each trade object must have:
-- action: BUY | SELL | CLOSE | SHORT | COVER
-- ticker: symbol from universe
-- size_pct: number
-- confidence: 0.0–1.0
-- rationale: why this trade helps you beat Internal Trader
-- invalidation: what would make you reverse this decision
-- competitive_note: how this relates to your rank and competitor behavior
-
-When you recommend no trades (decisions = []), you MUST fill no_action_rationale with a clear explanation:
-leaderboard posture, technical/macro read, risk discipline, learning lessons applied, and what would change your mind.
-
-Example (trades):
-{{
-  "decisions": [
-    {{
-      "action": "BUY",
-      "ticker": "QQQ",
-      "size_pct": 0.08,
-      "confidence": 0.72,
-      "rationale": "Momentum improving while competitor is likely overweight low-confidence names.",
-      "invalidation": "RSI > 70 and MACD histogram turns negative.",
-      "competitive_note": "Behind on leaderboard; need controlled risk-on exposure."
-    }}
-  ],
-  "no_action_rationale": ""
-}}
-
-Example (no trades):
-{{
-  "decisions": [],
-  "no_action_rationale": "No ticker clears confidence/Sharpe hurdle after costs; macro regime is mixed and competitor filled book is unknown for tonight. Staying flat is risk-adjusted here — not a rank-preservation cash hoard."
-}}"""
+        return build_runtime_signal_prompt(
+            BASELINE_SIGNAL_INSTRUCTION,
+            competition=competition,
+            market_lines=market_lines,
+            news_data=news_data,
+            learning_block=learning_block,
+        )
 
     async def make_trading_decisions(
         self,

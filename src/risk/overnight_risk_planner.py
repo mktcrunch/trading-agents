@@ -35,6 +35,9 @@ class OvernightRiskPlanner:
         weight: float,
         portfolio_context: Dict[str, Any],
     ) -> str:
+        from src import config
+
+        max_pct = int(config.MAX_POSITION_SIZE_PCT * 100)
         return f"""You are the overnight risk manager for the BASELINE ETF agent (pure LLM — no scripted 1%/70% rules).
 
 Decide whether to APPROVE this entry for tomorrow's session.
@@ -47,7 +50,7 @@ Proposal:
 Portfolio context:
 {json.dumps(portfolio_context, indent=2)}
 
-Hard limits (never approve above these): 10% per ticker, 8 positions, 125% gross exposure.
+Hard limits (never approve above these): {max_pct}% per ticker, 8 positions, 125% gross exposure.
 
 Return ONLY JSON:
 {{"approved": true, "rationale": "one sentence"}}"""
@@ -60,10 +63,13 @@ Return ONLY JSON:
         portfolio_context: Dict[str, Any],
         scripted_passed: bool,
     ) -> str:
+        from src import config
+
+        max_pct = int(config.MAX_POSITION_SIZE_PCT * 100)
         return f"""You are the overnight risk manager for the INTERNAL ETF agent (scripted checks + LLM).
 
 Scripted risk checks already {"PASSED" if scripted_passed else "FAILED"} for this entry.
-Scripted rules enforce: 10% per ticker, max positions, gross exposure, no long+short conflict.
+Scripted rules enforce: {max_pct}% per ticker, max positions, gross exposure, no long+short conflict.
 
 Your job: on PASSED entries, you may REJECT if MC/macro/correlation warrant; you must NOT approve failed scripted entries.
 

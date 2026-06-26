@@ -64,7 +64,8 @@ def _heuristic_signal(analysis: Dict[str, Any]) -> Dict[str, Any]:
     if excess is not None:
         if excess > 0:
             do_more.append(
-                f"Quant excess return vs competitor {excess:+.2f}% — defend risk-adjusted lead."
+                f"Quant excess return vs competitor {excess:+.2f}% — compound the lead with "
+                "deployed capital when setups clear hurdles; do not hide in cash."
             )
         elif excess < 0:
             bad.append(

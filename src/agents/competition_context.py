@@ -63,6 +63,12 @@ PERFORMANCE_METRICS_METHODOLOGY = {
     "min_paired_days": MIN_OBS_FOR_STATS,
 }
 
+COMPETITION_OBJECTIVE = (
+    "Primary: grow portfolio value (absolute returns). Secondary: hold #1 on the Twin Ledger. "
+    "Do not hide in cash because you lead or because the competitor is losing — stay deployed "
+    "when setups clear your confidence and risk-adjusted hurdles."
+)
+
 COMPETITOR_NOTES = {
     "baseline": (
         "Baseline Trader uses Alpaca technical indicators and Twin Ledger LLM strategy only. "
@@ -348,7 +354,8 @@ def format_quant_learning_block(
 - Your drawdown advantage: {fy.get('drawdown_advantage_pp')} pp ({interp.get('drawdown', 'n/a')})
 - Excess return: {_sig_note('total_return_diff')} · daily alpha: {_sig_note('daily_alpha')}
 Sign rule: comparison.* is Internal − Baseline; use for_you fields above for your desk.
-Use risk-adjusted edge, not just dollar gap, when sizing overnight risk."""
+Primary objective: compound portfolio value; leaderboard rank is secondary. Do not play defense
+when ahead or when the competitor is losing — size on edge, not on relative P&L alone."""
 
 
 def _attach_quant_head_to_head(
@@ -404,6 +411,7 @@ def build_competition_context(perspective: str = "baseline") -> Dict:
             "total_agents": 2,
             "status": status,
             "value_gap_usd": round(gap, 2),
+            "objective": COMPETITION_OBJECTIVE,
             "competitor_profile": COMPETITOR_NOTES[competitor_system],
             "information_boundary": COMPETITION_INFO_BOUNDARY,
         },

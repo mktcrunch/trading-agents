@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 logger = setup_logger(__name__)
 
 
+def _max_position_weight() -> float:
+    from src import config
+    return float(config.MAX_POSITION_SIZE_PCT)
+
+
 class PositionAllocator:
     """
     Calculates position sizes based on signal strength and risk constraints
@@ -84,7 +89,7 @@ class PositionAllocator:
                 weights[ticker] = 0.0
                 continue
             weight = kelly / total_kelly if total_kelly > 0 else 1.0 / len(signals)
-            weights[ticker] = min(weight, 0.10)
+            weights[ticker] = min(weight, _max_position_weight())
         return weights
 
     @staticmethod
@@ -123,10 +128,11 @@ class PositionAllocator:
 
     @staticmethod
     def baseline_target_weights(signals: Dict[str, Signal]) -> Dict[str, float]:
-        """Equal-weight targets capped at 10% per position."""
+        """Equal-weight targets capped at max position weight."""
         if not signals:
             return {}
-        weight = min(1.0 / len(signals), 0.10)
+        cap = _max_position_weight()
+        weight = min(1.0 / len(signals), cap)
         return {ticker: weight for ticker in signals}
 
     @staticmethod
@@ -135,7 +141,7 @@ class PositionAllocator:
         weights = {}
         for decision in decisions:
             if decision.action in ("BUY", "SHORT") and decision.size_pct > 0:
-                weights[decision.ticker] = min(decision.size_pct, 0.10)
+                weights[decision.ticker] = min(decision.size_pct, _max_position_weight())
         return weights
 
     @staticmethod
@@ -169,6 +175,7 @@ class PositionAllocator:
         Positive qty = buy, negative qty = sell.
         """
         position_changes: Dict[str, int] = {}
+        cap = _max_position_weight()
 
         for decision in decisions:
             price = prices.get(decision.ticker, 0)
@@ -177,7 +184,7 @@ class PositionAllocator:
                 continue
 
             if decision.action == "BUY":
-                weight = min(max(decision.size_pct, 0), 0.10)
+                weight = min(max(decision.size_pct, 0), cap)
                 dollars = portfolio_value * weight
                 qty = int(dollars / price)
                 if qty > 0:
@@ -187,7 +194,7 @@ class PositionAllocator:
                 position = current_positions.get(decision.ticker)
                 if position and position.qty > 0:
                     continue
-                weight = min(max(decision.size_pct, 0), 0.10)
+                weight = min(max(decision.size_pct, 0), cap)
                 dollars = portfolio_value * weight
                 qty = int(dollars / price)
                 if qty > 0:

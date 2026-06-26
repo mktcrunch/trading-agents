@@ -20,7 +20,7 @@ Licensed under the [Apache License 2.0](LICENSE).
 |---|----------|----------|
 | **Account** | Alpaca paper #1 | Alpaca paper #2 |
 | **Signals** | Gemini 3.5 Flash ledger decisions, Alpaca OHLCV only | Same + **MarketCrunch ensemble forecasts** + discovered features |
-| **Sizing** | `size_pct` from LLM (max 10%/position) | Ledger decisions + Kelly on BUY and SHORT entries |
+| **Sizing** | `size_pct` from LLM (max 25%/position) | Ledger decisions + Kelly on BUY and SHORT entries |
 | **Discovery** | — | Agentic DataBento catalog scan, LLM feature formulas |
 | **Overnight orders** | OPG limit ±0.5% from close | Same |
 | **Intraday risk** | Pure LLM base stop + trailing | Hybrid base stop (scripted + LLM), hybrid trailing, 15-min gate, EOD |
@@ -88,7 +88,7 @@ Env: `USE_ADK=true` (default), `USE_ADK_WORKFLOW=true`, `USE_ADK_MCP=false`, `GO
 
 1. Fetch Alpaca prices and positions  
 2. Gemini structured decisions (`BUY` / `SELL` / `HOLD` / `CLOSE`) with competition context  
-3. Pre-trade risk validation (max 10% weight, exposure caps)  
+3. Pre-trade risk validation (max 25% weight, exposure caps)  
 4. Overnight OPG limit orders  
 5. Portfolio monitoring  
 
