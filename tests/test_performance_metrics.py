@@ -3,7 +3,10 @@ from src.analytics.performance_metrics import (
     RISK_FREE_RATE_ANNUAL,
     TRADING_DAYS_PER_YEAR,
     _annualized_cumulative_return_pct,
+    _beta_vs_market,
     _sharpe,
+    _spy_benchmark_from_closes,
+    attach_spy_benchmark,
     compute_head_to_head_metrics,
 )
 
@@ -155,3 +158,59 @@ def test_live_daily_return_from_account():
         {"equity": 100_250, "last_equity": 100_200},
     )
     assert ret == round((100_250 - 100_200) / 100_200 * 100, 3)
+
+
+def test_spy_benchmark_from_closes_compound_annualizes():
+    closes = [
+        ("2026-06-09", 100.0),
+        ("2026-06-10", 101.0),
+        ("2026-06-11", 102.0),
+        ("2026-06-12", 103.0),
+    ]
+    spy = _spy_benchmark_from_closes(
+        closes,
+        start_date="2026-06-09",
+        start_label="June 9, 2026",
+    )
+    assert spy is not None
+    assert spy["source"] == "alpaca"
+    assert spy["total_return_pct"] == 3.0
+    assert spy["observation_days"] == 3
+    assert spy["annualized_return_pct"] == _annualized_cumulative_return_pct(3.0, 3)
+    assert spy["start_date"] == "2026-06-09"
+
+
+def test_beta_vs_market_unit_when_identical():
+    rets = {"2026-06-10": 0.01, "2026-06-11": -0.005, "2026-06-12": 0.02}
+    assert _beta_vs_market(rets, rets) == 1.0
+
+
+def test_attach_spy_benchmark_sets_beta(monkeypatch):
+    baseline = _series([100_000, 100_100, 100_050, 100_200, 100_150, 100_300])
+    internal = _series([100_000, 100_200, 100_180, 100_400, 100_350, 100_500])
+    metrics = compute_head_to_head_metrics(baseline, internal)
+
+    closes = [
+        ("2026-06-10", 100.0),
+        ("2026-06-11", 100.5),
+        ("2026-06-12", 100.2),
+        ("2026-06-13", 101.0),
+        ("2026-06-14", 100.8),
+        ("2026-06-15", 101.5),
+    ]
+
+    def _fake_closes(start_date=None):
+        return "2026-06-10", "June 10, 2026", closes
+
+    monkeypatch.setattr(
+        "src.analytics.performance_metrics._fetch_spy_closes",
+        _fake_closes,
+    )
+    out = attach_spy_benchmark(
+        metrics,
+        baseline_history=baseline,
+        internal_history=internal,
+    )
+    assert out["benchmark"]["spy"]["source"] == "alpaca"
+    assert out["baseline"]["beta_spy"] is not None
+    assert out["internal"]["beta_spy"] is not None

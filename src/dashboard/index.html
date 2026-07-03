@@ -3343,11 +3343,15 @@
         <span class="op">−</span>
         <span class="desk baseline">Baseline</span>
       </div>`;
-    const splitDesk = (desk, label, value, valueCls = "", annValue = null) => {
+    const fmtBeta = (n) => n == null ? null : Number(n).toFixed(2);
+    const splitDesk = (desk, label, value, valueCls = "", annValue = null, betaValue = null) => {
       const ann = annValue == null
         ? ""
         : `<span class="split-ann">· ann ${annValue}</span>`;
-      return `<span class="split-item ${desk}">${label} <strong class="${valueCls}">${value}</strong>${ann}</span>`;
+      const beta = betaValue == null
+        ? ""
+        : `<span class="split-ann">· β ${betaValue}</span>`;
+      return `<span class="split-item ${desk}">${label} <strong class="${valueCls}">${value}</strong>${ann}${beta}</span>`;
     };
     const renderPowerHint = (sig) => {
       if (!sig) return "";
@@ -3895,6 +3899,7 @@
       const rfLabel = rfAnn == null ? "4.25%" : `${(Number(rfAnn) * 100).toFixed(2)}%`;
       const ddDiff = cmp.max_drawdown_diff_pct;
       const totalReturnDiff = cmp.total_return_diff_pct ?? ((i.total_return_pct || 0) - (b.total_return_pct || 0));
+      const spyBench = (metrics.benchmark && metrics.benchmark.spy) || null;
       const path = metrics.path_comparison || {};
 
       el.innerHTML = `
@@ -3918,10 +3923,11 @@
             ${metricFormulaMinus()}
             <div class="perf-metric-value ${pctClass(totalReturnDiff)}">${fmtPct(totalReturnDiff)}</div>
             <div class="perf-metric-split">
-              ${splitDesk("baseline", "Baseline", fmtPct(b.total_return_pct), pctClass(b.total_return_pct), b.annualized_cumulative_return_pct == null ? null : fmtPct(b.annualized_cumulative_return_pct))}
-              ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct), i.annualized_cumulative_return_pct == null ? null : fmtPct(i.annualized_cumulative_return_pct))}
+              ${splitDesk("baseline", "Baseline", fmtPct(b.total_return_pct), pctClass(b.total_return_pct), b.annualized_cumulative_return_pct == null ? null : fmtPct(b.annualized_cumulative_return_pct), fmtBeta(b.beta_spy))}
+              ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct), i.annualized_cumulative_return_pct == null ? null : fmtPct(i.annualized_cumulative_return_pct), fmtBeta(i.beta_spy))}
             </div>
             <div class="perf-metric-sub">$100k start · cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)} · ann. excess ${fmtPct(cmp.annualized_excess_return_pct)}</div>
+            <div class="perf-metric-live">SPY ann. <strong class="${pctClass(spyBench && spyBench.annualized_return_pct)}">${spyBench ? fmtPct(spyBench.annualized_return_pct) : "n/a"}</strong> since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.total_return_diff)}
           </article>
           <article class="perf-metric-card">

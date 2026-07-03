@@ -6,11 +6,15 @@ estimates statistical significance for daily alpha, Sharpe spread, and drawdown 
 """
 from __future__ import annotations
 
+import logging
 import math
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy import stats
+
+logger = logging.getLogger(__name__)
 
 TRADING_DAYS_PER_YEAR = 252
 # Annual risk-free rate used in Sharpe (excess return over cash).
@@ -113,6 +117,156 @@ def _annualized_cumulative_return_pct(
         return None
     ann = (1.0 + r) ** (TRADING_DAYS_PER_YEAR / observation_days) - 1.0
     return round(ann * 100, 3)
+
+
+def _daily_returns_by_date(closes: List[Tuple[str, float]]) -> Dict[str, float]:
+    """Map end-date → simple close-to-close return from ordered (date, close) pairs."""
+    out: Dict[str, float] = {}
+    for i in range(1, len(closes)):
+        _d0, c0 = closes[i - 1]
+        d1, c1 = closes[i]
+        if c0 > 0:
+            out[d1] = (c1 - c0) / c0
+    return out
+
+
+def _portfolio_returns_by_date(history: List[Dict[str, Any]]) -> Dict[str, float]:
+    eq = _equity_by_date(history)
+    dates = sorted(eq.keys())
+    out: Dict[str, float] = {}
+    for i in range(1, len(dates)):
+        d0, d1 = dates[i - 1], dates[i]
+        p0, p1 = eq[d0], eq[d1]
+        if p0 > 0:
+            out[d1] = (p1 - p0) / p0
+    return out
+
+
+def _beta_vs_market(
+    portfolio_returns_by_date: Dict[str, float],
+    market_returns_by_date: Dict[str, float],
+) -> Optional[float]:
+    """OLS beta: Cov(r_p, r_m) / Var(r_m) on aligned daily returns."""
+    common = sorted(set(portfolio_returns_by_date) & set(market_returns_by_date))
+    if len(common) < 2:
+        return None
+    p = np.asarray([portfolio_returns_by_date[d] for d in common], dtype=float)
+    m = np.asarray([market_returns_by_date[d] for d in common], dtype=float)
+    var_m = float(m.var(ddof=1))
+    if var_m == 0 or math.isnan(var_m):
+        return None
+    cov = float(np.cov(p, m, ddof=1)[0, 1])
+    return round(cov / var_m, 3)
+
+
+def _spy_benchmark_from_closes(
+    closes: List[Tuple[str, float]],
+    *,
+    start_date: str,
+    start_label: str,
+) -> Optional[Dict[str, Any]]:
+    """Build SPY benchmark stats from (date, close) pairs on/after start_date."""
+    points = [(d, c) for d, c in closes if d >= start_date and c > 0]
+    if len(points) < 2:
+        return None
+    start_close = points[0][1]
+    end_close = points[-1][1]
+    if start_close <= 0:
+        return None
+    total_return_pct = round((end_close / start_close - 1.0) * 100, 3)
+    observation_days = len(points) - 1
+    return {
+        "ticker": "SPY",
+        "source": "alpaca",
+        "start_date": start_date,
+        "start_label": start_label,
+        "end_date": points[-1][0],
+        "start_close": round(start_close, 4),
+        "end_close": round(end_close, 4),
+        "total_return_pct": total_return_pct,
+        "annualized_return_pct": _annualized_cumulative_return_pct(
+            total_return_pct, observation_days
+        ),
+        "observation_days": observation_days,
+    }
+
+
+def _fetch_spy_closes(start_date: Optional[str] = None) -> Tuple[str, str, List[Tuple[str, float]]]:
+    """Return (start_date, start_label, closes) from Alpaca daily bars."""
+    from src.apis.alpaca_client import AlpacaClient
+    from src.config import FIRST_TRADE_DATE, FIRST_TRADE_DATE_LABEL
+
+    start = start_date or FIRST_TRADE_DATE
+    label = FIRST_TRADE_DATE_LABEL if start == FIRST_TRADE_DATE else start
+    try:
+        start_d = date.fromisoformat(start)
+    except ValueError:
+        logger.warning("Invalid SPY benchmark start_date=%s", start)
+        return start, label, []
+
+    today = datetime.now(timezone.utc).date()
+    lookback_days = max(30, (today - start_d).days + 14)
+
+    try:
+        client = AlpacaClient(system="baseline")
+        df = client.get_historical_bars("SPY", lookback_days=lookback_days)
+    except Exception:
+        logger.exception("Failed to fetch SPY bars for benchmark")
+        return start, label, []
+
+    if df is None or df.empty:
+        return start, label, []
+
+    closes: List[Tuple[str, float]] = []
+    for _, row in df.iterrows():
+        ts = row.get("date")
+        close = row.get("close")
+        if ts is None or close is None:
+            continue
+        try:
+            dk = _date_key(ts.isoformat() if hasattr(ts, "isoformat") else str(ts))
+            closes.append((dk, float(close)))
+        except (TypeError, ValueError):
+            continue
+    closes.sort(key=lambda x: x[0])
+    return start, label, closes
+
+
+def fetch_spy_benchmark(start_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """SPY total and compound-annualized return since first trade, from Alpaca daily bars."""
+    start, label, closes = _fetch_spy_closes(start_date)
+    return _spy_benchmark_from_closes(closes, start_date=start, start_label=label)
+
+
+def attach_spy_benchmark(
+    metrics: Dict[str, Any],
+    baseline_history: Optional[List[Dict[str, Any]]] = None,
+    internal_history: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Attach SPY benchmark and per-desk beta vs SPY (Alpaca daily closes)."""
+    out = dict(metrics)
+    start, label, closes = _fetch_spy_closes()
+    spy = _spy_benchmark_from_closes(closes, start_date=start, start_label=label)
+    if not spy:
+        return out
+
+    out["benchmark"] = {"spy": spy}
+    points = [(d, c) for d, c in closes if d >= start and c > 0]
+    mkt_rets = _daily_returns_by_date(points)
+
+    for system, history in (
+        ("baseline", baseline_history),
+        ("internal", internal_history),
+    ):
+        agent = out.get(system)
+        if not isinstance(agent, dict) or not history:
+            continue
+        beta = _beta_vs_market(_portfolio_returns_by_date(history), mkt_rets)
+        updated = dict(agent)
+        updated["beta_spy"] = beta
+        out[system] = updated
+
+    return out
 
 
 def _max_drawdown(equity_by_date: Dict[str, float]) -> Dict[str, Optional[float]]:

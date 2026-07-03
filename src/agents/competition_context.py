@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from src.analytics.performance_metrics import MIN_OBS_FOR_STATS, SIGN_CONVENTION
 from src.apis.alpaca_client import AlpacaClient
+from src.config import FIRST_TRADE_DATE_LABEL
 from src.models.position import Position
 
 STARTING_EQUITY = 100_000.0
@@ -30,7 +31,10 @@ PERFORMANCE_METRICS_METHODOLOGY = {
         "excess_return": (
             "Internal − Baseline total return vs $100k starting equity. "
             "Boxes also show compound-annualized cumulative return per desk "
-            "((1+r)^(252/n)−1); ann. excess scales the realized excess the same way."
+            "((1+r)^(252/n)−1); ann. excess scales the realized excess the same way. "
+            "SPY ann. return uses Alpaca daily closes since first trade "
+            f"({FIRST_TRADE_DATE_LABEL}), compound-annualized the same way. "
+            "Each desk box also shows beta vs SPY (aligned daily returns)."
         ),
         "daily_delta": (
             "Highlighted value is mean daily alpha (Internal − Baseline) over paired "
@@ -68,7 +72,10 @@ PERFORMANCE_METRICS_METHODOLOGY = {
 }
 
 COMPETITION_OBJECTIVE = (
-    "Primary: grow portfolio value (absolute returns). Secondary: hold #1 on the Twin Ledger. "
+    "Primary: grow portfolio value and beat the market (SPY) since the experiment start "
+    f"({FIRST_TRADE_DATE_LABEL}). Use quant_head_to_head.metrics.benchmark.spy "
+    "(Alpaca daily closes) and your desk's beta_spy — aim for higher compound return than SPY "
+    "without excessive market beta. Secondary: hold #1 on the Twin Ledger. "
     "Do not hide in cash because you lead or because the competitor is losing — stay deployed "
     "when setups clear your confidence and risk-adjusted hurdles."
 )
@@ -133,6 +140,7 @@ def _account_snapshot(system: str, label: str) -> Dict:
 def fetch_quant_head_to_head(since_hours: int = DEFAULT_QUANT_LOOKBACK_HOURS) -> Dict[str, Any]:
     """Aligned quant metrics from Alpaca equity history (same engine as the dashboard)."""
     from src.analytics.performance_metrics import (
+        attach_spy_benchmark,
         collect_live_daily_returns,
         compute_head_to_head_metrics,
     )
@@ -147,11 +155,15 @@ def fetch_quant_head_to_head(since_hours: int = DEFAULT_QUANT_LOOKBACK_HOURS) ->
             history[system] = []
 
     live_daily = collect_live_daily_returns(history)
-    metrics = compute_head_to_head_metrics(
-        history["baseline"],
-        history["internal"],
-        starting_equity=STARTING_EQUITY,
-        live_daily_returns=live_daily,
+    metrics = attach_spy_benchmark(
+        compute_head_to_head_metrics(
+            history["baseline"],
+            history["internal"],
+            starting_equity=STARTING_EQUITY,
+            live_daily_returns=live_daily,
+        ),
+        baseline_history=history["baseline"],
+        internal_history=history["internal"],
     )
     return {
         "since_hours": since_hours,
@@ -351,15 +363,27 @@ def format_quant_learning_block(
     daily_txt = f"{daily_you:+.3f}%" if daily_you is not None else "n/a"
     excess_txt = f"{excess_you:+.2f}%" if excess_you is not None else "n/a"
 
+    spy = (metrics.get("benchmark") or {}).get("spy") or {}
+    you_metrics = metrics.get(perspective) or {}
+    spy_ann = spy.get("annualized_return_pct")
+    spy_ann_txt = f"{spy_ann:+.2f}%" if spy_ann is not None else "n/a"
+    beta = you_metrics.get("beta_spy")
+    beta_txt = f"{beta:.2f}" if beta is not None else "n/a"
+    your_ann = you_metrics.get("annualized_cumulative_return_pct")
+    your_ann_txt = f"{your_ann:+.2f}%" if your_ann is not None else "n/a"
+
     return f"""HEAD-TO-HEAD QUANT (Performance dashboard · {view.get('paired_days')} paired days):
 - Your excess return vs competitor: {excess_txt} ({excess_lbl})
 - Your daily delta vs competitor (latest day): {daily_txt} ({interp.get('daily_delta', 'n/a')})
 - Your Sharpe difference vs competitor: {fy.get('sharpe_difference')} ({interp.get('sharpe', 'n/a')})
 - Your drawdown advantage: {fy.get('drawdown_advantage_pp')} pp ({interp.get('drawdown', 'n/a')})
+- Market (SPY since {spy.get('start_label') or FIRST_TRADE_DATE_LABEL}, Alpaca): ann {spy_ann_txt}
+- Your ann. cumulative return: {your_ann_txt} · beta vs SPY: {beta_txt}
 - Excess return: {_sig_note('total_return_diff')} · daily alpha: {_sig_note('daily_alpha')}
 Sign rule: comparison.* is Internal − Baseline; use for_you fields above for your desk.
-Primary objective: compound portfolio value; leaderboard rank is secondary. Do not play defense
-when ahead or when the competitor is losing — size on edge, not on relative P&L alone."""
+Primary objective: compound portfolio value and beat SPY since {FIRST_TRADE_DATE_LABEL};
+leaderboard rank is secondary. Do not play defense when ahead or when the competitor is losing
+— size on edge, not on relative P&L alone."""
 
 
 def _attach_quant_head_to_head(

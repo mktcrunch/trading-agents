@@ -161,17 +161,24 @@ def get_performance(since_hours: int = 720) -> Dict[str, Any]:
             history_points[system] = 0
 
     from src.analytics.performance_metrics import (
+        attach_spy_benchmark,
         collect_live_daily_returns,
         compute_head_to_head_metrics,
     )
     from src.config import TRADING_UNIVERSE, UNIVERSE_RATIONALE
 
     live_daily = collect_live_daily_returns(history)
-    metrics = compute_head_to_head_metrics(
-        history.get("baseline", []),
-        history.get("internal", []),
-        starting_equity=live.get("starting_equity", 100_000.0),
-        live_daily_returns=live_daily,
+    baseline_hist = history.get("baseline", [])
+    internal_hist = history.get("internal", [])
+    metrics = attach_spy_benchmark(
+        compute_head_to_head_metrics(
+            baseline_hist,
+            internal_hist,
+            starting_equity=live.get("starting_equity", 100_000.0),
+            live_daily_returns=live_daily,
+        ),
+        baseline_history=baseline_hist,
+        internal_history=internal_hist,
     )
 
     return {

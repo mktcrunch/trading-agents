@@ -1156,10 +1156,21 @@ def format_performance_metrics_report(
         if tr_diff is not None
         else "  Excess return: n/a",
         f"    Baseline {b.get('total_return_pct')}% "
-        f"(ann. cum {b.get('annualized_cumulative_return_pct')}%) · "
+        f"(ann. cum {b.get('annualized_cumulative_return_pct')}%, "
+        f"β {b.get('beta_spy')}) · "
         f"Internal {i.get('total_return_pct')}% "
-        f"(ann. cum {i.get('annualized_cumulative_return_pct')}%)",
+        f"(ann. cum {i.get('annualized_cumulative_return_pct')}%, "
+        f"β {i.get('beta_spy')})",
         f"    Ann. excess (compound): {cmp.get('annualized_excess_return_pct')}%",
+    ])
+    spy = (metrics.get("benchmark") or {}).get("spy") or {}
+    if spy.get("annualized_return_pct") is not None:
+        lines.append(
+            f"    SPY ann. (Alpaca since {spy.get('start_label') or spy.get('start_date')}): "
+            f"{spy.get('annualized_return_pct')}% "
+            f"(total {spy.get('total_return_pct')}% over {spy.get('observation_days')} days)"
+        )
+    lines.extend([
         _sig_line("Excess return test", sig.get("total_return_diff")),
         f"  Daily alpha (mean paired): {cmp.get('mean_daily_alpha_pct')}% "
         f"(ann. {cmp.get('annualized_alpha_pct')}%; "
