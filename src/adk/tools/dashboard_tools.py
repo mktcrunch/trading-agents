@@ -1155,13 +1155,22 @@ def format_performance_metrics_report(
         f"  Excess return (Internal − Baseline): {tr_diff:+.2f}%"
         if tr_diff is not None
         else "  Excess return: n/a",
-        f"    Baseline {b.get('total_return_pct')}% · Internal {i.get('total_return_pct')}%",
+        f"    Baseline {b.get('total_return_pct')}% "
+        f"(ann. cum {b.get('annualized_cumulative_return_pct')}%) · "
+        f"Internal {i.get('total_return_pct')}% "
+        f"(ann. cum {i.get('annualized_cumulative_return_pct')}%)",
+        f"    Ann. excess (compound): {cmp.get('annualized_excess_return_pct')}%",
         _sig_line("Excess return test", sig.get("total_return_diff")),
-        f"  Daily delta (latest day): {cmp.get('daily_delta_pct')}% "
-        f"(mean alpha {cmp.get('mean_daily_alpha_pct')}%)",
+        f"  Daily alpha (mean paired): {cmp.get('mean_daily_alpha_pct')}% "
+        f"(ann. {cmp.get('annualized_alpha_pct')}%; "
+        f"Baseline avg {b.get('mean_daily_return_pct')}% · "
+        f"Internal avg {i.get('mean_daily_return_pct')}%)",
+        f"    Live today Δ: {cmp.get('daily_delta_pct')}% "
+        f"(Baseline {b.get('daily_return_pct')}% · Internal {i.get('daily_return_pct')}%)",
         _sig_line("Daily alpha test", sig.get("daily_alpha")),
         f"  Sharpe difference: {cmp.get('sharpe_diff')} "
-        f"(Baseline {b.get('sharpe')} · Internal {i.get('sharpe')})",
+        f"(Baseline {b.get('sharpe')} · Internal {i.get('sharpe')}; "
+        f"rf {float(cmp.get('risk_free_rate_annual') or 0.0425) * 100:.2f}%)",
         _sig_line("Sharpe test", sig.get("sharpe_diff")),
         f"  Drawdown difference: {cmp.get('max_drawdown_diff_pct')} pp "
         f"(Baseline max DD {b.get('max_drawdown_pct')}% · Internal {i.get('max_drawdown_pct')}%)",

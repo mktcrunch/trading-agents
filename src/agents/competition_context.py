@@ -28,14 +28,18 @@ PERFORMANCE_METRICS_METHODOLOGY = {
     ),
     "dashboard_cards": {
         "excess_return": (
-            "Internal − Baseline total return vs $100k starting equity."
+            "Internal − Baseline total return vs $100k starting equity. "
+            "Boxes also show compound-annualized cumulative return per desk "
+            "((1+r)^(252/n)−1); ann. excess scales the realized excess the same way."
         ),
         "daily_delta": (
-            "Internal − Baseline return today (live equity vs prior close). "
-            "Mean daily alpha uses completed paired days only."
+            "Highlighted value is mean daily alpha (Internal − Baseline) over paired "
+            "close-to-close days. Boxes show each desk's avg daily return and simple "
+            "annualized return (avg daily × 252). Live today returns are shown small."
         ),
         "sharpe_difference": (
-            "Annualized Sharpe (mean/std × √252) per desk; card = Internal − Baseline."
+            "Annualized Sharpe ((mean − rf/252)/std × √252) per desk with rf = 4.25%; "
+            "card = Internal − Baseline."
         ),
         "drawdown_difference": (
             "Max peak-to-trough drawdown % per desk; card = Internal − Baseline "

@@ -1,5 +1,11 @@
 """Tests for Twin Ledger quant performance metrics."""
-from src.analytics.performance_metrics import compute_head_to_head_metrics
+from src.analytics.performance_metrics import (
+    RISK_FREE_RATE_ANNUAL,
+    TRADING_DAYS_PER_YEAR,
+    _annualized_cumulative_return_pct,
+    _sharpe,
+    compute_head_to_head_metrics,
+)
 
 
 def _series(values):
@@ -7,6 +13,18 @@ def _series(values):
         {"timestamp": f"2026-06-{10 + i:02d}T21:00:00+00:00", "portfolio_value": v}
         for i, v in enumerate(values)
     ]
+
+
+def test_sharpe_uses_risk_free_rate():
+    # Constant positive daily returns still have zero excess if equal to rf.
+    rf_daily = RISK_FREE_RATE_ANNUAL / TRADING_DAYS_PER_YEAR
+    assert _sharpe([rf_daily, rf_daily, rf_daily, rf_daily]) is None  # zero std
+    # Mean above rf → positive Sharpe; below rf → negative.
+    above = [rf_daily + 0.001] * 5 + [rf_daily + 0.002] * 5
+    below = [rf_daily - 0.001] * 5 + [rf_daily - 0.002] * 5
+    assert _sharpe(above) > 0
+    assert _sharpe(below) < 0
+    assert RISK_FREE_RATE_ANNUAL == 0.0425
 
 
 def test_head_to_head_metrics_aligns_and_computes_sharpe():
@@ -21,6 +39,29 @@ def test_head_to_head_metrics_aligns_and_computes_sharpe():
     assert out["comparison"]["sign_convention"] == "internal_minus_baseline"
     assert "internal_minus_baseline" in out["comparison"]
     assert out["comparison"]["mean_daily_alpha_pct"] is not None
+    assert out["comparison"]["annualized_alpha_pct"] is not None
+    assert out["comparison"]["risk_free_rate_annual"] == 0.0425
+    assert out["baseline"]["mean_daily_return_pct"] is not None
+    assert out["baseline"]["annualized_return_pct"] is not None
+    assert out["baseline"]["annualized_cumulative_return_pct"] is not None
+    assert out["internal"]["mean_daily_return_pct"] is not None
+    assert out["internal"]["annualized_return_pct"] is not None
+    assert out["internal"]["annualized_cumulative_return_pct"] is not None
+    # Annualized alpha = mean daily alpha × 252 (rounded to 3 dp)
+    assert out["comparison"]["annualized_alpha_pct"] == round(
+        out["comparison"]["mean_daily_alpha_pct"] * 252, 3
+    )
+    # Compound-annualized excess ≠ mean-daily × 252 in general
+    n = out["observation_days"]
+    assert out["comparison"]["annualized_excess_return_pct"] == (
+        _annualized_cumulative_return_pct(
+            out["comparison"]["total_return_diff_pct"], n
+        )
+    )
+    assert (
+        out["comparison"]["annualized_excess_return_pct"]
+        != out["comparison"]["annualized_alpha_pct"]
+    )
     assert out["baseline"]["max_drawdown_pct"] is not None
     assert out["internal"]["max_drawdown_pct"] is not None
     assert "significance" in out["comparison"]

@@ -13,6 +13,8 @@ import numpy as np
 from scipy import stats
 
 TRADING_DAYS_PER_YEAR = 252
+# Annual risk-free rate used in Sharpe (excess return over cash).
+RISK_FREE_RATE_ANNUAL = 0.0425
 MIN_OBS_FOR_STATS = 5
 BOOTSTRAP_SAMPLES = 4000
 SIGN_CONVENTION = "internal_minus_baseline"
@@ -68,16 +70,49 @@ def _align_returns(
 
 
 def _sharpe(returns: List[float], annualize: bool = True) -> Optional[float]:
+    """Annualized Sharpe using excess returns over RISK_FREE_RATE_ANNUAL."""
     if len(returns) < 2:
         return None
     arr = np.asarray(returns, dtype=float)
     std = float(arr.std(ddof=1))
     if std == 0 or math.isnan(std):
         return None
-    sr = float(arr.mean() / std)
+    rf_daily = RISK_FREE_RATE_ANNUAL / TRADING_DAYS_PER_YEAR
+    sr = float((arr.mean() - rf_daily) / std)
     if annualize:
         sr *= math.sqrt(TRADING_DAYS_PER_YEAR)
     return round(sr, 3)
+
+
+def _mean_daily_return_pct(returns: List[float]) -> Optional[float]:
+    if not returns:
+        return None
+    return round(float(np.mean(returns)) * 100, 4)
+
+
+def _annualized_return_pct(mean_daily_return_pct: Optional[float]) -> Optional[float]:
+    """Simple annualization: mean daily % × 252 trading days."""
+    if mean_daily_return_pct is None:
+        return None
+    return round(mean_daily_return_pct * TRADING_DAYS_PER_YEAR, 3)
+
+
+def _annualized_cumulative_return_pct(
+    total_return_pct: Optional[float],
+    observation_days: int,
+) -> Optional[float]:
+    """Compound-annualize a realized cumulative return over observation_days.
+
+    (1 + r)^(252 / n) − 1, where r is total return as a decimal and n is paired days.
+    Distinct from mean-daily × 252 (run-rate annualization on the Daily delta card).
+    """
+    if total_return_pct is None or observation_days < 1:
+        return None
+    r = total_return_pct / 100.0
+    if r <= -1.0:
+        return None
+    ann = (1.0 + r) ** (TRADING_DAYS_PER_YEAR / observation_days) - 1.0
+    return round(ann * 100, 3)
 
 
 def _max_drawdown(equity_by_date: Dict[str, float]) -> Dict[str, Optional[float]]:
@@ -499,14 +534,22 @@ def _agent_metrics(
     latest_daily_return_pct: Optional[float],
 ) -> Dict[str, Any]:
     dd = _max_drawdown(equity_by_date)
+    mean_daily = _mean_daily_return_pct(returns)
+    n = len(returns)
+    total_return = _total_return_pct(equity_by_date, starting_equity)
     return {
         "daily_return_pct": latest_daily_return_pct,
+        "mean_daily_return_pct": mean_daily,
+        "annualized_return_pct": _annualized_return_pct(mean_daily),
+        "annualized_cumulative_return_pct": _annualized_cumulative_return_pct(
+            total_return, n
+        ),
         "sharpe": _sharpe(returns),
         "max_drawdown_pct": dd["max_drawdown_pct"],
         "current_drawdown_pct": dd["current_drawdown_pct"],
         "volatility_ann_pct": _volatility_ann_pct(returns),
-        "total_return_pct": _total_return_pct(equity_by_date, starting_equity),
-        "observation_days": len(returns),
+        "total_return_pct": total_return,
+        "observation_days": n,
     }
 
 
@@ -542,6 +585,7 @@ def compute_head_to_head_metrics(
 
     excess = [i - b for b, i in zip(b_rets, i_rets)]
     mean_alpha = round(float(np.mean(excess)) * 100, 4) if excess else None
+    annualized_alpha = _annualized_return_pct(mean_alpha)
     cum_alpha = (
         round((float(np.prod([1.0 + e for e in excess])) - 1.0) * 100, 3)
         if excess
@@ -567,11 +611,36 @@ def compute_head_to_head_metrics(
     total_return_diff = None
     if b_total["total_return_pct"] is not None and i_total["total_return_pct"] is not None:
         total_return_diff = round(i_total["total_return_pct"] - b_total["total_return_pct"], 3)
+    annualized_return_diff = None
+    if (
+        b_total["annualized_return_pct"] is not None
+        and i_total["annualized_return_pct"] is not None
+    ):
+        annualized_return_diff = round(
+            i_total["annualized_return_pct"] - b_total["annualized_return_pct"], 3
+        )
+    # Compound-annualize realized cumulative excess (same n as each desk's path).
+    n_obs = len(b_rets)
+    annualized_excess = _annualized_cumulative_return_pct(total_return_diff, n_obs)
+    annualized_cum_diff = None
+    if (
+        b_total["annualized_cumulative_return_pct"] is not None
+        and i_total["annualized_cumulative_return_pct"] is not None
+    ):
+        annualized_cum_diff = round(
+            i_total["annualized_cumulative_return_pct"]
+            - b_total["annualized_cumulative_return_pct"],
+            3,
+        )
 
     internal_minus_baseline = {
         "daily_delta_pct": daily_delta,
         "excess_return_pct": total_return_diff,
         "mean_daily_alpha_pct": mean_alpha,
+        "annualized_alpha_pct": annualized_alpha,
+        "annualized_return_diff_pct": annualized_return_diff,
+        "annualized_excess_return_pct": annualized_excess,
+        "annualized_cumulative_return_diff_pct": annualized_cum_diff,
         "cumulative_alpha_pct": cum_alpha,
         "sharpe_diff": sharpe_diff,
         "max_drawdown_diff_pct": dd_diff,
@@ -596,29 +665,53 @@ def compute_head_to_head_metrics(
             "daily_delta_pct": daily_delta,
             "daily_delta_basis": daily_delta_basis,
             "mean_daily_alpha_pct": mean_alpha,
+            "annualized_alpha_pct": annualized_alpha,
+            "annualized_return_diff_pct": annualized_return_diff,
+            "annualized_excess_return_pct": annualized_excess,
+            "annualized_cumulative_return_diff_pct": annualized_cum_diff,
             "cumulative_alpha_pct": cum_alpha,
             "total_return_diff_pct": total_return_diff,
             "sharpe_diff": sharpe_diff,
+            "risk_free_rate_annual": RISK_FREE_RATE_ANNUAL,
             "max_drawdown_diff_pct": dd_diff,
             "field_glossary": {
                 "daily_delta_pct": (
                     "Internal − Baseline return today (live equity vs prior close). "
-                    "Mean daily alpha uses completed paired close-to-close days only. "
-                    "Positive favors Internal, not Baseline."
+                    "Highlighted Daily delta card uses mean_daily_alpha_pct "
+                    "(paired close-to-close days). Positive favors Internal."
+                ),
+                "mean_daily_alpha_pct": (
+                    "Mean daily Internal − Baseline return over paired days "
+                    "(highlighted Daily delta value)."
+                ),
+                "annualized_alpha_pct": (
+                    "Mean daily alpha × 252 trading days (simple annualization)."
+                ),
+                "annualized_return_diff_pct": (
+                    "Internal − Baseline annualized return "
+                    "(each desk: mean daily return × 252)."
+                ),
+                "annualized_excess_return_pct": (
+                    "Compound-annualized excess return: "
+                    "(1 + excess)^(252/n) − 1 over paired days n. "
+                    "Distinct from mean-daily × 252."
+                ),
+                "annualized_cumulative_return_diff_pct": (
+                    "Internal − Baseline compound-annualized cumulative return "
+                    "(each desk: (1 + total_return)^(252/n) − 1)."
                 ),
                 "total_return_diff_pct": (
                     "Internal − Baseline total return vs starting equity. "
                     "Positive favors Internal, not Baseline."
                 ),
                 "sharpe_diff": (
-                    "Internal Sharpe − Baseline Sharpe. Positive favors Internal."
+                    f"Internal Sharpe − Baseline Sharpe "
+                    f"(excess over {RISK_FREE_RATE_ANNUAL * 100:.2f}% annual risk-free). "
+                    "Positive favors Internal."
                 ),
                 "max_drawdown_diff_pct": (
                     "Internal max drawdown − Baseline max drawdown (pp). "
                     "Negative means Internal had a shallower drawdown."
-                ),
-                "mean_daily_alpha_pct": (
-                    "Mean daily Internal − Baseline return over paired days."
                 ),
             },
             "significance": {

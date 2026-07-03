@@ -2052,6 +2052,19 @@
     .perf-metric-split .split-item strong { font-weight: 700; }
     .perf-metric-split .split-item.baseline strong { color: var(--baseline); }
     .perf-metric-split .split-item.internal strong { color: var(--internal); }
+    .perf-metric-split .split-item .split-ann {
+      color: var(--subtle);
+      font-weight: 600;
+      margin-left: 0.15rem;
+    }
+    .perf-metric-live {
+      font-size: 0.68rem;
+      margin-top: 0.4rem;
+      color: var(--subtle);
+      font-family: var(--mono);
+      line-height: 1.4;
+    }
+    .perf-metric-live strong { font-weight: 700; color: var(--muted); }
     .perf-metric-foot {
       display: flex;
       flex-direction: column;
@@ -3294,6 +3307,7 @@
     };
     const fmtUsd = (n) => n == null ? "n/a" : `$${Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     const fmtPct = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
+    const fmtPct4 = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(4)}%`;
     const DEFAULT_RANGE_HOURS = 720;
     const formatRangeLabel = (hours) => {
       const h = Number(hours);
@@ -3329,8 +3343,12 @@
         <span class="op">−</span>
         <span class="desk baseline">Baseline</span>
       </div>`;
-    const splitDesk = (desk, label, value, valueCls = "") =>
-      `<span class="split-item ${desk}">${label} <strong class="${valueCls}">${value}</strong></span>`;
+    const splitDesk = (desk, label, value, valueCls = "", annValue = null) => {
+      const ann = annValue == null
+        ? ""
+        : `<span class="split-ann">· ann ${annValue}</span>`;
+      return `<span class="split-item ${desk}">${label} <strong class="${valueCls}">${value}</strong>${ann}</span>`;
+    };
     const renderPowerHint = (sig) => {
       if (!sig) return "";
       if (sig.significant_95) {
@@ -3871,7 +3889,10 @@
 
       const dailyDelta = cmp.daily_delta_pct;
       const meanAlpha = cmp.mean_daily_alpha_pct;
+      const annAlpha = cmp.annualized_alpha_pct ?? cmp.annualized_return_diff_pct;
       const sharpeDiff = cmp.sharpe_diff;
+      const rfAnn = cmp.risk_free_rate_annual;
+      const rfLabel = rfAnn == null ? "4.25%" : `${(Number(rfAnn) * 100).toFixed(2)}%`;
       const ddDiff = cmp.max_drawdown_diff_pct;
       const totalReturnDiff = cmp.total_return_diff_pct ?? ((i.total_return_pct || 0) - (b.total_return_pct || 0));
       const path = metrics.path_comparison || {};
@@ -3897,21 +3918,22 @@
             ${metricFormulaMinus()}
             <div class="perf-metric-value ${pctClass(totalReturnDiff)}">${fmtPct(totalReturnDiff)}</div>
             <div class="perf-metric-split">
-              ${splitDesk("baseline", "Baseline", fmtPct(b.total_return_pct), pctClass(b.total_return_pct))}
-              ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct))}
+              ${splitDesk("baseline", "Baseline", fmtPct(b.total_return_pct), pctClass(b.total_return_pct), b.annualized_cumulative_return_pct == null ? null : fmtPct(b.annualized_cumulative_return_pct))}
+              ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct), i.annualized_cumulative_return_pct == null ? null : fmtPct(i.annualized_cumulative_return_pct))}
             </div>
-            <div class="perf-metric-sub">$100k start · cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)}</div>
+            <div class="perf-metric-sub">$100k start · cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)} · ann. excess ${fmtPct(cmp.annualized_excess_return_pct)}</div>
             ${renderSigFoot(sig.total_return_diff)}
           </article>
           <article class="perf-metric-card">
             <div class="perf-metric-title">Daily delta</div>
             ${metricFormulaMinus()}
-            <div class="perf-metric-value ${pctClass(dailyDelta)}">${fmtPct(dailyDelta)}</div>
+            <div class="perf-metric-value ${pctClass(meanAlpha)}">${fmtPct(meanAlpha)}</div>
             <div class="perf-metric-split">
-              ${splitDesk("baseline", "Baseline", fmtPct(b.daily_return_pct), pctClass(b.daily_return_pct))}
-              ${splitDesk("internal", "Internal", fmtPct(i.daily_return_pct), pctClass(i.daily_return_pct))}
+              ${splitDesk("baseline", "Baseline", `avg ${fmtPct4(b.mean_daily_return_pct)}`, pctClass(b.mean_daily_return_pct), b.annualized_return_pct == null ? null : fmtPct(b.annualized_return_pct))}
+              ${splitDesk("internal", "Internal", `avg ${fmtPct4(i.mean_daily_return_pct)}`, pctClass(i.mean_daily_return_pct), i.annualized_return_pct == null ? null : fmtPct(i.annualized_return_pct))}
             </div>
-            <div class="perf-metric-sub">Today (live) · mean daily alpha ${fmtPct(meanAlpha)} (paired closes)</div>
+            <div class="perf-metric-sub">Mean daily alpha (paired closes) · ann. alpha ${fmtPct(annAlpha)}</div>
+            <div class="perf-metric-live">Live today Baseline <strong class="${pctClass(b.daily_return_pct)}">${fmtPct(b.daily_return_pct)}</strong> · Internal <strong class="${pctClass(i.daily_return_pct)}">${fmtPct(i.daily_return_pct)}</strong> · Δ <strong class="${pctClass(dailyDelta)}">${fmtPct(dailyDelta)}</strong></div>
             ${renderSigFoot(sig.daily_alpha)}
           </article>
           <article class="perf-metric-card">
@@ -3922,7 +3944,7 @@
               ${splitDesk("baseline", "Baseline", fmtSharpe(b.sharpe))}
               ${splitDesk("internal", "Internal", fmtSharpe(i.sharpe))}
             </div>
-            <div class="perf-metric-sub">Ann. vol ${b.volatility_ann_pct ?? "—"}% vs ${i.volatility_ann_pct ?? "—"}%</div>
+            <div class="perf-metric-sub">rf ${rfLabel} · ann. vol ${b.volatility_ann_pct ?? "—"}% vs ${i.volatility_ann_pct ?? "—"}%</div>
             ${renderSigFoot(sig.sharpe_diff)}
           </article>
           <article class="perf-metric-card">
@@ -3990,9 +4012,11 @@
 
       const metrics = data.metrics || {};
       const cmp = metrics.comparison || {};
-      const alphaHint = cmp.daily_delta_pct != null
-        ? ` · daily delta ${fmtPct(cmp.daily_delta_pct)} (live)`
-        : "";
+      const alphaHint = cmp.mean_daily_alpha_pct != null
+        ? ` · daily alpha ${fmtPct(cmp.mean_daily_alpha_pct)}`
+        : (cmp.daily_delta_pct != null
+          ? ` · live Δ ${fmtPct(cmp.daily_delta_pct)}`
+          : "");
       const alphaSig = cmp.significance?.daily_alpha;
       const sigHint = alphaSig && !alphaSig.insufficient_data && alphaSig.p_value != null
         ? (alphaSig.significant_95 ? " · α = 0.05" : ` · p = ${Number(alphaSig.p_value).toFixed(3)}`)
