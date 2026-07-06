@@ -347,6 +347,17 @@ class DiscoveryAgent(BaseAgent):
         Overnight workflows call this via ``_ensure_discovery_fresh()`` (try discovery,
         fall back to GCS cache on failure, then continue without enrichment).
         """
+        if not config.DATABENTO_DISCOVERY_ENABLED:
+            data = load_approved_sources()
+            if data:
+                self.log_action(
+                    "DataBento discovery disabled — using cached approved sources "
+                    f"from {data.get('generated_at', 'unknown')}"
+                )
+                return data
+            self.log_action("DataBento discovery disabled and no cached sources")
+            return self._save_empty_result(error="discovery_disabled")
+
         if force or is_stale():
             reason = "forced refresh" if force else "missing or stale approved sources"
             self.log_action(f"Running discovery ({reason})")
@@ -363,5 +374,8 @@ class DiscoveryAgent(BaseAgent):
         return data
 
     async def execute(self) -> bool:
+        if not config.DATABENTO_DISCOVERY_ENABLED:
+            self.log_action("DataBento discovery disabled — skipping execute()")
+            return True
         await self.run_daily_discovery()
         return True

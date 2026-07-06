@@ -3927,7 +3927,7 @@
               ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct), i.annualized_cumulative_return_pct == null ? null : fmtPct(i.annualized_cumulative_return_pct), fmtBeta(i.beta_spy))}
             </div>
             <div class="perf-metric-sub">$100k start · cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)} · ann. excess ${fmtPct(cmp.annualized_excess_return_pct)}</div>
-            <div class="perf-metric-live">SPY ann. <strong class="${pctClass(spyBench && spyBench.annualized_return_pct)}">${spyBench ? fmtPct(spyBench.annualized_return_pct) : "n/a"}</strong> since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
+            <div class="perf-metric-live">SPY <strong class="${pctClass(spyBench && spyBench.total_return_pct)}">${spyBench ? fmtPct(spyBench.total_return_pct) : "n/a"}</strong> · ann <strong class="${pctClass(spyBench && spyBench.annualized_return_pct)}">${spyBench ? fmtPct(spyBench.annualized_return_pct) : "n/a"}</strong> since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.total_return_diff)}
           </article>
           <article class="perf-metric-card">

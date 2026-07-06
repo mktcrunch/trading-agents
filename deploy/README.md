@@ -247,6 +247,7 @@ Alternatives: set `"skip_calendar": true` instead of `"force"`, or include `forc
 - `ALPACA_API_KEY_INTERNAL`, `ALPACA_SECRET_KEY_INTERNAL`
 - `GEMINI_API_KEY`
 - `DATABENTO_API_KEY` (discovery)
+- `DATABENTO_DISCOVERY_ENABLED` — set `false` on Cloud Run to pause paid DataBento scouting; internal keeps using cached `approved_datasources.json` from GCS
 - `SCHEDULER_SECRET` (HTTP job auth)
 - `GCS_RISK_STATE_BUCKET` (trailing stop persistence on Cloud Run)
 - `DB_*` (optional — only if using Postgres features)

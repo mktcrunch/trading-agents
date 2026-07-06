@@ -35,6 +35,21 @@ logger = setup_logger(__name__)
 
 async def run_discovery(force: bool = False, traced: bool = True) -> bool:
     """Run DataBento discovery pipeline."""
+    if not config.DATABENTO_DISCOVERY_ENABLED:
+        logger.info(
+            "DataBento discovery disabled (DATABENTO_DISCOVERY_ENABLED=false) — "
+            "using cached approved sources only"
+        )
+        if traced:
+            start_trace("discovery", system="discovery")
+            end_trace(
+                "discovery",
+                system="discovery",
+                success=True,
+                summary={"skipped": True, "reason": "discovery_disabled"},
+            )
+        return True
+
     if traced:
         start_trace("discovery", system="discovery")
     logger.info("=" * 80)

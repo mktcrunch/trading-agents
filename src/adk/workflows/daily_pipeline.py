@@ -30,6 +30,30 @@ async def _ensure_discovery_fresh() -> Dict[str, Any]:
     Order: run discovery (as before, when stale/missing) → on failure use GCS cache → else skip.
     Same behavior for scheduled and force overnight runs.
     """
+    from src.discovery.approved_sources import (
+        discovery_run_meta,
+        has_usable_cached_sources,
+        is_stale,
+        load_approved_sources,
+    )
+
+    if not config.DATABENTO_DISCOVERY_ENABLED:
+        cached = load_approved_sources()
+        if has_usable_cached_sources(cached):
+            logger.info(
+                "[daily_pipeline] DataBento discovery disabled — using cached sources from %s",
+                cached.get("generated_at", "unknown"),
+            )
+            meta = discovery_run_meta(cached, mode="cached")
+            meta["refreshed"] = False
+            meta["discovery_disabled"] = True
+            return meta
+        logger.info(
+            "[daily_pipeline] DataBento discovery disabled; no cached sources — "
+            "continuing without DataBento enrichment"
+        )
+        return discovery_run_meta({}, mode="skipped", error="discovery_disabled")
+
     from src.agents.discovery_agent import DiscoveryAgent
     from src.discovery.approved_sources import (
         discovery_run_meta,

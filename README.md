@@ -243,6 +243,7 @@ Environment variables (`.env`):
 | `GEMINI_FLASH_MODEL` | Default `gemini-3.5-flash` |
 | `GEMINI_VERTEX_LOCATION` | Default `global` (Vertex Gemini endpoint; separate from `GCP_REGION`) |
 | `DATABENTO_API_KEY` | Discovery pipeline |
+| `DATABENTO_DISCOVERY_ENABLED` | `true` (default). Set `false` to skip catalog scans and paid probes; internal uses cached `approved_datasources.json` from GCS |
 | `DB_*` | PostgreSQL (optional) |
 | `SCHEDULER_SECRET` | Cloud Run job auth |
 | `GCS_RISK_STATE_BUCKET`, `GCS_AUDIT_BUCKET` | Cloud Run persistence |

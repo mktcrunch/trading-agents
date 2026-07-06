@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src import config
 from src.adk.workflows.daily_pipeline import _ensure_discovery_fresh
 from src.discovery.approved_sources import (
     discovery_run_meta,
@@ -76,6 +77,26 @@ async def test_ensure_discovery_fresh_cache_fallback_on_failure():
                 meta = await _ensure_discovery_fresh()
     assert meta["mode"] == "cache_fallback"
     assert meta["success"] is True
+    assert meta["approved_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_discovery_fresh_skips_when_discovery_disabled():
+    cached = {
+        "generated_at": "2026-06-20T00:00:00+00:00",
+        "sources": [{"id": "feat1"}],
+        "ticker_features": {"SPY": {"x": 1.0}},
+        "summary": {"approved_count": 1, "tickers_with_features": 1},
+    }
+    with patch.object(config, "DATABENTO_DISCOVERY_ENABLED", False):
+        with patch(
+            "src.discovery.approved_sources.load_approved_sources",
+            return_value=cached,
+        ):
+            meta = await _ensure_discovery_fresh()
+    assert meta["mode"] == "cached"
+    assert meta["success"] is True
+    assert meta.get("discovery_disabled") is True
     assert meta["approved_count"] == 1
 
 

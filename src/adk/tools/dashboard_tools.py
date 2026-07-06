@@ -1166,9 +1166,9 @@ def format_performance_metrics_report(
     spy = (metrics.get("benchmark") or {}).get("spy") or {}
     if spy.get("annualized_return_pct") is not None:
         lines.append(
-            f"    SPY ann. (Alpaca since {spy.get('start_label') or spy.get('start_date')}): "
-            f"{spy.get('annualized_return_pct')}% "
-            f"(total {spy.get('total_return_pct')}% over {spy.get('observation_days')} days)"
+            f"    SPY (Alpaca since {spy.get('start_label') or spy.get('start_date')}): "
+            f"total {spy.get('total_return_pct')}% · ann {spy.get('annualized_return_pct')}% "
+            f"({spy.get('observation_days')} trading days)"
         )
     lines.extend([
         _sig_line("Excess return test", sig.get("total_return_diff")),

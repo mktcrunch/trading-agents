@@ -140,6 +140,10 @@ else:
 # DATABENTO DATA DISCOVERY
 # ============================================================================
 DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY")
+# Set false to skip catalog scans / paid probes; internal still uses cached GCS sources.
+DATABENTO_DISCOVERY_ENABLED = (
+    os.getenv("DATABENTO_DISCOVERY_ENABLED", "true").lower() == "true"
+)
 
 # ============================================================================
 # TRADING UNIVERSE & CONFIGURATION
