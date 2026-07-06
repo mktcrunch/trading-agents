@@ -45,6 +45,53 @@ def _mc_cache_set(key: str, data: Dict[str, Any]) -> None:
     _mc_cache[key] = (time.time() + ttl, data)
 
 
+def _confidence_is_empty(confidence: Any) -> bool:
+    """True when MC returned no usable confidence label/score."""
+    if confidence is None:
+        return True
+    if isinstance(confidence, (int, float)):
+        return confidence == 0
+    if isinstance(confidence, str):
+        label = confidence.strip()
+        if not label:
+            return True
+        if label.lower() in ("unknown", "none", "0", "0.0"):
+            return True
+    return False
+
+
+def _parse_target_delta_numeric(ai_est: Dict[str, Any]) -> Optional[float]:
+    target_delta_str = ai_est.get("target_delta_pct")
+    if target_delta_str is None:
+        return None
+    try:
+        return float(str(target_delta_str).replace("%", "").strip())
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _target_value_missing(ai_est: Dict[str, Any]) -> bool:
+    """True when MC returned no target delta and no target price."""
+    target_price = ai_est.get("target_price")
+    has_price = target_price not in (None, "", "null")
+    delta = _parse_target_delta_numeric(ai_est)
+    if delta is None and not has_price:
+        return True
+    if delta == 0 and not has_price:
+        return True
+    return False
+
+
+def mc_estimate_needs_retry(ai_est: Optional[Dict[str, Any]]) -> bool:
+    """Retry when MC HTTP succeeded but the ai_estimate payload is empty."""
+    if not ai_est:
+        return True
+    return (
+        _confidence_is_empty(ai_est.get("confidence"))
+        or _target_value_missing(ai_est)
+    )
+
+
 def request_with_retry(
     method: str,
     url: str,
@@ -125,12 +172,21 @@ class MarketCrunchClient:
             "Content-Type": "application/json",
         }
 
-    def _get_json(self, path: str, ticker: str, label: str) -> Optional[Dict[str, Any]]:
+    def _get_json(
+        self,
+        path: str,
+        ticker: str,
+        label: str,
+        *,
+        use_cache: bool = True,
+        cache_result: bool = True,
+    ) -> Optional[Dict[str, Any]]:
         cache_key = _mc_cache_key(path, ticker)
-        cached = _mc_cache_get(cache_key)
-        if cached is not None:
-            logger.info(f"✓ MC cache hit for {label} {ticker}")
-            return cached
+        if use_cache:
+            cached = _mc_cache_get(cache_key)
+            if cached is not None:
+                logger.info(f"✓ MC cache hit for {label} {ticker}")
+                return cached
 
         url = f"{self.api_url}{path}"
         params = {"ticker": ticker.upper()}
@@ -145,7 +201,8 @@ class MarketCrunchClient:
         if response is None:
             return None
         data = response.json()
-        _mc_cache_set(cache_key, data)
+        if cache_result:
+            _mc_cache_set(cache_key, data)
         return data
 
     def get_ai_estimates(self, ticker: str) -> Optional[Dict[str, Any]]:
@@ -159,32 +216,70 @@ class MarketCrunchClient:
         - weekly_range: price predictions for the week
         """
         try:
-            data = self._get_json("/analyze", ticker, "analyze")
-            if data is None:
-                return None
+            max_retries = config.MC_API_MAX_RETRIES
+            backoff = config.MC_API_RETRY_BACKOFF_SEC
+            cache_key = _mc_cache_key("/analyze", ticker)
 
-            # Extract and parse key prediction data
-            ai_est = data.get('ai_estimate', {})
-            target_delta_str = ai_est.get('target_delta_pct', '0%')
+            cached = _mc_cache_get(cache_key)
+            if cached is not None:
+                ai_est = cached.get("ai_estimate") or {}
+                if not mc_estimate_needs_retry(ai_est):
+                    return cached
 
-            # Parse target_delta: convert "0.00%" string to numeric value
-            try:
-                target_delta_numeric = float(target_delta_str.replace('%', '').strip())
-            except (ValueError, AttributeError):
-                target_delta_numeric = 0.0
+            for attempt in range(1, max_retries + 1):
+                data = self._get_json(
+                    "/analyze",
+                    ticker,
+                    "analyze",
+                    use_cache=False,
+                    cache_result=False,
+                )
+                if data is None:
+                    if attempt < max_retries:
+                        wait = backoff * attempt
+                        logger.warning(
+                            f"MC analyze {ticker}: no response, "
+                            f"retry {attempt}/{max_retries} in {wait:.0f}s"
+                        )
+                        time.sleep(wait)
+                        continue
+                    return None
 
-            confidence = ai_est.get('confidence', 'Unknown')
+                ai_est = data.get("ai_estimate") or {}
+                if mc_estimate_needs_retry(ai_est):
+                    if attempt < max_retries:
+                        wait = backoff * attempt
+                        logger.warning(
+                            f"MC analyze {ticker}: incomplete estimate "
+                            f"(confidence={ai_est.get('confidence')!r}, "
+                            f"target_delta_pct={ai_est.get('target_delta_pct')!r}), "
+                            f"retry {attempt}/{max_retries} in {wait:.0f}s"
+                        )
+                        time.sleep(wait)
+                        continue
+                    logger.error(
+                        f"MC analyze {ticker}: incomplete estimate after "
+                        f"{max_retries} attempts"
+                    )
+                    return None
 
-            logger.info(
-                f"✓ Fetched complete analysis for {ticker}: "
-                f"target={target_delta_numeric:.2f}%, confidence={confidence}"
-            )
+                target_delta_numeric = _parse_target_delta_numeric(ai_est)
+                if target_delta_numeric is None:
+                    target_delta_numeric = 0.0
+                confidence = ai_est.get("confidence", "Unknown")
 
-            # Store parsed numeric value back in data for easier access
-            if 'ai_estimate' in data:
-                data['ai_estimate']['target_delta_numeric'] = target_delta_numeric
+                logger.info(
+                    f"✓ Fetched complete analysis for {ticker}: "
+                    f"target={target_delta_numeric:.2f}%, confidence={confidence}"
+                )
 
-            return data
+                if "ai_estimate" in data:
+                    data["ai_estimate"]["target_delta_numeric"] = target_delta_numeric
+
+                _mc_cache_set(cache_key, data)
+                return data
+
+            return None
 
         except Exception as e:
             logger.error(f"Unexpected error fetching analysis for {ticker}: {e}")
