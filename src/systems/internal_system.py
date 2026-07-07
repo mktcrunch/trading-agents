@@ -210,7 +210,7 @@ class InternalSystem:
         self.logger.info(f"Chased {len(new_orders)} unfilled orders")
 
     async def eod_position_check(self):
-        """EOD check: trim losers if next-day confidence < 0.55 (4:10 PM EST)"""
+        """EOD check: trim losers if next-day confidence < 0.55 (2:00 PM PT)"""
         self.logger.info("\n[Step EOD] Position check at market close...")
         from src.apis.marketcrunch_client import MarketCrunchClient
         from src.agents.ledger_utils import mc_confidence_score

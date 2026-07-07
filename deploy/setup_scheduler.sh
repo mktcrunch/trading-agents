@@ -39,12 +39,13 @@ create_or_update_job() {
   local engine_id="$3"
   local query="$4"
   local attempt_deadline="${5:-180s}"
+  local time_zone="${6:-America/New_York}"
 
   local uri="https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${REGION}/reasoningEngines/${engine_id}:streamQuery"
   local body="{\"classMethod\": \"stream_query\", \"input\": {\"message\": \"${query}\", \"user_id\": \"scheduler\"}}"
 
   echo "==> Configuring job: ${job_name}"
-  echo "    Schedule: ${schedule}"
+  echo "    Schedule: ${schedule} (${time_zone})"
   echo "    Query:    ${query}"
   echo "    Deadline: ${attempt_deadline}"
 
@@ -63,7 +64,7 @@ create_or_update_job() {
     --location="${REGION}" \
     --project="${PROJECT}" \
     --schedule="${schedule}" \
-    --time-zone="America/New_York" \
+    --time-zone="${time_zone}" \
     --uri="${uri}" \
     --http-method=POST \
     --headers="Content-Type=application/json" \
@@ -75,9 +76,9 @@ create_or_update_job() {
   echo ""
 }
 
-# 1. Overnight Trading Workflow (4:10 PM ET Mon-Fri) — 900s deadline (workflow + Gemini can run 5–30 min)
-create_or_update_job "baseline-overnight-direct" "10 16 * * 1-5" "${BASELINE_ID}" "Run daily trading workflow." "900s"
-create_or_update_job "internal-overnight-direct" "10 16 * * 1-5" "${INTERNAL_ID}" "Run daily trading workflow." "900s"
+# 1. Overnight Trading Workflow (2:00 PM PT Mon-Fri) — 900s deadline (workflow + Gemini can run 5–30 min)
+create_or_update_job "baseline-overnight-direct" "0 14 * * 1-5" "${BASELINE_ID}" "Run daily trading workflow." "900s" "America/Los_Angeles"
+create_or_update_job "internal-overnight-direct" "0 14 * * 1-5" "${INTERNAL_ID}" "Run daily trading workflow." "900s" "America/Los_Angeles"
 
 # 2. Intraday Risk Check (Every 15 Minutes, 9:30 AM – 4:00 PM ET Mon-Fri)
 create_or_update_job "baseline-risk-direct" "*/15 9-15 * * 1-5" "${BASELINE_ID}" "Run intraday risk check."

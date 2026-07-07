@@ -9,7 +9,7 @@ Usage:
     python main.py --internal   # Run discovery (if stale) + internal system
     python main.py --internal --dry-run
     python main.py --discovery  # Run DataBento discovery only
-    python main.py --overnight  # EOD workflow for both systems (4:10 PM job)
+    python main.py --overnight  # EOD workflow for both systems (2:00 PM PT job)
     python main.py --risk       # Intraday risk check for both accounts
     python main.py --serve      # Cloud Run HTTP server (scheduler triggers)
     python main.py --reconcile-orders  # Cancel duplicate OPG orders (both accounts)
@@ -160,7 +160,7 @@ async def run_internal_only(dry_run: bool = False):
 
 async def run_overnight_job(dry_run: bool = False):
     """
-    Scheduled EOD job (~4:10 PM ET): discovery + both systems place overnight OPG orders.
+    Scheduled EOD job (~2:00 PM PT): discovery + both systems place overnight OPG orders.
     """
     start_trace("overnight", system="both", meta={"dry_run": dry_run})
     logger.info("=" * 80)

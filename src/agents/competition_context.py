@@ -94,7 +94,7 @@ COMPETITOR_NOTES = {
 COMPETITION_INFO_BOUNDARY = (
     "Competitor snapshot shows filled Alpaca positions and account values only — "
     "NOT pending or unfilled overnight orders. Both agents submit overnight orders "
-    "at the same time (~4:10 PM ET). The competitor may deploy new exposure tonight "
+    "at the same time (~2:00 PM PT). The competitor may deploy new exposure tonight "
     "even if their current book looks static; do not infer their intent from cash alone."
 )
 

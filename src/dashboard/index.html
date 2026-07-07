@@ -2640,12 +2640,12 @@
           <div class="arch-node scheduler">
             <div class="name">baseline-overnight-direct</div>
             <div class="desc">Daily trading workflow</div>
-            <div class="tag">4:10 PM ET · Mon-Fri</div>
+            <div class="tag">2:00 PM PT · Mon-Fri</div>
           </div>
           <div class="arch-node scheduler">
             <div class="name">internal-overnight-direct</div>
             <div class="desc">Daily trading workflow</div>
-            <div class="tag">4:10 PM ET · Mon-Fri</div>
+            <div class="tag">2:00 PM PT · Mon-Fri</div>
           </div>
           <div class="arch-node scheduler">
             <div class="name">*-risk-direct</div>
@@ -2763,14 +2763,14 @@
         <tbody>
           <tr>
             <td><code>baseline-overnight-direct</code></td>
-            <td>4:10 PM Mon-Fri</td>
+            <td>2:00 PM PT Mon-Fri</td>
             <td>Baseline Engine</td>
             <td>Run daily trading workflow.</td>
             <td><code>run_daily_trading_workflow</code></td>
           </tr>
           <tr>
             <td><code>internal-overnight-direct</code></td>
-            <td>4:10 PM Mon-Fri</td>
+            <td>2:00 PM PT Mon-Fri</td>
             <td>Internal Engine</td>
             <td>Run daily trading workflow.</td>
             <td><code>run_daily_trading_workflow</code></td>
@@ -2825,7 +2825,7 @@
 
     <div class="arch-cmp-panel">
       <p class="arch-cmp-lead">
-        Same fixed sequence every 4:10 PM ET run — Baseline and Internal share steps 1–4 &amp; 6–7; Internal adds discovery + MC enrichment at signal time.
+        Same fixed sequence every 2:00 PM PT run — Baseline and Internal share steps 1–4 &amp; 6–7; Internal adds discovery + MC enrichment at signal time.
       </p>
       <div class="arch-flow-steps" aria-label="Overnight pipeline steps">
         <span class="arch-flow-step">1 · Hydrate</span><span class="arch-flow-arrow">→</span>
@@ -2950,7 +2950,7 @@
       <div class="arch-wf">
         <div class="arch-wf-head">
           <h4>Overnight Orders</h4>
-          <span class="arch-wf-cron">daily · 4:10 PM ET</span>
+          <span class="arch-wf-cron">daily · 2:00 PM PT</span>
         </div>
         <div class="arch-wf-body">
           <div class="arch-step"><span class="arch-step-num">0</span><span class="arch-step-text"><strong>Scheduler intercept</strong>: <code>before_agent_callback</code> routes message to <code>run_daily_trading_workflow</code></span></div>
@@ -3652,11 +3652,21 @@
 
     function annotatePlacementStatus(events, rawEvents, system) {
       const placed = new Map();
+      const riskRejected = new Set();
       for (const e of rawEvents || []) {
-        if (e.event_type !== "order_placed") continue;
-        const p = e.payload || {};
-        const key = orderPlacementKey(e.trace_id, p.ticker, p.side);
-        placed.set(key, p);
+        if (e.event_type === "order_placed") {
+          const p = e.payload || {};
+          const key = orderPlacementKey(e.trace_id, p.ticker, p.side);
+          placed.set(key, p);
+          continue;
+        }
+        if (e.event_type === "risk_rejected") {
+          const rationale = String(e.action || "").trim();
+          const tickerMatch = rationale.match(/^([A-Z][A-Z0-9.-]*):/);
+          if (tickerMatch) {
+            riskRejected.add(`${e.trace_id || ""}|${tickerMatch[1].toUpperCase()}`);
+          }
+        }
       }
       return (events || []).map(ev => {
         if (ev._kind !== "signal") return ev;
@@ -3674,7 +3684,10 @@
             _meta: [ev._meta, `Placed on Alpaca${price}${status}`].filter(Boolean).join(" · "),
           };
         }
-        const skipNote = "Not placed · Kelly/MC sizing 0%";
+        const blockedByRisk = riskRejected.has(`${ev.trace_id || ""}|${ev._ticker}`);
+        const skipNote = system === "internal" && !blockedByRisk
+          ? "Not placed · Kelly/MC sizing 0%"
+          : "Not placed";
         return {
           ...ev,
           _placementStatus: "Not placed",
@@ -3940,6 +3953,7 @@
             </div>
             <div class="perf-metric-sub">Mean daily alpha (paired closes) · ann. alpha ${fmtPct(annAlpha)}</div>
             <div class="perf-metric-live">Live today Baseline <strong class="${pctClass(b.daily_return_pct)}">${fmtPct(b.daily_return_pct)}</strong> · Internal <strong class="${pctClass(i.daily_return_pct)}">${fmtPct(i.daily_return_pct)}</strong> · Δ <strong class="${pctClass(dailyDelta)}">${fmtPct(dailyDelta)}</strong></div>
+            <div class="perf-metric-live">SPY avg <strong class="${pctClass(spyBench && spyBench.mean_daily_return_pct)}">${spyBench ? fmtPct4(spyBench.mean_daily_return_pct) : "n/a"}</strong>${spyBench && spyBench.annualized_mean_return_pct != null ? ` · ann <strong class="${pctClass(spyBench.annualized_mean_return_pct)}">${fmtPct(spyBench.annualized_mean_return_pct)}</strong>` : ""} since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.daily_alpha)}
           </article>
           <article class="perf-metric-card">
@@ -3951,6 +3965,7 @@
               ${splitDesk("internal", "Internal", fmtSharpe(i.sharpe))}
             </div>
             <div class="perf-metric-sub">rf ${rfLabel} · ann. vol ${b.volatility_ann_pct ?? "—"}% vs ${i.volatility_ann_pct ?? "—"}%</div>
+            <div class="perf-metric-live">SPY Sharpe <strong>${spyBench && spyBench.sharpe != null ? fmtSharpe(spyBench.sharpe) : "n/a"}</strong> since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.sharpe_diff)}
           </article>
           <article class="perf-metric-card">
@@ -3962,6 +3977,7 @@
               ${splitDesk("internal", "Internal", fmtDrawdown(i.max_drawdown_pct))}
             </div>
             <div class="perf-metric-sub">Current DD ${fmtDrawdown(b.current_drawdown_pct)} vs ${fmtDrawdown(i.current_drawdown_pct)}</div>
+            <div class="perf-metric-live">SPY max DD <strong class="neg">${spyBench ? fmtDrawdown(spyBench.max_drawdown_pct) : "n/a"}</strong>${spyBench && spyBench.current_drawdown_pct != null ? ` · current <strong class="neg">${fmtDrawdown(spyBench.current_drawdown_pct)}</strong>` : ""} since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.max_drawdown_diff)}
           </article>
         </div>`;

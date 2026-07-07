@@ -1168,7 +1168,8 @@ def format_performance_metrics_report(
         lines.append(
             f"    SPY (Alpaca since {spy.get('start_label') or spy.get('start_date')}): "
             f"total {spy.get('total_return_pct')}% · ann {spy.get('annualized_return_pct')}% "
-            f"({spy.get('observation_days')} trading days)"
+            f"(avg daily {spy.get('mean_daily_return_pct')}% · Sharpe {spy.get('sharpe')} · "
+            f"max DD {spy.get('max_drawdown_pct')}%)"
         )
     lines.extend([
         _sig_line("Excess return test", sig.get("total_return_diff")),

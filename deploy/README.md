@@ -89,7 +89,7 @@ Checks requirements, local ADK `sub_agents` tree, and live Reasoning Engine REST
 ## Architecture
 
 ```
-Cloud Scheduler (4:10 PM ET)  ──POST──►  /jobs/overnight
+Cloud Scheduler (2:00 PM PT)  ──POST──►  /jobs/overnight
                                               │
                                               ├─ discovery (if stale; cache fallback on failure)
                                               ├─ baseline → OPG limit orders

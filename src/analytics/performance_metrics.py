@@ -175,6 +175,15 @@ def _spy_benchmark_from_closes(
         return None
     total_return_pct = round((end_close / start_close - 1.0) * 100, 3)
     observation_days = len(points) - 1
+    spy_rets: List[float] = []
+    for i in range(1, len(points)):
+        c0 = points[i - 1][1]
+        c1 = points[i][1]
+        if c0 > 0:
+            spy_rets.append((c1 - c0) / c0)
+    spy_eq = {d: c for d, c in points}
+    mean_daily = _mean_daily_return_pct(spy_rets)
+    dd = _max_drawdown(spy_eq)
     return {
         "ticker": "SPY",
         "source": "alpaca",
@@ -187,6 +196,12 @@ def _spy_benchmark_from_closes(
         "annualized_return_pct": _annualized_cumulative_return_pct(
             total_return_pct, observation_days
         ),
+        "mean_daily_return_pct": mean_daily,
+        "annualized_mean_return_pct": _annualized_return_pct(mean_daily),
+        "sharpe": _sharpe(spy_rets),
+        "max_drawdown_pct": dd["max_drawdown_pct"],
+        "current_drawdown_pct": dd["current_drawdown_pct"],
+        "volatility_ann_pct": _volatility_ann_pct(spy_rets),
         "observation_days": observation_days,
     }
 

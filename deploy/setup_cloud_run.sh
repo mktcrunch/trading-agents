@@ -104,6 +104,7 @@ _upsert_scheduler_job() {
   local job_name="$1"
   local schedule="$2"
   local uri="$3"
+  local time_zone="${4:-America/New_York}"
 
   local -a create_flags=(--http-method POST --oidc-service-account-email "${SA_EMAIL}")
   local -a update_flags=(--http-method POST --oidc-service-account-email "${SA_EMAIL}")
@@ -118,7 +119,7 @@ _upsert_scheduler_job() {
       --project "${PROJECT}" \
       --location "${REGION}" \
       --schedule "${schedule}" \
-      --time-zone "America/New_York" \
+      --time-zone "${time_zone}" \
       --uri "${uri}" \
       "${update_flags[@]}"
   else
@@ -127,18 +128,18 @@ _upsert_scheduler_job() {
       --project "${PROJECT}" \
       --location "${REGION}" \
       --schedule "${schedule}" \
-      --time-zone "America/New_York" \
+      --time-zone "${time_zone}" \
       --uri "${uri}" \
       "${create_flags[@]}"
   fi
 }
 
-# Overnight orders — 4:10 PM ET weekdays
-_upsert_scheduler_job "${SERVICE}-overnight" "10 16 * * 1-5" "${SERVICE_URL}/jobs/overnight"
+# Overnight orders — 2:00 PM PT weekdays (clean post-close account snapshots)
+_upsert_scheduler_job "${SERVICE}-overnight" "0 14 * * 1-5" "${SERVICE_URL}/jobs/overnight" "America/Los_Angeles"
 
 # Intraday risk — every 5 min, 9 AM–3:55 PM ET weekdays (market-hours gate inside app)
 _upsert_scheduler_job "${SERVICE}-risk" "*/5 9-15 * * 1-5" "${SERVICE_URL}/jobs/risk"
 
 echo "==> Done."
-echo "Overnight: POST ${SERVICE_URL}/jobs/overnight  (4:10 PM ET Mon-Fri)"
+echo "Overnight: POST ${SERVICE_URL}/jobs/overnight  (2:00 PM PT Mon-Fri)"
 echo "Risk:      POST ${SERVICE_URL}/jobs/risk         (every 5m 9-15 ET Mon-Fri)"

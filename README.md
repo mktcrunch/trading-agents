@@ -266,7 +266,7 @@ BASELINE_RISK_CONFIG / INTERNAL_RISK_CONFIG
 
 ## Cloud deployment
 
-See [deploy/README.md](deploy/README.md) for Cloud Run, Cloud Scheduler (4:10 PM overnight + 5-min risk window), secrets, and IAM.
+See [deploy/README.md](deploy/README.md) for Cloud Run, Cloud Scheduler (2:00 PM PT overnight + 5-min risk window), secrets, and IAM.
 
 ```bash
 export GCP_PROJECT=your-project

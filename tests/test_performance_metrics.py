@@ -177,6 +177,10 @@ def test_spy_benchmark_from_closes_compound_annualizes():
     assert spy["total_return_pct"] == 3.0
     assert spy["observation_days"] == 3
     assert spy["annualized_return_pct"] == _annualized_cumulative_return_pct(3.0, 3)
+    assert spy["mean_daily_return_pct"] is not None
+    assert spy["annualized_mean_return_pct"] == round(spy["mean_daily_return_pct"] * 252, 3)
+    assert spy["sharpe"] is not None
+    assert spy["max_drawdown_pct"] is not None
     assert spy["start_date"] == "2026-06-09"
 
 
