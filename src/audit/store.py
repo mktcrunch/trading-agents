@@ -161,13 +161,16 @@ def get_performance(since_hours: int = 720) -> Dict[str, Any]:
             history_points[system] = 0
 
     from src.analytics.performance_metrics import (
+        append_live_equity_points,
         attach_spy_benchmark,
+        collect_live_account_snapshots,
         collect_live_daily_returns,
         compute_head_to_head_metrics,
     )
     from src.config import TRADING_UNIVERSE, UNIVERSE_RATIONALE
 
     live_daily = collect_live_daily_returns(history)
+    live_accounts = collect_live_account_snapshots(history)
     baseline_hist = history.get("baseline", [])
     internal_hist = history.get("internal", [])
     metrics = attach_spy_benchmark(
@@ -176,17 +179,30 @@ def get_performance(since_hours: int = 720) -> Dict[str, Any]:
             internal_hist,
             starting_equity=live.get("starting_equity", 100_000.0),
             live_daily_returns=live_daily,
+            live_accounts=live_accounts,
         ),
         baseline_history=baseline_hist,
         internal_history=internal_hist,
     )
 
+    display_history, history_basis = append_live_equity_points(
+        history,
+        live_accounts,
+        starting_equity=live.get("starting_equity", 100_000.0),
+    )
+    display_history_points = {
+        system: len(display_history.get(system) or [])
+        for system in ("baseline", "internal")
+    }
+
     return {
         "since_hours": since_hours,
         "live": live,
-        "history": history,
+        "history": display_history,
         "history_source": "alpaca",
-        "history_points": history_points,
+        "history_basis": history_basis,
+        "history_points": display_history_points,
+        "close_history_points": history_points,
         "metrics": metrics,
         "experiment": {
             "first_trade_date": config.FIRST_TRADE_DATE,

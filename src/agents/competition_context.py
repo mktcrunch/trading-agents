@@ -24,22 +24,23 @@ PERFORMANCE_METRICS_METHODOLOGY = {
     ),
     "source": "Aligned daily Alpaca portfolio equity snapshots for Baseline and Internal.",
     "paired_window": (
-        "Metrics use calendar days where both accounts have equity points. "
-        "Daily returns are simple close-to-close % changes on those aligned dates."
+        "Metrics use one shared paired series: calendar days where both accounts have "
+        "equity points, plus the latest live return appended for each desk when available. "
+        "Historical daily returns are simple close-to-close % changes on those aligned dates."
     ),
     "dashboard_cards": {
         "excess_return": (
             "Internal − Baseline total return vs $100k starting equity. "
             "Boxes also show compound-annualized cumulative return per desk "
             "((1+r)^(252/n)−1); ann. excess scales the realized excess the same way. "
-            "SPY ann. return uses Alpaca daily closes since first trade "
+            "SPY ann. return uses the same close-history plus live-latest convention since first trade "
             f"({FIRST_TRADE_DATE_LABEL}), compound-annualized the same way. "
-            "Each desk box also shows beta vs SPY (aligned daily returns)."
+            "Each desk box also shows beta vs SPY on that same paired series."
         ),
         "daily_delta": (
-            "Highlighted value is mean daily alpha (Internal − Baseline) over paired "
-            "close-to-close days. Boxes show each desk's avg daily return and simple "
-            "annualized return (avg daily × 252). Live today returns are shown small."
+            "Highlighted value is mean daily alpha (Internal − Baseline) over the paired series. "
+            "Boxes show each desk's avg daily return and simple annualized return "
+            "(avg daily × 252)."
         ),
         "sharpe_difference": (
             "Annualized Sharpe ((mean − rf/252)/std × √252) per desk with rf = 4.25%; "
@@ -51,7 +52,7 @@ PERFORMANCE_METRICS_METHODOLOGY = {
         ),
     },
     "for_you_fields": {
-        "daily_delta_pct": "Your return minus competitor on the latest paired day.",
+        "daily_delta_pct": "Your return minus competitor on the latest point in the paired series.",
         "excess_return_pct": "Your total return minus competitor vs $100k start.",
         "sharpe_difference": "Your Sharpe minus competitor Sharpe.",
         "drawdown_advantage_pp": (
@@ -59,7 +60,7 @@ PERFORMANCE_METRICS_METHODOLOGY = {
         ),
     },
     "significance": {
-        "daily_alpha": "Two-sided paired t-test on daily excess returns.",
+        "daily_alpha": "Two-sided paired t-test on the same paired-series daily excess returns shown in the UI.",
         "excess_return": "Paired bootstrap on compounded return paths (4,000 resamples).",
         "sharpe_difference": "Paired bootstrap on daily return pairs.",
         "drawdown_difference": "Paired bootstrap on reconstructed equity paths.",
@@ -74,7 +75,7 @@ PERFORMANCE_METRICS_METHODOLOGY = {
 COMPETITION_OBJECTIVE = (
     "Primary: grow portfolio value and beat the market (SPY) since the experiment start "
     f"({FIRST_TRADE_DATE_LABEL}). Use quant_head_to_head.metrics.benchmark.spy "
-    "(Alpaca daily closes) and your desk's beta_spy — aim for higher compound return than SPY "
+    "(same close-history plus live-latest basis) and your desk's beta_spy — aim for higher compound return than SPY "
     "without excessive market beta. Secondary: hold #1 on the Twin Ledger. "
     "Do not hide in cash because you lead or because the competitor is losing — stay deployed "
     "when setups clear your confidence and risk-adjusted hurdles."
@@ -141,6 +142,7 @@ def fetch_quant_head_to_head(since_hours: int = DEFAULT_QUANT_LOOKBACK_HOURS) ->
     """Aligned quant metrics from Alpaca equity history (same engine as the dashboard)."""
     from src.analytics.performance_metrics import (
         attach_spy_benchmark,
+        collect_live_account_snapshots,
         collect_live_daily_returns,
         compute_head_to_head_metrics,
     )
@@ -155,12 +157,14 @@ def fetch_quant_head_to_head(since_hours: int = DEFAULT_QUANT_LOOKBACK_HOURS) ->
             history[system] = []
 
     live_daily = collect_live_daily_returns(history)
+    live_accounts = collect_live_account_snapshots(history)
     metrics = attach_spy_benchmark(
         compute_head_to_head_metrics(
             history["baseline"],
             history["internal"],
             starting_equity=STARTING_EQUITY,
             live_daily_returns=live_daily,
+            live_accounts=live_accounts,
         ),
         baseline_history=history["baseline"],
         internal_history=history["internal"],

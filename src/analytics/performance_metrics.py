@@ -119,6 +119,21 @@ def _annualized_cumulative_return_pct(
     return round(ann * 100, 3)
 
 
+def _current_equity_from_account(
+    account: Optional[Dict[str, Any]],
+) -> Optional[float]:
+    if not account:
+        return None
+    equity = account.get("equity")
+    if equity is None:
+        equity = account.get("portfolio_value")
+    try:
+        equity_f = float(equity)
+    except (TypeError, ValueError):
+        return None
+    return equity_f if equity_f > 0 else None
+
+
 def _daily_returns_by_date(closes: List[Tuple[str, float]]) -> Dict[str, float]:
     """Map end-date → simple close-to-close return from ordered (date, close) pairs."""
     out: Dict[str, float] = {}
@@ -164,24 +179,34 @@ def _spy_benchmark_from_closes(
     *,
     start_date: str,
     start_label: str,
+    live_price: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     """Build SPY benchmark stats from (date, close) pairs on/after start_date."""
     points = [(d, c) for d, c in closes if d >= start_date and c > 0]
     if len(points) < 2:
         return None
+    live_daily_return_pct: Optional[float] = None
+    live_included = False
+    display_points = list(points)
+    if live_price is not None and live_price > 0:
+        last_close = points[-1][1]
+        if last_close > 0:
+            live_daily_return_pct = round((live_price - last_close) / last_close * 100, 3)
+            display_points = points + [("LIVE", live_price)]
+            live_included = True
     start_close = points[0][1]
-    end_close = points[-1][1]
+    end_close = display_points[-1][1]
     if start_close <= 0:
         return None
     total_return_pct = round((end_close / start_close - 1.0) * 100, 3)
-    observation_days = len(points) - 1
+    observation_days = len(display_points) - 1
     spy_rets: List[float] = []
-    for i in range(1, len(points)):
-        c0 = points[i - 1][1]
-        c1 = points[i][1]
+    for i in range(1, len(display_points)):
+        c0 = display_points[i - 1][1]
+        c1 = display_points[i][1]
         if c0 > 0:
             spy_rets.append((c1 - c0) / c0)
-    spy_eq = {d: c for d, c in points}
+    spy_eq = {d: c for d, c in display_points}
     mean_daily = _mean_daily_return_pct(spy_rets)
     dd = _max_drawdown(spy_eq)
     return {
@@ -190,8 +215,13 @@ def _spy_benchmark_from_closes(
         "start_date": start_date,
         "start_label": start_label,
         "end_date": points[-1][0],
+        "display_end_date": "LIVE" if live_included else points[-1][0],
         "start_close": round(start_close, 4),
-        "end_close": round(end_close, 4),
+        "end_close": round(points[-1][1], 4),
+        "display_end_close": round(end_close, 4),
+        "live_price": round(live_price, 4) if live_price is not None and live_price > 0 else None,
+        "live_daily_return_pct": live_daily_return_pct,
+        "live_included": live_included,
         "total_return_pct": total_return_pct,
         "annualized_return_pct": _annualized_cumulative_return_pct(
             total_return_pct, observation_days
@@ -247,10 +277,26 @@ def _fetch_spy_closes(start_date: Optional[str] = None) -> Tuple[str, str, List[
     return start, label, closes
 
 
+def _fetch_spy_live_price() -> Optional[float]:
+    from src.apis.alpaca_client import AlpacaClient
+
+    try:
+        client = AlpacaClient(system="baseline")
+        return client.get_latest_price("SPY")
+    except Exception:
+        logger.exception("Failed to fetch live SPY price")
+        return None
+
+
 def fetch_spy_benchmark(start_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """SPY total and compound-annualized return since first trade, from Alpaca daily bars."""
     start, label, closes = _fetch_spy_closes(start_date)
-    return _spy_benchmark_from_closes(closes, start_date=start, start_label=label)
+    return _spy_benchmark_from_closes(
+        closes,
+        start_date=start,
+        start_label=label,
+        live_price=_fetch_spy_live_price(),
+    )
 
 
 def attach_spy_benchmark(
@@ -261,13 +307,22 @@ def attach_spy_benchmark(
     """Attach SPY benchmark and per-desk beta vs SPY (Alpaca daily closes)."""
     out = dict(metrics)
     start, label, closes = _fetch_spy_closes()
-    spy = _spy_benchmark_from_closes(closes, start_date=start, start_label=label)
+    spy_live_price = _fetch_spy_live_price()
+    spy = _spy_benchmark_from_closes(
+        closes,
+        start_date=start,
+        start_label=label,
+        live_price=spy_live_price,
+    )
     if not spy:
         return out
 
     out["benchmark"] = {"spy": spy}
     points = [(d, c) for d, c in closes if d >= start and c > 0]
     mkt_rets = _daily_returns_by_date(points)
+    if spy.get("live_included") and spy.get("live_daily_return_pct") is not None:
+        mkt_rets = dict(mkt_rets)
+        mkt_rets["LIVE"] = float(spy["live_daily_return_pct"]) / 100.0
 
     for system, history in (
         ("baseline", baseline_history),
@@ -276,7 +331,12 @@ def attach_spy_benchmark(
         agent = out.get(system)
         if not isinstance(agent, dict) or not history:
             continue
-        beta = _beta_vs_market(_portfolio_returns_by_date(history), mkt_rets)
+        port_rets = _portfolio_returns_by_date(history)
+        latest_daily = agent.get("daily_return_pct")
+        if latest_daily is not None and "LIVE" in mkt_rets:
+            port_rets = dict(port_rets)
+            port_rets["LIVE"] = float(latest_daily) / 100.0
+        beta = _beta_vs_market(port_rets, mkt_rets)
         updated = dict(agent)
         updated["beta_spy"] = beta
         out[system] = updated
@@ -294,6 +354,25 @@ def _max_drawdown(equity_by_date: Dict[str, float]) -> Dict[str, Optional[float]
     cur_dd = 0.0
     for d in dates:
         v = equity_by_date[d]
+        if v > peak:
+            peak = v
+        dd = (peak - v) / peak if peak > 0 else 0.0
+        max_dd = max(max_dd, dd)
+        cur_dd = dd
+    return {
+        "max_drawdown_pct": round(max_dd * 100, 3),
+        "current_drawdown_pct": round(cur_dd * 100, 3),
+    }
+
+
+def _max_drawdown_from_points(points: List[float]) -> Dict[str, Optional[float]]:
+    vals = [float(v) for v in points if v is not None and float(v) > 0]
+    if not vals:
+        return {"max_drawdown_pct": None, "current_drawdown_pct": None}
+    peak = vals[0]
+    max_dd = 0.0
+    cur_dd = 0.0
+    for v in vals:
         if v > peak:
             peak = v
         dd = (peak - v) / peak if peak > 0 else 0.0
@@ -696,16 +775,106 @@ def collect_live_daily_returns(
     return out
 
 
+def collect_live_account_snapshots(
+    history: Dict[str, List[Dict[str, Any]]],
+) -> Optional[Dict[str, Dict[str, Optional[float]]]]:
+    """Current account snapshot for both desks plus today's live return."""
+    from src.apis.alpaca_client import AlpacaClient
+
+    out: Dict[str, Dict[str, Optional[float]]] = {}
+    for system in ("baseline", "internal"):
+        try:
+            client = AlpacaClient(system=system)
+            account = client.get_account() or {}
+            out[system] = {
+                "equity": _current_equity_from_account(account),
+                "last_equity": (
+                    float(account["last_equity"])
+                    if account.get("last_equity") is not None
+                    else None
+                ),
+                "daily_return_pct": live_daily_return_pct(history.get(system) or [], account),
+            }
+        except Exception:
+            out[system] = {
+                "equity": None,
+                "last_equity": None,
+                "daily_return_pct": None,
+            }
+
+    if not out:
+        return None
+    return out
+
+
+def append_live_equity_points(
+    history: Dict[str, List[Dict[str, Any]]],
+    live_accounts: Optional[Dict[str, Dict[str, Optional[float]]]],
+    *,
+    starting_equity: float = 100_000.0,
+) -> tuple[Dict[str, List[Dict[str, Any]]], str]:
+    """Extend close history with the latest live equity point per desk (chart display series)."""
+    if not live_accounts:
+        return history, "closes_only"
+
+    now = datetime.now(timezone.utc).isoformat()
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    live_included = False
+
+    for system in ("baseline", "internal"):
+        pts = list(history.get(system) or [])
+        equity = (live_accounts.get(system) or {}).get("equity")
+        if equity is None:
+            out[system] = pts
+            continue
+        try:
+            pv = float(equity)
+        except (TypeError, ValueError):
+            out[system] = pts
+            continue
+        if pv <= 0:
+            out[system] = pts
+            continue
+
+        live_included = True
+        pnl_usd = pv - starting_equity
+        pnl_pct = (pnl_usd / starting_equity * 100) if starting_equity else 0.0
+        live_point = {
+            "timestamp": now,
+            "portfolio_value": round(pv, 2),
+            "pnl_pct": round(pnl_pct, 2),
+            "pnl_usd": round(pnl_usd, 2),
+            "source": "live",
+        }
+        if pts and pts[-1].get("source") == "live":
+            pts[-1] = live_point
+        else:
+            pts.append(live_point)
+        out[system] = pts
+
+    basis = "closes_plus_live_latest" if live_included else "closes_only"
+    return out, basis
+
+
 def _agent_metrics(
     returns: List[float],
     equity_by_date: Dict[str, float],
     starting_equity: float,
     latest_daily_return_pct: Optional[float],
+    *,
+    current_equity: Optional[float] = None,
 ) -> Dict[str, Any]:
-    dd = _max_drawdown(equity_by_date)
+    eq_points = [equity_by_date[d] for d in sorted(equity_by_date.keys())]
+    if current_equity is not None:
+        eq_points.append(current_equity)
+    dd = _max_drawdown_from_points(eq_points)
     mean_daily = _mean_daily_return_pct(returns)
     n = len(returns)
-    total_return = _total_return_pct(equity_by_date, starting_equity)
+    total_return = (
+        round((current_equity - starting_equity) / starting_equity * 100, 3)
+        if current_equity is not None and starting_equity > 0
+        else _total_return_pct(equity_by_date, starting_equity)
+    )
     return {
         "daily_return_pct": latest_daily_return_pct,
         "mean_daily_return_pct": mean_daily,
@@ -728,15 +897,21 @@ def compute_head_to_head_metrics(
     starting_equity: float = 100_000.0,
     *,
     live_daily_returns: Optional[Dict[str, Optional[float]]] = None,
+    live_accounts: Optional[Dict[str, Dict[str, Optional[float]]]] = None,
 ) -> Dict[str, Any]:
     """Compute aligned quant metrics and head-to-head significance tests."""
     dates, b_rets, i_rets = _align_returns(baseline_history, internal_history)
     b_eq = _equity_by_date(baseline_history)
     i_eq = _equity_by_date(internal_history)
+    paired_days = len(b_rets)
 
     latest_b = round(b_rets[-1] * 100, 3) if b_rets else None
     latest_i = round(i_rets[-1] * 100, 3) if i_rets else None
     daily_delta_basis = "prior_close"
+    display_b_rets = list(b_rets)
+    display_i_rets = list(i_rets)
+    current_b_equity: Optional[float] = None
+    current_i_equity: Optional[float] = None
 
     if live_daily_returns:
         live_b = live_daily_returns.get("baseline")
@@ -745,6 +920,12 @@ def compute_head_to_head_metrics(
             latest_b = live_b
             latest_i = live_i
             daily_delta_basis = "live"
+            display_b_rets.append(live_b / 100.0)
+            display_i_rets.append(live_i / 100.0)
+
+    if live_accounts:
+        current_b_equity = live_accounts.get("baseline", {}).get("equity")
+        current_i_equity = live_accounts.get("internal", {}).get("equity")
 
     daily_delta = (
         round(latest_i - latest_b, 3)
@@ -752,31 +933,50 @@ def compute_head_to_head_metrics(
         else None
     )
 
-    excess = [i - b for b, i in zip(b_rets, i_rets)]
-    mean_alpha = round(float(np.mean(excess)) * 100, 4) if excess else None
+    close_excess = [i - b for b, i in zip(b_rets, i_rets)]
+    display_excess = [i - b for b, i in zip(display_b_rets, display_i_rets)]
+    mean_alpha = round(float(np.mean(display_excess)) * 100, 4) if display_excess else None
     annualized_alpha = _annualized_return_pct(mean_alpha)
     cum_alpha = (
-        round((float(np.prod([1.0 + e for e in excess])) - 1.0) * 100, 3)
-        if excess
+        round((float(np.prod([1.0 + e for e in display_excess])) - 1.0) * 100, 3)
+        if display_excess
         else None
     )
 
-    b_sharpe = _sharpe(b_rets)
-    i_sharpe = _sharpe(i_rets)
+    b_sharpe = _sharpe(display_b_rets)
+    i_sharpe = _sharpe(display_i_rets)
     sharpe_diff = (
         round(i_sharpe - b_sharpe, 3)
         if b_sharpe is not None and i_sharpe is not None
         else None
     )
 
-    b_dd = _max_drawdown(b_eq)
-    i_dd = _max_drawdown(i_eq)
+    b_points = [b_eq[d] for d in sorted(b_eq.keys())]
+    i_points = [i_eq[d] for d in sorted(i_eq.keys())]
+    if current_b_equity is not None:
+        b_points.append(current_b_equity)
+    if current_i_equity is not None:
+        i_points.append(current_i_equity)
+    b_dd = _max_drawdown_from_points(b_points)
+    i_dd = _max_drawdown_from_points(i_points)
     dd_diff = None
     if b_dd["max_drawdown_pct"] is not None and i_dd["max_drawdown_pct"] is not None:
         dd_diff = round(i_dd["max_drawdown_pct"] - b_dd["max_drawdown_pct"], 3)
 
-    b_total = _agent_metrics(b_rets, b_eq, starting_equity, latest_b)
-    i_total = _agent_metrics(i_rets, i_eq, starting_equity, latest_i)
+    b_total = _agent_metrics(
+        display_b_rets,
+        b_eq,
+        starting_equity,
+        latest_b,
+        current_equity=current_b_equity,
+    )
+    i_total = _agent_metrics(
+        display_i_rets,
+        i_eq,
+        starting_equity,
+        latest_i,
+        current_equity=current_i_equity,
+    )
     total_return_diff = None
     if b_total["total_return_pct"] is not None and i_total["total_return_pct"] is not None:
         total_return_diff = round(i_total["total_return_pct"] - b_total["total_return_pct"], 3)
@@ -788,8 +988,9 @@ def compute_head_to_head_metrics(
         annualized_return_diff = round(
             i_total["annualized_return_pct"] - b_total["annualized_return_pct"], 3
         )
-    # Compound-annualize realized cumulative excess (same n as each desk's path).
-    n_obs = len(b_rets)
+    # Compound-annualize realized cumulative excess over the displayed paired
+    # series (paired closes plus today's live move when available).
+    n_obs = len(display_b_rets)
     annualized_excess = _annualized_cumulative_return_pct(total_return_diff, n_obs)
     annualized_cum_diff = None
     if (
@@ -801,6 +1002,33 @@ def compute_head_to_head_metrics(
             - b_total["annualized_cumulative_return_pct"],
             3,
         )
+
+    close_b_total = _agent_metrics(b_rets, b_eq, starting_equity, round(b_rets[-1] * 100, 3) if b_rets else None)
+    close_i_total = _agent_metrics(i_rets, i_eq, starting_equity, round(i_rets[-1] * 100, 3) if i_rets else None)
+    close_total_return_diff = None
+    if (
+        close_b_total["total_return_pct"] is not None
+        and close_i_total["total_return_pct"] is not None
+    ):
+        close_total_return_diff = round(
+            close_i_total["total_return_pct"] - close_b_total["total_return_pct"], 3
+        )
+    close_annualized_excess = _annualized_cumulative_return_pct(
+        close_total_return_diff, paired_days
+    )
+    close_sharpe_diff = (
+        round(close_i_total["sharpe"] - close_b_total["sharpe"], 3)
+        if close_b_total["sharpe"] is not None and close_i_total["sharpe"] is not None
+        else None
+    )
+    close_dd_diff = (
+        round(
+            close_i_total["max_drawdown_pct"] - close_b_total["max_drawdown_pct"], 3
+        )
+        if close_b_total["max_drawdown_pct"] is not None
+        and close_i_total["max_drawdown_pct"] is not None
+        else None
+    )
 
     internal_minus_baseline = {
         "daily_delta_pct": daily_delta,
@@ -820,7 +1048,8 @@ def compute_head_to_head_metrics(
     )
 
     return {
-        "observation_days": len(b_rets),
+        "observation_days": len(display_b_rets),
+        "paired_observation_days": paired_days,
         "min_days_for_stats": MIN_OBS_FOR_STATS,
         "latest_date": dates[-1] if dates else None,
         "path_comparison": path_comparison,
@@ -833,6 +1062,22 @@ def compute_head_to_head_metrics(
             # Flat aliases kept for dashboard backward compatibility.
             "daily_delta_pct": daily_delta,
             "daily_delta_basis": daily_delta_basis,
+            "series_basis": (
+                "paired_plus_live_latest" if daily_delta_basis == "live" else "paired_closes"
+            ),
+            "paired_close": {
+                "observation_days": paired_days,
+                "daily_delta_pct": (
+                    round(i_rets[-1] * 100 - b_rets[-1] * 100, 3) if b_rets and i_rets else None
+                ),
+                "mean_daily_alpha_pct": (
+                    round(float(np.mean(close_excess)) * 100, 4) if close_excess else None
+                ),
+                "total_return_diff_pct": close_total_return_diff,
+                "annualized_excess_return_pct": close_annualized_excess,
+                "sharpe_diff": close_sharpe_diff,
+                "max_drawdown_diff_pct": close_dd_diff,
+            },
             "mean_daily_alpha_pct": mean_alpha,
             "annualized_alpha_pct": annualized_alpha,
             "annualized_return_diff_pct": annualized_return_diff,
@@ -845,13 +1090,13 @@ def compute_head_to_head_metrics(
             "max_drawdown_diff_pct": dd_diff,
             "field_glossary": {
                 "daily_delta_pct": (
-                    "Internal − Baseline return today (live equity vs prior close). "
-                    "Highlighted Daily delta card uses mean_daily_alpha_pct "
-                    "(paired close-to-close days). Positive favors Internal."
+                    "Internal − Baseline latest return in the displayed paired series. "
+                    "Historical observations are paired close-to-close; today's live move "
+                    "is appended when available."
                 ),
                 "mean_daily_alpha_pct": (
-                    "Mean daily Internal − Baseline return over paired days "
-                    "(highlighted Daily delta value)."
+                    "Mean daily Internal − Baseline return over the displayed paired "
+                    "series, including today's live point when available."
                 ),
                 "annualized_alpha_pct": (
                     "Mean daily alpha × 252 trading days (simple annualization)."
@@ -862,7 +1107,7 @@ def compute_head_to_head_metrics(
                 ),
                 "annualized_excess_return_pct": (
                     "Compound-annualized excess return: "
-                    "(1 + excess)^(252/n) − 1 over paired days n. "
+                    "(1 + excess)^(252/n) − 1 over the displayed paired series. "
                     "Distinct from mean-daily × 252."
                 ),
                 "annualized_cumulative_return_diff_pct": (
@@ -870,8 +1115,8 @@ def compute_head_to_head_metrics(
                     "(each desk: (1 + total_return)^(252/n) − 1)."
                 ),
                 "total_return_diff_pct": (
-                    "Internal − Baseline total return vs starting equity. "
-                    "Positive favors Internal, not Baseline."
+                    "Internal − Baseline total return vs starting equity using the "
+                    "displayed paired series and current live equity when available."
                 ),
                 "sharpe_diff": (
                     f"Internal Sharpe − Baseline Sharpe "
@@ -884,10 +1129,10 @@ def compute_head_to_head_metrics(
                 ),
             },
             "significance": {
-                "total_return_diff": _bootstrap_total_return_diff(b_rets, i_rets),
-                "daily_alpha": _significance_ttest(excess),
-                "sharpe_diff": _bootstrap_sharpe_diff(b_rets, i_rets),
-                "max_drawdown_diff": _bootstrap_max_dd_diff(b_rets, i_rets),
+                "total_return_diff": _bootstrap_total_return_diff(display_b_rets, display_i_rets),
+                "daily_alpha": _significance_ttest(display_excess),
+                "sharpe_diff": _bootstrap_sharpe_diff(display_b_rets, display_i_rets),
+                "max_drawdown_diff": _bootstrap_max_dd_diff(display_b_rets, display_i_rets),
             },
         },
     }

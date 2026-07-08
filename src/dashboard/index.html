@@ -3309,6 +3309,7 @@
     const fmtPct = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`;
     const fmtPct4 = (n) => n == null ? "n/a" : `${Number(n) >= 0 ? "+" : ""}${Number(n).toFixed(4)}%`;
     const DEFAULT_RANGE_HOURS = 720;
+    const RECENT_ACTIVITY_HOURS = 72;
     const formatRangeLabel = (hours) => {
       const h = Number(hours);
       if (h === 720) return "30d";
@@ -3796,7 +3797,7 @@
       try {
         const batches = await Promise.all(types.map(t =>
           fetchJSON(
-            `/api/events?hours=${DEFAULT_RANGE_HOURS}&limit=80&system=${encodeURIComponent(system)}&event_type=${t}`
+            `/api/events?hours=${RECENT_ACTIVITY_HOURS}&limit=80&system=${encodeURIComponent(system)}&event_type=${t}`
           ).then(d => d.events || []).catch(() => [])
         ));
         const rawEvents = batches.flat();
@@ -3816,7 +3817,7 @@
       if (!items.length) {
         const sub = marketOpen
           ? "Intraday risk actions (stops, trailing, holds) appear here while the market is open."
-          : "Signal proposals and risk actions from the last 7 days appear here. Placement status shows what actually reached Alpaca.";
+          : "Signal proposals and risk actions from the last 72 hours appear here. Placement status shows what actually reached Alpaca.";
         return `<div class="decision-empty"><span class="holdings-empty-title">No recent activity</span><span class="holdings-empty-sub">${sub}</span></div>`;
       }
       return `<div class="decision-feed">${items.map(e => {
@@ -3923,12 +3924,12 @@
           </div>
           <div class="perf-leadership-grid">
             ${renderLeadershipCard(path.days_equity_ahead, "Days equity ahead", "end-of-day equity")}
-            ${renderLeadershipCard(path.daily_win_rate, "Daily win rate", "close-to-close return")}
+            ${renderLeadershipCard(path.daily_win_rate, "Daily win rate", "daily return series")}
           </div>
         </div>
         <div class="perf-metrics-head">
           <h2>Quant head-to-head</h2>
-          <span class="meta">${days} paired day${days === 1 ? "" : "s"}${latest} · n ≥ ${minDays} for tests</span>
+          <span class="meta">${days} observed day${days === 1 ? "" : "s"}${latest}${cmp.series_basis === "paired_plus_live_latest" ? " · live latest point included" : ""} · n ≥ ${minDays} for tests</span>
         </div>
         <div class="perf-metrics-grid">
           <article class="perf-metric-card">
@@ -3940,6 +3941,7 @@
               ${splitDesk("internal", "Internal", fmtPct(i.total_return_pct), pctClass(i.total_return_pct), i.annualized_cumulative_return_pct == null ? null : fmtPct(i.annualized_cumulative_return_pct), fmtBeta(i.beta_spy))}
             </div>
             <div class="perf-metric-sub">$100k start · cumulative alpha ${fmtPct(cmp.cumulative_alpha_pct)} · ann. excess ${fmtPct(cmp.annualized_excess_return_pct)}</div>
+            <div class="perf-metric-live">Latest point is live when available</div>
             <div class="perf-metric-live">SPY <strong class="${pctClass(spyBench && spyBench.total_return_pct)}">${spyBench ? fmtPct(spyBench.total_return_pct) : "n/a"}</strong> · ann <strong class="${pctClass(spyBench && spyBench.annualized_return_pct)}">${spyBench ? fmtPct(spyBench.annualized_return_pct) : "n/a"}</strong> since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.total_return_diff)}
           </article>
@@ -3951,7 +3953,7 @@
               ${splitDesk("baseline", "Baseline", `avg ${fmtPct4(b.mean_daily_return_pct)}`, pctClass(b.mean_daily_return_pct), b.annualized_return_pct == null ? null : fmtPct(b.annualized_return_pct))}
               ${splitDesk("internal", "Internal", `avg ${fmtPct4(i.mean_daily_return_pct)}`, pctClass(i.mean_daily_return_pct), i.annualized_return_pct == null ? null : fmtPct(i.annualized_return_pct))}
             </div>
-            <div class="perf-metric-sub">Mean daily alpha (paired closes) · ann. alpha ${fmtPct(annAlpha)}</div>
+            <div class="perf-metric-sub">Mean daily alpha · ann. alpha ${fmtPct(annAlpha)}</div>
             <div class="perf-metric-live">Live today Baseline <strong class="${pctClass(b.daily_return_pct)}">${fmtPct(b.daily_return_pct)}</strong> · Internal <strong class="${pctClass(i.daily_return_pct)}">${fmtPct(i.daily_return_pct)}</strong> · Δ <strong class="${pctClass(dailyDelta)}">${fmtPct(dailyDelta)}</strong></div>
             <div class="perf-metric-live">SPY avg <strong class="${pctClass(spyBench && spyBench.mean_daily_return_pct)}">${spyBench ? fmtPct4(spyBench.mean_daily_return_pct) : "n/a"}</strong>${spyBench && spyBench.annualized_mean_return_pct != null ? ` · ann <strong class="${pctClass(spyBench.annualized_mean_return_pct)}">${fmtPct(spyBench.annualized_mean_return_pct)}</strong>` : ""} since ${spyBench ? (spyBench.start_label || spyBench.start_date) : FIRST_TRADE_LABEL} (Alpaca)</div>
             ${renderSigFoot(sig.daily_alpha)}
@@ -4062,8 +4064,11 @@
       const pts = data.history_points || {};
       const bPts = pts.baseline ?? (data.history?.baseline || []).length;
       const iPts = pts.internal ?? (data.history?.internal || []).length;
+      const liveHistNote = data.history_basis === "closes_plus_live_latest"
+        ? " · live latest point included"
+        : "";
       document.getElementById("perf-updated").textContent =
-        `Equity history from Alpaca: ${bPts} baseline, ${iPts} internal points`;
+        `Equity history: ${bPts} baseline, ${iPts} internal points${liveHistNote}`;
     }
 
     let perfChartState = null;
