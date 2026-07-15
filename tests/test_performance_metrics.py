@@ -225,6 +225,42 @@ def test_spy_benchmark_includes_live_latest_point():
     )
 
 
+def test_spy_live_replaces_todays_incomplete_bar(monkeypatch):
+    """When live price is set, drop today's incomplete daily bar so n matches desks."""
+    monkeypatch.setattr(
+        "src.analytics.performance_metrics.datetime",
+        type(
+            "DT",
+            (),
+            {
+                "now": staticmethod(
+                    lambda tz=None: __import__("datetime").datetime(
+                        2026, 6, 11, 15, 0, tzinfo=tz or __import__("datetime").timezone.utc
+                    )
+                ),
+            },
+        ),
+    )
+    # Avoid zoneinfo path flake: patch after import by using utc today matching last bar.
+    closes = [
+        ("2026-06-09", 100.0),
+        ("2026-06-10", 101.0),
+        ("2026-06-11", 102.0),  # incomplete "today"
+    ]
+    spy = _spy_benchmark_from_closes(
+        closes,
+        start_date="2026-06-09",
+        start_label="June 9, 2026",
+        live_price=103.5,
+    )
+    assert spy is not None
+    assert spy["live_included"] is True
+    assert spy["end_date"] == "2026-06-10"
+    assert spy["observation_days"] == 2  # Jun9→10 and 10→LIVE
+    assert spy["live_daily_return_pct"] == round((103.5 - 101.0) / 101.0 * 100, 3)
+    assert spy["total_return_pct"] == round((103.5 / 100.0 - 1.0) * 100, 3)
+
+
 def test_beta_vs_market_unit_when_identical():
     rets = {"2026-06-10": 0.01, "2026-06-11": -0.005, "2026-06-12": 0.02}
     assert _beta_vs_market(rets, rets) == 1.0
@@ -264,6 +300,69 @@ def test_attach_spy_benchmark_sets_beta(monkeypatch):
     assert out["benchmark"]["spy"]["live_included"] is True
     assert out["baseline"]["beta_spy"] is not None
     assert out["internal"]["beta_spy"] is not None
+
+
+def test_attach_spy_shares_annualization_window(monkeypatch):
+    """Desk compound ann. uses SPY trading-day n, not shorter paired series n."""
+    # 3 equity points → 2 return days (paired series)
+    baseline = _series([100_000, 100_500, 102_120])  # +2.12% total
+    internal = _series([100_000, 100_800, 102_120])
+    metrics = compute_head_to_head_metrics(baseline, internal)
+    assert metrics["observation_days"] == 2
+    assert metrics["internal"]["total_return_pct"] == 2.12
+    # Before SPY attach: annualized over paired n=2
+    paired_ann = _annualized_cumulative_return_pct(2.12, 2)
+    assert metrics["internal"]["annualized_cumulative_return_pct"] == paired_ann
+
+    # SPY window: 4 closes + live → 4 observation days
+    closes = [
+        ("2026-06-10", 100.0),
+        ("2026-06-11", 100.5),
+        ("2026-06-12", 101.0),
+        ("2026-06-13", 101.5),
+    ]
+
+    monkeypatch.setattr(
+        "src.analytics.performance_metrics._fetch_spy_closes",
+        lambda start_date=None: ("2026-06-10", "June 10, 2026", closes),
+    )
+    monkeypatch.setattr(
+        "src.analytics.performance_metrics._fetch_spy_live_price",
+        lambda: 102.29,  # +2.29% from 100
+    )
+    out = attach_spy_benchmark(
+        metrics,
+        baseline_history=baseline,
+        internal_history=internal,
+    )
+    spy = out["benchmark"]["spy"]
+    assert spy["observation_days"] == 4
+    assert out["annualization_days"] == 4
+    assert out["internal"]["annualization_days"] == 4
+    assert out["baseline"]["annualization_days"] == 4
+    # Observation (paired) length unchanged for significance / Sharpe n
+    assert out["observation_days"] == 2
+    assert out["internal"]["observation_days"] == 2
+
+    shared_ann = _annualized_cumulative_return_pct(
+        out["internal"]["total_return_pct"], 4
+    )
+    assert out["internal"]["annualized_cumulative_return_pct"] == shared_ann
+    assert out["internal"]["annualized_cumulative_return_pct"] != paired_ann
+    assert spy["annualized_return_pct"] == _annualized_cumulative_return_pct(
+        spy["total_return_pct"], 4
+    )
+    # Shared n: lower total than SPY cannot annualize higher solely via shorter window
+    assert out["internal"]["total_return_pct"] < spy["total_return_pct"]
+    assert (
+        out["internal"]["annualized_cumulative_return_pct"]
+        < spy["annualized_return_pct"]
+    )
+    assert out["comparison"]["annualized_excess_return_pct"] == (
+        _annualized_cumulative_return_pct(
+            out["comparison"]["total_return_diff_pct"], 4
+        )
+    )
 
 
 def test_append_live_equity_points_extends_close_history():

@@ -32,10 +32,11 @@ PERFORMANCE_METRICS_METHODOLOGY = {
         "excess_return": (
             "Internal − Baseline total return vs $100k starting equity. "
             "Boxes also show compound-annualized cumulative return per desk "
-            "((1+r)^(252/n)−1); ann. excess scales the realized excess the same way. "
-            "SPY ann. return uses the same close-history plus live-latest convention since first trade "
-            f"({FIRST_TRADE_DATE_LABEL}), compound-annualized the same way. "
-            "Each desk box also shows beta vs SPY on that same paired series."
+            "((1+r)^(252/n)−1) using the same n as SPY (trading days since first trade); "
+            "ann. excess scales the realized excess the same way. "
+            f"SPY uses Alpaca closes since first trade ({FIRST_TRADE_DATE_LABEL}) "
+            "with the same compound annualization. "
+            "Each desk box also shows beta vs SPY on the paired return series."
         ),
         "daily_delta": (
             "Highlighted value is mean daily alpha (Internal − Baseline) over the paired series. "

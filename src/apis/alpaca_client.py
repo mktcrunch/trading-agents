@@ -3,7 +3,7 @@ Alpaca Trading API client
 Supports both paper trading accounts (baseline and internal)
 """
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 
 import pandas as pd
@@ -383,34 +383,63 @@ class AlpacaClient:
             return {}
 
     def get_portfolio_history_series(self, since_hours: int = 720) -> List[Dict[str, Any]]:
-        """Return equity history for the dashboard chart (sourced from Alpaca)."""
+        """Return equity history for the dashboard chart (sourced from Alpaca).
+
+        Uses full daily history (period=all) then keeps points on/after FIRST_TRADE_DATE.
+        Alpine ``period=1M`` truncates mid-experiment, and Alpaca stamps EOD equity at
+        20:00 ET — we normalize timestamps to the US/Eastern session date so they
+        align with SPY daily bars.
+        """
+        from zoneinfo import ZoneInfo
+
         from alpaca.trading.requests import GetPortfolioHistoryRequest
         from src.agents.competition_context import STARTING_EQUITY
+        from src.config import FIRST_TRADE_DATE
 
-        if since_hours <= 720:
-            period, timeframe = "1M", "1D"
-        elif since_hours <= 2160:
-            period, timeframe = "3M", "1D"
-        else:
-            period, timeframe = "6M", "1D"
+        try:
+            first_trade = date.fromisoformat(FIRST_TRADE_DATE)
+        except ValueError:
+            first_trade = None
 
         try:
             hist = self.client.get_portfolio_history(
-                GetPortfolioHistoryRequest(period=period, timeframe=timeframe)
+                GetPortfolioHistoryRequest(period="all", timeframe="1D")
             )
         except Exception as e:
             logger.error(f"Failed to get portfolio history for {self.system}: {e}")
             return []
 
+        et_tz = ZoneInfo("America/New_York")
+        # Always include since first trade so desk series matches the SPY window.
+        # ``since_hours`` is retained for API compat; the chart clips the x-axis client-side.
+        start_date = first_trade or (
+            datetime.now(et_tz) - timedelta(hours=max(1, int(since_hours)))
+        ).date()
+
         points: List[Dict[str, Any]] = []
         for ts, equity in zip(hist.timestamp, hist.equity):
             if not equity or float(equity) <= 0:
                 continue
+            # Alpaca daily equity timestamps are typically 20:00 America/New_York.
+            # UTC calendar date is the next morning — use ET date as the session key.
+            session_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc).astimezone(et_tz)
+            session_date = session_dt.date()
+            if session_date < start_date:
+                continue
+            # Stable noon-ET stamp so ISO [:10] matches the session date in any tz.
+            session_stamp = datetime(
+                session_date.year,
+                session_date.month,
+                session_date.day,
+                12,
+                0,
+                tzinfo=et_tz,
+            )
             pv = float(equity)
             pnl_usd = pv - STARTING_EQUITY
             pnl_pct = (pnl_usd / STARTING_EQUITY * 100) if STARTING_EQUITY else 0.0
             points.append({
-                "timestamp": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                "timestamp": session_stamp.isoformat(),
                 "portfolio_value": pv,
                 "pnl_pct": round(pnl_pct, 2),
                 "pnl_usd": round(pnl_usd, 2),

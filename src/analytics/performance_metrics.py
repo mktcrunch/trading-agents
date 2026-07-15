@@ -189,10 +189,22 @@ def _spy_benchmark_from_closes(
     live_included = False
     display_points = list(points)
     if live_price is not None and live_price > 0:
-        last_close = points[-1][1]
+        # Alpaca may already publish today's incomplete daily bar while the market
+        # is open. Drop it so live replaces today (same window as desk equity).
+        try:
+            from zoneinfo import ZoneInfo
+
+            today_et = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+        except Exception:
+            today_et = datetime.now(timezone.utc).date().isoformat()
+        if display_points and display_points[-1][0] == today_et:
+            display_points = display_points[:-1]
+        if len(display_points) < 1:
+            return None
+        last_close = display_points[-1][1]
         if last_close > 0:
             live_daily_return_pct = round((live_price - last_close) / last_close * 100, 3)
-            display_points = points + [("LIVE", live_price)]
+            display_points = display_points + [("LIVE", live_price)]
             live_included = True
     start_close = points[0][1]
     end_close = display_points[-1][1]
@@ -209,15 +221,20 @@ def _spy_benchmark_from_closes(
     spy_eq = {d: c for d, c in display_points}
     mean_daily = _mean_daily_return_pct(spy_rets)
     dd = _max_drawdown(spy_eq)
+    closed_end_date = display_points[-2][0] if live_included and len(display_points) >= 2 else points[-1][0]
+    closed_end_close = next(
+        (c for d, c in reversed(display_points if not live_included else display_points[:-1]) if d == closed_end_date),
+        points[-1][1],
+    )
     return {
         "ticker": "SPY",
         "source": "alpaca",
         "start_date": start_date,
         "start_label": start_label,
-        "end_date": points[-1][0],
+        "end_date": closed_end_date,
         "display_end_date": "LIVE" if live_included else points[-1][0],
         "start_close": round(start_close, 4),
-        "end_close": round(points[-1][1], 4),
+        "end_close": round(closed_end_close, 4),
         "display_end_close": round(end_close, 4),
         "live_price": round(live_price, 4) if live_price is not None and live_price > 0 else None,
         "live_daily_return_pct": live_daily_return_pct,
@@ -299,6 +316,70 @@ def fetch_spy_benchmark(start_date: Optional[str] = None) -> Optional[Dict[str, 
     )
 
 
+def _apply_shared_annualization_window(
+    metrics: Dict[str, Any],
+    annualization_days: int,
+) -> Dict[str, Any]:
+    """Recompute compound-annualized cumulative metrics on a shared trading-day window.
+
+    Keeps per-desk ``observation_days`` as the return-series length (Sharpe / significance),
+    but annualizes total / excess returns with ``annualization_days`` (typically SPY days
+    since first trade) so desk and SPY ann. figures are comparable.
+    """
+    if annualization_days < 1:
+        return metrics
+
+    out = dict(metrics)
+    out["annualization_days"] = annualization_days
+
+    for system in ("baseline", "internal"):
+        agent = out.get(system)
+        if not isinstance(agent, dict):
+            continue
+        updated = dict(agent)
+        updated["annualized_cumulative_return_pct"] = _annualized_cumulative_return_pct(
+            agent.get("total_return_pct"),
+            annualization_days,
+        )
+        updated["annualization_days"] = annualization_days
+        out[system] = updated
+
+    cmp = dict(out.get("comparison") or {})
+    imb = dict(cmp.get("internal_minus_baseline") or {})
+    total_diff = cmp.get("total_return_diff_pct")
+    if total_diff is None and imb.get("excess_return_pct") is not None:
+        total_diff = imb.get("excess_return_pct")
+
+    annualized_excess = _annualized_cumulative_return_pct(total_diff, annualization_days)
+    b_ann = (out.get("baseline") or {}).get("annualized_cumulative_return_pct")
+    i_ann = (out.get("internal") or {}).get("annualized_cumulative_return_pct")
+    annualized_cum_diff = (
+        round(i_ann - b_ann, 3) if b_ann is not None and i_ann is not None else None
+    )
+
+    imb["annualized_excess_return_pct"] = annualized_excess
+    imb["annualized_cumulative_return_diff_pct"] = annualized_cum_diff
+    cmp["internal_minus_baseline"] = imb
+    cmp["annualized_excess_return_pct"] = annualized_excess
+    cmp["annualized_cumulative_return_diff_pct"] = annualized_cum_diff
+
+    notes = dict(cmp.get("field_notes") or {})
+    if notes:
+        notes["annualized_excess_return_pct"] = (
+            "Compound-annualized excess return: "
+            "(1 + excess)^(252/n) − 1 using shared trading days since first trade "
+            "(same n as SPY). Distinct from mean-daily × 252."
+        )
+        notes["annualized_cumulative_return_diff_pct"] = (
+            "Internal − Baseline compound-annualized cumulative return "
+            "(each desk: (1 + total_return)^(252/n) − 1 with shared n since first trade)."
+        )
+        cmp["field_notes"] = notes
+
+    out["comparison"] = cmp
+    return out
+
+
 def attach_spy_benchmark(
     metrics: Dict[str, Any],
     baseline_history: Optional[List[Dict[str, Any]]] = None,
@@ -340,6 +421,11 @@ def attach_spy_benchmark(
         updated = dict(agent)
         updated["beta_spy"] = beta
         out[system] = updated
+
+    # Align desk / excess compound annualization to SPY's trading-day window.
+    spy_days = int(spy.get("observation_days") or 0)
+    if spy_days >= 1:
+        out = _apply_shared_annualization_window(out, spy_days)
 
     return out
 
@@ -1107,12 +1193,14 @@ def compute_head_to_head_metrics(
                 ),
                 "annualized_excess_return_pct": (
                     "Compound-annualized excess return: "
-                    "(1 + excess)^(252/n) − 1 over the displayed paired series. "
+                    "(1 + excess)^(252/n) − 1. When SPY is attached, n is shared "
+                    "trading days since first trade (same window as SPY). "
                     "Distinct from mean-daily × 252."
                 ),
                 "annualized_cumulative_return_diff_pct": (
                     "Internal − Baseline compound-annualized cumulative return "
-                    "(each desk: (1 + total_return)^(252/n) − 1)."
+                    "(each desk: (1 + total_return)^(252/n) − 1; n shared with SPY "
+                    "when benchmark is attached)."
                 ),
                 "total_return_diff_pct": (
                     "Internal − Baseline total return vs starting equity using the "
