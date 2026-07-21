@@ -11,6 +11,10 @@ for _p in (_repo_root, _agent_dir):
 
 from src.adk.agent_engine_app import build_scheduler_direct_app, install_agent_engine_stream_query_patch
 from src.adk.agents.coordinators import build_baseline_root_agent
+from src.adk.model import configure_genai_env
+
+# Force Gemini model calls onto the global endpoint (Agent Engine itself stays regional).
+configure_genai_env()
 
 root_agent = build_baseline_root_agent()
 install_agent_engine_stream_query_patch("baseline")

@@ -31,24 +31,157 @@ Both agents see a live leaderboard (portfolio value vs competitor) and aligned q
 
 ## Architecture
 
+Twin Ledger runs as three scheduled control loops that share one agent backend: session manager, controller/state machine, context assembly, model gateway, tool registry, and policy layer. Side effects go to broker and data APIs; durable state lives in GCS.
+
+Each loop follows the same control cycle: **plan → think → act → observe → verify → repeat**. LLM components produce structured decisions (think); deterministic tools apply policy and execute (act/verify).
+
+### Shared harness stack
+
 ```
-main.py
-├── Discovery (DataBento) ──► approved_datasources.json
-├── BaselineSystem ──────────► ADK Workflow → Signal (LlmAgent) → Risk → Execute
-└── InternalSystem ──────────► ADK Workflow → Signal (LlmAgent) → Kelly → Execute
-
-ADK (agents/)
-├── twin_ledger_baseline/ ── chat coordinator + data/signal task agents
-├── twin_ledger_internal/ ─── same + MarketCrunch + DataBento tools
-└── src/adk/mcp/server.py ─── MCP tools (Alpaca, MC, DataBento, leaderboard)
-
-Cloud Scheduler (production)
-├── 8 jobs → Vertex Agent Engine :streamQuery (overnight, risk, chase-open, chase-midday × 2 traders)
-
-Cloud Run
-├── /dashboard  → audit UI, read-only chat, learning panel
-└── /api/*      → agent-activity, learning, performance (no LLM required)
+┌─────────────────────────────────────────────┐
+│  Frontend / IDE                             │
+│  adk web · Cloud Run /dashboard · CLI       │
+└───────────────────┬─────────────────────────┘
+                    ▼
+┌─────────────────────────────────────────────┐
+│  Agent Backend (ADK + Vertex Agent Engine)  │
+│                                             │
+│  1. Task/session manager                    │
+│     Cloud Scheduler → streamQuery phrases   │
+│     main.py jobs · InMemorySessionService   │
+│                                             │
+│  2. Agent controller / state machine        │
+│     ADK Workflow nodes · RiskMonitor        │
+│     Discovery probe loop · TwinLedgerState  │
+│                                             │
+│  3. Context engine                          │
+│     Account, OHLCV, news, leaderboard,      │
+│     MC forecasts, approved features,        │
+│     learning/{role}_{system}.json           │
+│                                             │
+│  4. Model gateway                           │
+│     Gemini 3.5 Flash (Vertex global)        │
+│     Signal / discovery / trailing planners  │
+│                                             │
+│  5. Tool registry                           │
+│     FunctionTools + optional MCP            │
+│     Alpaca · MarketCrunch · DataBento       │
+│                                             │
+│  6. Policy / approval engine                │
+│     Risk caps · order dedup · calendar      │
+│     Discovery MI / IC / alpha gates         │
+│     Dashboard chat = read-only tools        │
+└─────────────┬────────────────┬──────────────┘
+              │                │
+              ▼                ▼
+     GCS + audit JSONL     External workers
+     learning / registry   (not local shell)
+     approved_datasources        │
+                                 ├── Alpaca paper
+                                 ├── MarketCrunch API
+                                 ├── DataBento
+                                 └── Google Search
 ```
+
+Deployment topology: Cloud Scheduler (8 jobs) → Vertex Agent Engine `:streamQuery` for overnight / risk / chase × 2 desks; Cloud Run serves `/dashboard` and `/api/*`. Local: `adk web agents`, `python main.py`, `python -m src.adk.mcp.server`. Deploy detail: [`deploy/README.md`](deploy/README.md).
+
+### Gymnasium correspondence
+
+The loops map onto the [Gymnasium](https://gymnasium.farama.org/) MDP interface: market or catalog as environment, LLM + policy as policy network, scheduler ticks as discrete time steps.
+
+| Gymnasium | Twin Ledger |
+|-----------|-------------|
+| `env` | Live Alpaca paper market, or DataBento catalog + bars |
+| `observation` / `reset()` | Context fetch: account, positions, OHLCV, news, MC, features, learning |
+| `action_space` | Overnight: ledger actions (`BUY`/`SELL`/`HOLD`/`CLOSE`/`SHORT`/`COVER` + size). Intraday: hold / exit / trail update. Discovery: probe targets + feature formulas |
+| `agent.act(obs)` | Gemini structured output (signal / planner / trailing planner) |
+| `env.step(action)` | ExecutionAgent / RiskMonitor closes / DataBento download+eval |
+| Reward | PnL, Sharpe, leaderboard / quant H2H; discovery: gate pass (MI, IC, alpha) |
+| Episode | One overnight session, one 15-min risk tick, or one discovery run |
+| Policy constraints | RiskAgent, order dedup, calendar, cost/size preflight (action masking / safety wrappers) |
+| Replay / learning | Audit JSONL + `learning/*.json` reflection into subsequent observations (outcome memory, not gradient RL) |
+
+---
+
+### Harness A — Overnight trading (Baseline + Internal)
+
+**Trigger:** Scheduler ~2:00 PM PT (`Run daily trading workflow`) or `main.py --overnight` / `--baseline` / `--internal`.
+
+**Controller:** ADK `Workflow` — `fetch_context → signal_decisions → risk_and_execute → monitor` (`src/adk/workflows/*_daily.py`).
+
+```
+PLAN     Scheduler / coordinator picks desk + job; calendar gate
+THINK    {system}_signal LlmAgent → structured ledger (+ Google Search)
+ACT      Kelly (internal) / size_pct (baseline) → ExecutionAgent OPG limits
+OBSERVE  MonitorAgent metrics; fills land next open
+VERIFY   RiskAgent caps, reconcile/dedup/BP before place; audit end_trace
+REPEAT   Next market day; learning memory injected into next THINK
+```
+
+| Slot | Baseline | Internal |
+|------|----------|----------|
+| Obs extras | Alpaca OHLCV + news | + MC `/analyze` + DataBento from `approved_datasources.json` |
+| Act sizing | LLM `size_pct` (max 25%) | Ledger + Kelly on BUY/SHORT |
+| Verify | LLM then hard caps | Scripted caps then LLM reject gate |
+| Prefetch | — | Discovery if stale (>24h); GCS cache fallback on failure |
+
+**MarketCrunch (Internal only):** production ensemble (~50M+ params, 1B+ datapoints) via API — injected into data, signal, sizing, and intraday gate. Baseline never calls it (experiment control).
+
+**Order safety (policy before `step`):** reconcile duplicate OPG; delta placement vs pending; exact dup skip; buying-power scale; exposure includes held + pending + proposed.
+
+**Force re-run:** default skips weekends/holidays. Bypass with `force` / `skip_calendar` on `streamQuery`, coordinator tool, or message keywords (`force`/`retry`) — safe because dedup + caps prevent duplicate orders. See `deploy/README.md`.
+
+---
+
+### Harness B — Discovery (Internal only)
+
+**Trigger:** Stale approved sources (>24h) before Internal overnight, or `main.py --discovery`.
+
+**Controller:** Catalog scan → LLM/heuristic planner → per-probe feature planner → download → three-gate evaluator → merge registry (`src/discovery/`).
+
+```
+PLAN     DiscoveryPlanner picks dataset/schema targets (registry memory)
+THINK    FeaturePlanner proposes formulas per schema
+ACT      Preflight billable size/cost → download bars → compute features
+OBSERVE  Probe metrics (MI, IC, t-stat, incremental alpha, coverage)
+VERIFY   Auto-approve only if all three gates pass (no human step)
+REPEAT   Write approved_datasources.json + discovery_registry.json;
+         next run prefers never-probed / cooldown-elapsed / re-eval approved
+```
+
+Constraints: bar period under 15m excluded; lookback 90d daily / 45d hourly; skip download if **>10 MB** or **>$1**; max probes/day from `DISCOVERY_CONFIG`. Overnight: try discovery → on failure use GCS cache → else trade without DataBento enrichment.
+
+**MDP view:** catalog + registry form state; a probe is an action; gate pass/fail is a sparse reward; the registry is episodic memory for the next planning policy.
+
+---
+
+### Harness C — Intraday risk (+ chase)
+
+**Trigger:** Risk every ~15 min (9-15 ET); chase at open (9:35) and midday. `run_intraday_risk_check` / `run_post_open_chase`.
+
+**Controller:** `RiskMonitor.run_check` (`src/risk/risk_monitor.py`) — observe positions → plan stops → optional LLM trail tighten → verify exit gates → act market closes.
+
+```
+PLAN     Load risk_state; identify stop / trail / EOD candidates
+THINK    Base-stop + trailing planners (LLM; Internal hybrid with scripted floor)
+ACT      Cancel open limits on symbol → market close (or hold)
+OBSERVE  Live returns, ATR, MC 15-min (Internal), audit risk_* events
+VERIFY   Prediction gate may defer exit (Internal); EOD once/day; vol gate on chase
+REPEAT   Next Scheduler tick until session end
+```
+
+| Feature | Baseline | Internal |
+|---------|----------|----------|
+| Base stop | Pure LLM return threshold | ATR × 1.5 scripted floor (fallback -1%) merged with LLM tighten |
+| Trailing | Pure LLM activation + lock | Scripted 1%/70% floor merged with LLM tighten |
+| Prediction gate | No | 15-min MC can defer exit |
+| EOD | -0.95% losers ~3:54 PM ET | ATR-implied or -0.95% |
+
+**Post-open chase:** same calendar gate as overnight. Lookback from **last equity session close** (Alpaca calendar). Volatility checked **before** cancelling limits; calm fails → limits stay live.
+
+**MDP view:** each 15-min job is one `step` in a continuous trading episode; `risk_state` is partial environment state; EOD is a terminal transition for the day.
+
+---
 
 ### ADK agent map
 
@@ -56,21 +189,29 @@ Cloud Run
 |-------|------|------|
 | `twin_ledger_{baseline,internal}` | `LlmAgent` chat | Coordinator — scheduler callbacks + dashboard tools |
 | `{system}_data` | `LlmAgent` task | Fetch account, OHLCV, news, MC/discovery context |
-| `{system}_signal` | `LlmAgent` task | Structured BUY/SELL/HOLD/CLOSE (+ Google Search grounding on both) |
-| Risk / Execution / Monitor | Deterministic Python | Invoked via `FunctionTool` on scheduler path |
-| Discovery | Internal only | DataBento probes when stale; GCS cache fallback on failure |
+| `{system}_signal` | `LlmAgent` task | Structured ledger (+ Google Search grounding) |
+| Risk / Execution / Monitor | Deterministic Python | Workflow nodes / FunctionTools on scheduler path |
+| Discovery | Internal only | Harness B — DataBento probes when stale |
+
+```
+main.py / Scheduler
+├── Harness B Discovery ──► approved_datasources.json
+├── Harness A Baseline ───► ADK Workflow → Signal → Risk → Execute → Monitor
+├── Harness A Internal ───► ADK Workflow → Signal → Kelly → Execute → Monitor
+└── Harness C Intraday ───► RiskMonitor (+ chase) per desk
+```
 
 ### A2A & Agent Engine
 
-Each trader deploys to **Vertex AI Agent Engine** with `google-adk[a2a]` in requirements. Cloud Scheduler and operators invoke `stream_query` on the engine REST API. In-engine crews delegate via ADK `sub_agents`. Run `python scripts/verify_a2a.py` to confirm engines, requirements, and local ADK tree.
+Each trader deploys to **Vertex AI Agent Engine** (`google-adk[a2a]`). Scheduler/operators call `stream_query`; in-engine crews use ADK `sub_agents`. Verify with `python scripts/verify_a2a.py`. Console: Vertex AI → Agent Engines (project from `.env` `GCP_PROJECT`).
 
 ### Grounding & RAG
 
 | Source | Used by |
 |--------|---------|
-| **Google Search** (`GoogleSearch` tool) | Both signal agents — macro/ETF news (`SIGNAL_GOOGLE_SEARCH_GROUNDING=true`) |
+| **Google Search** (`GoogleSearch` tool) | Both signal agents (`SIGNAL_GOOGLE_SEARCH_GROUNDING=true`) |
 | **Alpaca news API** | Data agents |
-| **MarketCrunch ensemble** (50M+ params, 1B+ datapoints) | Internal Signal + sizing + intraday risk gate (private RAG) |
+| **MarketCrunch ensemble** | Internal Signal + sizing + intraday gate |
 | **DataBento discovery features** | Internal Signal (`approved_datasources.json`) |
 | **Learning memory** | Signal + Risk prompts (`learning/{role}_{system}.json`) |
 | **GCS audit log** | Dashboard chat tools (retrieval, no vector DB) |
@@ -83,67 +224,6 @@ python -m src.adk.mcp.server         # MCP stdio tool server
 ```
 
 Env: `USE_ADK=true` (default), `USE_ADK_WORKFLOW=true`, `USE_ADK_MCP=false`, `GOOGLE_GENAI_USE_VERTEXAI=false`
-
-### Baseline daily workflow
-
-1. Fetch Alpaca prices and positions  
-2. Gemini structured decisions (`BUY` / `SELL` / `HOLD` / `CLOSE`) with competition context  
-3. Pre-trade risk validation (max 25% weight, exposure caps)  
-4. Overnight OPG limit orders  
-5. Portfolio monitoring  
-
-### Internal daily workflow
-
-Same as baseline, plus:
-
-- MarketCrunch `/analyze` per ticker — proprietary ensemble forecasts (direction, expected move, confidence)  
-- DataBento feature enrichment from discovery output  
-- Confidence-based sizing on BUY orders from the prediction snapshot  
-
-### MarketCrunch prediction stack (Internal only)
-
-MarketCrunch’s production ensemble is trained at scale — **50M+ parameters** across **1B+ datapoints** — and served via the MarketCrunch API. Twin Ledger does not retrain models; Internal pulls nightly forecasts and injects them into data, signal, sizing, and risk agents. Baseline never calls this layer — that isolation is the experiment control.
-
-### Agentic discovery
-
-Runs daily (or when stale >24h), or on overnight internal with cache fallback if discovery fails:
-
-1. Scan DataBento catalog for equity OHLCV datasets (bar period under 15m excluded; lookback: 90d daily, 45d hourly)  
-2. LLM planner picks probe targets; LLM proposes feature formulas per schema  
-3. Pre-flight each probe with DataBento `get_billable_size` / `get_cost` — skip downloads **>10 MB** or **>$1** and continue to the next dataset  
-4. Three-gate evaluation (MI, IC+t-stat, incremental alpha)  
-5. Merge approved sources into `data/approved_datasources.json`  
-6. Registry memory in `data/discovery_registry.json`  
-
-Overnight internal: try discovery → on failure use GCS cache → else continue without DataBento enrichment.
-
-### Intraday risk
-
-| Feature | Baseline | Internal |
-|---------|----------|----------|
-| Base stop | Pure LLM return threshold | ATR × 1.5 scripted floor (fallback -1%) merged with LLM tightening |
-| Trailing | Pure LLM activation + profit lock | Scripted 1%/70% floor merged with LLM tightening |
-| Overnight risk | Pure LLM entry approval + hard caps | Scripted caps + LLM reject gate |
-| Prediction gate | No | 15-min MC API can defer exits |
-| EOD exit | -0.95% losers ~3:54 PM ET | ATR-implied or -0.95% |
-
-### Order safety
-
-Before placing overnight orders:
-
-- **Reconcile** — cancel duplicate OPG orders (same symbol/side/price)  
-- **Delta placement** — only buy the gap vs pending open orders  
-- **Exact duplicate skip** — same symbol/side/qty/price/TIF  
-- **Buying power** — skip or scale buys when cash is insufficient  
-- **Risk caps** — per-ticker and gross exposure include held + pending + proposed weights (internal: scripted first, then LLM; baseline: LLM then hard caps)
-
-**Re-triggering overnight runs:** by default the pipeline skips non-market days (weekends, Alpaca holidays). Pass **`skip_calendar=true`** (or **`force=true`**) to bypass — safe to re-run because dedup + risk caps prevent duplicate orders. Ways to force:
-
-- Agent Engine `streamQuery` input: `"force": true` alongside the message (see `deploy/README.md`)
-- Coordinator tool: `run_daily_trading_workflow(system="internal", skip_calendar=true)`
-- Message keyword: include `force` or `retry` in the text
-
-**Post-open chase** (9:35 AM ET): same calendar gate — no chase on weekends/holidays. Overnight limit lookback uses the **last equity session close** (Alpaca calendar), not calendar Friday. Volatility is checked **before** cancelling open limits; limits stay live if the gate fails.
 
 ---
 

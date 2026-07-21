@@ -937,6 +937,64 @@
       white-space: nowrap;
     }
     .arch-wf-body { padding: 0.85rem 1rem; }
+    .arch-wf-note {
+      margin: 0.55rem 0 0;
+      padding-top: 0.5rem;
+      border-top: 1px dashed var(--border);
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .arch-wf-note code {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--accent-deep);
+    }
+    .arch-harness-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .arch-harness-layer {
+      display: grid;
+      grid-template-columns: 7.5rem 1fr;
+      gap: 0.5rem;
+      align-items: start;
+      padding: 0.4rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-elevated);
+    }
+    .arch-harness-layer.front {
+      background: linear-gradient(90deg, rgba(47, 158, 114, 0.08), transparent);
+      border-color: rgba(20, 108, 74, 0.28);
+    }
+    .arch-harness-layer.store,
+    .arch-harness-layer.workers {
+      min-height: 100%;
+    }
+    .arch-harness-k {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent-deep);
+    }
+    .arch-harness-v {
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .arch-harness-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem;
+    }
+    @media (max-width: 720px) {
+      .arch-harness-layer { grid-template-columns: 1fr; gap: 0.15rem; }
+      .arch-harness-split { grid-template-columns: 1fr; }
+    }
     .arch-step {
       display: flex;
       gap: 0.65rem;
@@ -2422,42 +2480,168 @@
   <div id="view-architecture" class="view">
     <div class="arch-intro">
     <div class="arch-hero">
-      <h2>Two Traders, Specialist Crews, Full Traceability</h2>
+      <h2>Control architecture</h2>
       <p>
-        Twin Ledger is a live head-to-head trading experiment on Google Cloud. Two competing traders,
-        <strong style="color:var(--baseline)">Baseline</strong> and <strong style="color:var(--internal)">Internal</strong>,
-        each start with <strong>$100,000</strong> on a dedicated Alpaca paper account. Every trader is a
-        <strong>Vertex AI Agent Engine</strong> deployment: a chat-mode <em>coordinator</em> routes scheduler work to
-        task-mode specialists and deterministic execution tools (phrase-matched callbacks, not LLM orchestration).
-        <strong>Gemini 3.5 Flash</strong> runs on the Vertex <code>global</code> endpoint for signal decisions, discovery planning,
-        chat Q&amp;A, and the intraday trailing-stop planner inside the deterministic risk path.
-        Each overnight run refreshes <strong>per-agent learning memory</strong> for the full crew before new signals.
-        Every action is logged to GCS with a <code>trace_id</code> and surfaced in this dashboard; equity charts come from Alpaca portfolio history.
+        Twin Ledger implements three scheduled control loops — overnight trading, feature discovery,
+        and intraday risk — on a shared agent backend (session, controller, context, model, tools, policy).
+        <strong style="color:var(--baseline)">Baseline</strong> and
+        <strong style="color:var(--internal)">Internal</strong> are paired paper-trading desks
+        ($100,000 each on Alpaca), each deployed as a <strong>Vertex AI Agent Engine</strong> resource.
+        Structured LLM outputs select actions; deterministic tools enforce policy and execute.
+        Cycle: plan → think → act → observe → verify → repeat. All actions are written to GCS under a
+        <code>trace_id</code>; this dashboard reads that audit surface.
       </p>
       <div class="arch-pill-row">
+        <span class="arch-pill accent">Loop A · Overnight</span>
+        <span class="arch-pill accent">Loop B · Discovery</span>
+        <span class="arch-pill accent">Loop C · Intraday</span>
         <span class="arch-pill accent">Google ADK</span>
-        <span class="arch-pill accent">Vertex AI Agent Engine</span>
+        <span class="arch-pill accent">Vertex Agent Engine</span>
         <span class="arch-pill accent">Gemini 3.5 Flash · global</span>
         <span class="arch-pill baseline">Baseline · Technicals + LLM</span>
         <span class="arch-pill internal">Internal · MC Internal IP</span>
         <span class="arch-pill">Alpaca Paper × 2</span>
-        <span class="arch-pill">GCS Audit Trail</span>
-        <span class="arch-pill">Agent Learning · 7 roles</span>
-        <span class="arch-pill">Read-only Dashboard Chat</span>
+        <span class="arch-pill">GCS Audit + Learning</span>
         <span class="arch-pill">12-ETF Universe</span>
       </div>
     </div>
 
     <div class="arch-stats">
+      <div class="arch-stat"><div class="num">3</div><div class="lbl">Control Loops</div></div>
       <div class="arch-stat"><div class="num">2</div><div class="lbl">Competing Traders</div></div>
       <div class="arch-stat"><div class="num">6+1</div><div class="lbl">Agents · +Discovery</div></div>
-      <div class="arch-stat"><div class="num">6</div><div class="lbl">Scheduler Jobs</div></div>
+      <div class="arch-stat"><div class="num">8</div><div class="lbl">Scheduler Jobs</div></div>
       <div class="arch-stat"><div class="num">7</div><div class="lbl">Learning Roles</div></div>
       <div class="arch-stat"><div class="num">12</div><div class="lbl">ETF Universe</div></div>
       <div class="arch-stat"><div class="num">50M+</div><div class="lbl">MC Model Params</div></div>
-      <div class="arch-stat"><div class="num">1B+</div><div class="lbl">Training Datapoints</div></div>
       <div class="arch-stat"><div class="num">$100k</div><div class="lbl">Starting Equity</div></div>
     </div>
+    </div>
+
+    <div class="arch-section-title">Shared control stack</div>
+
+    <div class="arch-cmp-panel">
+      <p class="arch-cmp-lead">
+        Six backend layers used by overnight, discovery, and intraday loops. Policy runs before
+        broker or data side effects (<code>step</code>).
+      </p>
+      <div class="arch-harness-stack" aria-label="Shared harness layers">
+        <div class="arch-harness-layer front">
+          <div class="arch-harness-k">Frontend</div>
+          <div class="arch-harness-v">adk web · Cloud Run /dashboard · CLI · Cloud Scheduler</div>
+        </div>
+        <div class="arch-harness-layer">
+          <div class="arch-harness-k">1 · Session</div>
+          <div class="arch-harness-v">streamQuery phrases · main.py jobs · InMemorySessionService</div>
+        </div>
+        <div class="arch-harness-layer">
+          <div class="arch-harness-k">2 · Controller</div>
+          <div class="arch-harness-v">ADK Workflow nodes · RiskMonitor · Discovery probe loop</div>
+        </div>
+        <div class="arch-harness-layer">
+          <div class="arch-harness-k">3 · Context</div>
+          <div class="arch-harness-v">Account · OHLCV · news · leaderboard · MC · approved features · learning/*.json</div>
+        </div>
+        <div class="arch-harness-layer">
+          <div class="arch-harness-k">4 · Model</div>
+          <div class="arch-harness-v">Gemini 3.5 Flash — signal · discovery planners · trailing planners</div>
+        </div>
+        <div class="arch-harness-layer">
+          <div class="arch-harness-k">5 · Tools</div>
+          <div class="arch-harness-v">FunctionTools + optional MCP — Alpaca · MarketCrunch · DataBento</div>
+        </div>
+        <div class="arch-harness-layer">
+          <div class="arch-harness-k">6 · Policy</div>
+          <div class="arch-harness-v">Risk caps · order dedup · calendar · discovery MI/IC/alpha · dashboard read-only</div>
+        </div>
+        <div class="arch-harness-split">
+          <div class="arch-harness-layer store">
+            <div class="arch-harness-k">Store</div>
+            <div class="arch-harness-v">GCS audit · learning · registry · approved_datasources · risk_state</div>
+          </div>
+          <div class="arch-harness-layer workers">
+            <div class="arch-harness-k">Workers</div>
+            <div class="arch-harness-v">Alpaca paper · MC API · DataBento · Google Search (not local shell)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Gymnasium correspondence</div>
+
+    <div class="arch-cmp-panel">
+      <p class="arch-cmp-lead">
+        MDP mapping: market or catalog as <code>env</code>; LLM + policy as agent; scheduler ticks as discrete time.
+        Learning writes outcome summaries into later observations (not gradient RL).
+      </p>
+      <div class="arch-table-wrap" style="margin-bottom:0">
+        <table class="arch-table">
+          <thead>
+            <tr><th>Gymnasium</th><th>Twin Ledger</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>env</code></td><td>Alpaca paper market, or DataBento catalog + bars</td></tr>
+            <tr><td><code>observation</code> / <code>reset()</code></td><td>Context fetch: account, positions, OHLCV, news, MC, features, learning</td></tr>
+            <tr><td><code>action_space</code></td><td>Overnight ledger · intraday hold/exit/trail · discovery probe + formulas</td></tr>
+            <tr><td><code>agent.act(obs)</code></td><td>Gemini structured output (signal / planner / trailing)</td></tr>
+            <tr><td><code>env.step(action)</code></td><td>ExecutionAgent · RiskMonitor closes · DataBento download+eval</td></tr>
+            <tr><td>Reward</td><td>PnL / Sharpe / leaderboard · discovery: gate pass (MI, IC, alpha)</td></tr>
+            <tr><td>Episode</td><td>One overnight session · one 15-min risk tick · one discovery run</td></tr>
+            <tr><td>Action masking</td><td>RiskAgent, dedup, calendar, cost/size preflight</td></tr>
+            <tr><td>Replay</td><td>Audit JSONL + <code>learning/*.json</code> → next obs</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="arch-section-title">Control loops (plan → think → act → observe → verify → repeat)</div>
+
+    <div class="arch-workflows">
+      <div class="arch-wf">
+        <div class="arch-wf-head">
+          <h4>A · Overnight trading</h4>
+          <span class="arch-wf-cron">daily · 2:00 PM PT</span>
+        </div>
+        <div class="arch-wf-body">
+          <div class="arch-step"><span class="arch-step-num">P</span><span class="arch-step-text"><strong>Plan</strong> — Scheduler / coordinator picks desk; calendar gate</span></div>
+          <div class="arch-step"><span class="arch-step-num">T</span><span class="arch-step-text"><strong>Think</strong> — <code>{system}_signal</code> LlmAgent → structured ledger (+ Search)</span></div>
+          <div class="arch-step"><span class="arch-step-num">A</span><span class="arch-step-text"><strong>Act</strong> — Kelly (Internal) / size_pct (Baseline) → OPG limits ±0.5%</span></div>
+          <div class="arch-step"><span class="arch-step-num">O</span><span class="arch-step-text"><strong>Observe</strong> — Monitor metrics; fills at next open</span></div>
+          <div class="arch-step"><span class="arch-step-num">V</span><span class="arch-step-text"><strong>Verify</strong> — Risk caps, reconcile/dedup/BP before place</span></div>
+          <div class="arch-step"><span class="arch-step-num">R</span><span class="arch-step-text"><strong>Repeat</strong> — Next market day; learning memory into next Think</span></div>
+          <p class="arch-wf-note">Internal obs extras: MC <code>/analyze</code> + DataBento from <code>approved_datasources.json</code>. Discovery prefetch if stale.</p>
+        </div>
+      </div>
+      <div class="arch-wf">
+        <div class="arch-wf-head">
+          <h4>B · Discovery <span class="mc-ip-badge">MC Internal</span></h4>
+          <span class="arch-wf-cron">when stale · &gt;24h</span>
+        </div>
+        <div class="arch-wf-body">
+          <div class="arch-step"><span class="arch-step-num">P</span><span class="arch-step-text"><strong>Plan</strong> — DiscoveryPlanner picks dataset/schema (registry memory)</span></div>
+          <div class="arch-step"><span class="arch-step-num">T</span><span class="arch-step-text"><strong>Think</strong> — FeaturePlanner proposes formulas per schema</span></div>
+          <div class="arch-step"><span class="arch-step-num">A</span><span class="arch-step-text"><strong>Act</strong> — Preflight size/cost → download bars → compute features</span></div>
+          <div class="arch-step"><span class="arch-step-num">O</span><span class="arch-step-text"><strong>Observe</strong> — MI, IC, t-stat, incremental alpha, coverage</span></div>
+          <div class="arch-step"><span class="arch-step-num">V</span><span class="arch-step-text"><strong>Verify</strong> — Auto-approve only if all three gates pass (no human)</span></div>
+          <div class="arch-step"><span class="arch-step-num">R</span><span class="arch-step-text"><strong>Repeat</strong> — Write approved sources + registry; next run uses memory</span></div>
+          <p class="arch-wf-note">Skip download if &gt;10&nbsp;MB or &gt;$1. Overnight: try discovery → GCS cache → else trade without enrichment. Baseline never runs this harness.</p>
+        </div>
+      </div>
+      <div class="arch-wf">
+        <div class="arch-wf-head">
+          <h4>C · Intraday + chase</h4>
+          <span class="arch-wf-cron">risk · 15m · chase 3×</span>
+        </div>
+        <div class="arch-wf-body">
+          <div class="arch-step"><span class="arch-step-num">P</span><span class="arch-step-text"><strong>Plan</strong> — Load risk_state; stop / trail / EOD candidates</span></div>
+          <div class="arch-step"><span class="arch-step-num">T</span><span class="arch-step-text"><strong>Think</strong> — Base-stop + trailing planners (Internal: scripted floor + LLM tighten)</span></div>
+          <div class="arch-step"><span class="arch-step-num">A</span><span class="arch-step-text"><strong>Act</strong> — Cancel open limits on symbol → market close (or hold)</span></div>
+          <div class="arch-step"><span class="arch-step-num">O</span><span class="arch-step-text"><strong>Observe</strong> — Live returns, ATR, MC 15-min gate (Internal)</span></div>
+          <div class="arch-step"><span class="arch-step-num">V</span><span class="arch-step-text"><strong>Verify</strong> — Prediction may defer exit; EOD once/day; vol gate on chase</span></div>
+          <div class="arch-step"><span class="arch-step-num">R</span><span class="arch-step-text"><strong>Repeat</strong> — Next Scheduler tick until session end</span></div>
+          <p class="arch-wf-note">MDP view: each 15-min job is one <code>step</code> in a continuous episode; EOD is a terminal transition for the day.</p>
+        </div>
+      </div>
     </div>
 
     <div class="arch-section-title">MarketCrunch AI prediction layer <span class="mc-ip-badge">MC Internal IP</span></div>
@@ -2582,7 +2766,7 @@
       </div>
     </div>
 
-    <div class="arch-section-title">System topology</div>
+    <div class="arch-section-title">System topology · harnesses on Agent Engine</div>
 
     <div class="arch-svg-scroll">
     <svg class="arch-flow-svg" viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg" aria-label="Twin Ledger architecture flow">
@@ -2602,7 +2786,7 @@
       <!-- Scheduler -->
       <rect x="320" y="8" width="260" height="44" rx="8" fill="#ffffff" stroke="#92610a" stroke-width="1.5"/>
       <text x="450" y="26" text-anchor="middle" fill="#92610a" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">CLOUD SCHEDULER</text>
-      <text x="450" y="42" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="10">6 cron jobs · America/New_York</text>
+      <text x="450" y="42" text-anchor="middle" fill="#7d9a8f" font-family="Inter, sans-serif" font-size="10">8 cron jobs · America/New_York</text>
       <!-- Arrows down -->
       <line x1="380" y1="52" x2="280" y2="88" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
       <line x1="520" y1="52" x2="620" y2="88" stroke="#b8cdc3" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -2821,7 +3005,7 @@
       </table>
     </div>
 
-    <div class="arch-section-title">Deterministic overnight pipeline</div>
+    <div class="arch-section-title">Harness A · overnight pipeline detail</div>
 
     <div class="arch-cmp-panel">
       <p class="arch-cmp-lead">
@@ -2945,49 +3129,49 @@
       </div>
     </div>
 
-    <div class="arch-section-title">Three autonomous workflows</div>
+    <div class="arch-section-title">Workflow detail (same three harnesses)</div>
     <div class="arch-workflows">
       <div class="arch-wf">
         <div class="arch-wf-head">
-          <h4>Overnight Orders</h4>
-          <span class="arch-wf-cron">daily · 2:00 PM PT</span>
+          <h4>A · Overnight · execution detail</h4>
+          <span class="arch-wf-cron">Harness A</span>
         </div>
         <div class="arch-wf-body">
-          <div class="arch-step"><span class="arch-step-num">0</span><span class="arch-step-text"><strong>Scheduler intercept</strong>: <code>before_agent_callback</code> routes message to <code>run_daily_trading_workflow</code></span></div>
-          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Learning refresh</strong>: audit → scorecard → lessons for all crew roles; Signal/Risk blocks injected next</span></div>
-          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Data</strong>: 90d technicals; Internal adds <span class="mc-ip-badge">MC Internal</span> predictions + vendor features</span></div>
-          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Signal</strong>: Gemini direct JSON: action, ticker, size_pct, confidence, rationale per symbol</span></div>
-          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Risk</strong>: max 8 positions; reject BUYs failing weight / exposure checks</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Allocator</strong>: Baseline: size_pct cap 25% · Internal: <span class="mc-ip-badge">MC Internal</span> confidence-based sizing from prediction snapshot</span></div>
-          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Execution</strong>: DAY limit at last close ±0.5%; delta vs pending orders; sells before buys (30s gap)</span></div>
-          <div class="arch-step"><span class="arch-step-num">7</span><span class="arch-step-text"><strong>Audit</strong>: <code>job_started</code> → <code>ledger_decision</code> → <code>order_placed</code> → <code>portfolio_snapshot</code> → <code>job_completed</code></span></div>
+          <div class="arch-step"><span class="arch-step-num">0</span><span class="arch-step-text"><strong>Scheduler intercept</strong>: <code>before_agent_callback</code> → <code>run_daily_trading_workflow</code></span></div>
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Learning refresh</strong>: audit → scorecard → lessons; inject into next Think</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Data / obs</strong>: 90d technicals; Internal adds <span class="mc-ip-badge">MC Internal</span> + vendor features</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Think</strong>: Gemini ledger JSON — action, ticker, size_pct, confidence, rationale</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Verify</strong>: max 8 positions; reject entries failing weight / exposure</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Act / size</strong>: Baseline size_pct ≤25% · Internal Kelly from prediction snapshot</span></div>
+          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Act / execute</strong>: DAY/OPG limit at close ±0.5%; delta vs pending; sells before buys</span></div>
+          <div class="arch-step"><span class="arch-step-num">7</span><span class="arch-step-text"><strong>Observe / audit</strong>: <code>job_started</code> → <code>ledger_decision</code> → <code>order_placed</code> → <code>job_completed</code></span></div>
         </div>
       </div>
       <div class="arch-wf">
         <div class="arch-wf-head">
-          <h4>Intraday Risk</h4>
-          <span class="arch-wf-cron">risk · every 15m</span>
+          <h4>C · Intraday risk · execution detail</h4>
+          <span class="arch-wf-cron">Harness C</span>
         </div>
         <div class="arch-wf-body">
-          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Positions check</strong>: log returns for every open position</span></div>
-          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>LLM trailing planner</strong>: Gemini sets activation % &amp; profit lock per position (<code>trailing_stop_planned</code>)</span></div>
-          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Stop evaluation</strong>: trailing trigger → base stop (ATR on Internal); deterministic rules after LLM plan</span></div>
-          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Signal gate</strong>: Internal: <span class="mc-ip-badge">MC Internal</span> short-horizon prediction must agree before stop exit</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>EOD exit</strong>: losers below threshold in final ~6 min before close</span></div>
-          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Market sell</strong>: risk_stop_exit / risk_eod_exit logged with full payload</span></div>
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Observe</strong>: log returns for every open position</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Think</strong>: Gemini trailing planner (<code>trailing_stop_planned</code>)</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Verify</strong>: trail trigger → base stop (ATR on Internal)</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Verify / gate</strong>: Internal <span class="mc-ip-badge">MC Internal</span> short-horizon must agree before exit</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Act / EOD</strong>: losers below threshold in final ~6 min</span></div>
+          <div class="arch-step"><span class="arch-step-num">6</span><span class="arch-step-text"><strong>Act / observe</strong>: market close · <code>risk_stop_exit</code> / <code>risk_eod_exit</code></span></div>
         </div>
       </div>
       <div class="arch-wf">
         <div class="arch-wf-head">
-          <h4>Post-Open Chase</h4>
-          <span class="arch-wf-cron">chase · 3× daily</span>
+          <h4>C · Post-open chase · execution detail</h4>
+          <span class="arch-wf-cron">Harness C · chase</span>
         </div>
         <div class="arch-wf-body">
-          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Scan</strong> overnight DAY/OPG limits since prior close</span></div>
-          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Fill check</strong>: skip if &gt;70% filled or already chased</span></div>
-          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Volatility gate</strong>: 30-min std dev &amp; range must be calm</span></div>
-          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Cancel + market</strong>: chase remaining qty with market order</span></div>
-          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Audit</strong>: order_placed / order_skipped with chase rationale</span></div>
+          <div class="arch-step"><span class="arch-step-num">1</span><span class="arch-step-text"><strong>Observe</strong>: overnight DAY/OPG limits since prior session close</span></div>
+          <div class="arch-step"><span class="arch-step-num">2</span><span class="arch-step-text"><strong>Verify</strong>: skip if &gt;70% filled or already chased</span></div>
+          <div class="arch-step"><span class="arch-step-num">3</span><span class="arch-step-text"><strong>Verify / vol</strong>: 30-min std &amp; range must be calm before cancel</span></div>
+          <div class="arch-step"><span class="arch-step-num">4</span><span class="arch-step-text"><strong>Act</strong>: cancel limit → market chase remaining qty</span></div>
+          <div class="arch-step"><span class="arch-step-num">5</span><span class="arch-step-text"><strong>Observe</strong>: <code>order_placed</code> / <code>order_skipped</code> with chase rationale</span></div>
         </div>
       </div>
     </div>

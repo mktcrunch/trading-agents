@@ -69,7 +69,7 @@ GOOGLE_GENAI_USE_VERTEXAI=true adk web agents
 
 `VERTEX_MODE=true ./deploy/setup_cloud_run.sh` sets `GOOGLE_GENAI_USE_VERTEXAI=true` and uses the service account for Gemini (no `GEMINI_API_KEY` secret). The service account needs `roles/aiplatform.user`.
 
-**Gemini 3.5 on Vertex:** model calls use `GEMINI_VERTEX_LOCATION=global` (required for `gemini-3.5-flash`). Agent Engine, Cloud Run, and GCS stay in `GCP_REGION=us-central1`.
+**Gemini 3.5 on Vertex:** model calls use `GEMINI_VERTEX_LOCATION=global` and `GOOGLE_CLOUD_LOCATION=global` (required for `gemini-3.5-flash`; set in each agent’s `.agent_engine_config.json`). Agent Engine, Cloud Run, and GCS stay in `GCP_REGION=us-central1`.
 
 ### A2A verification
 
@@ -87,6 +87,8 @@ Checks requirements, local ADK `sub_agents` tree, and live Reasoning Engine REST
 - **Internal Signal (incremental):** MC predictions + gate-approved DataBento features + learning memory
 
 ## Architecture
+
+Product harness view (overnight / discovery / intraday + Gymnasium mapping): root [`README.md`](../README.md#architecture).
 
 ```
 Cloud Scheduler (2:00 PM PT)  ──POST──►  /jobs/overnight
